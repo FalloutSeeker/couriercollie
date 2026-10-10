@@ -6,14 +6,10 @@ import QtQuick
 QtObject {
     function interval(hours) {
         return {
-            "1": "hour",
-            "6": "6 hours",
-            "12": "12 hours",
-            "24": "day",
-            "72": "3 days",
-            "168": "week",
-            "336": "2 weeks",
-            "672": "month"
-        }[hours] || `${hours} hours`;
+            "24": "Daily",
+            "168": "Every 7 days",
+            "336": "Every 14 days",
+            "672": "Monthly"
+        }[hours] || `Every ${hours} hours`;
     }
 }

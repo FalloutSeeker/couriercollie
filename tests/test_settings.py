@@ -31,19 +31,33 @@ class SettingsTest(unittest.TestCase):
         self.assertTrue(Backend(self.path).settings["firstLaunchDone"])
 
     def test_numbers_from_the_window_may_be_floats(self):
-        self.backend.updateSettings({"checkIntervalHours": 12.0, "deleteOldDays": 7.0})
-        self.assertEqual(self.backend.settings["checkIntervalHours"], 12)
+        self.backend.updateSettings({"checkIntervalHours": 168.0, "deleteOldDays": 7.0})
+        self.assertEqual(self.backend.settings["checkIntervalHours"], 168)
         self.assertEqual(self.backend.settings["deleteOldDays"], 7)
 
-    def test_longer_intervals(self):
-        # 3 days, week, 2 weeks, "month" (4 weeks).
-        for hours in (72, 168, 336, 672):
+    def test_interval_choices(self):
+        # Daily, every 7 days, every 14 days, monthly (4 weeks). Daily is the default.
+        self.assertEqual(self.backend.settings["checkIntervalHours"], 24)
+        for hours in (24, 168, 336, 672):
             self.backend.updateSettings({"checkIntervalHours": hours})
             self.assertEqual(self.backend.settings["checkIntervalHours"], hours)
 
+    def test_old_saved_intervals_move_to_the_next_choice_up(self):
+        for saved, expected in [(1, 24), (6, 24), (72, 168), (168, 168), (5000, 672), ("junk", 24)]:
+            self.path.write_text(f"[settings]\ncheck_interval_hours = {saved!r}\n".replace("'", '"'))
+            self.assertEqual(config.load(self.path).settings.check_interval_hours, expected, saved)
+
+    def test_reset_keeps_a_backup(self):
+        self.backend.updateSettings({"firstLaunchDone": True})
+        backup = config.reset(self.path)
+        self.assertFalse(self.path.exists())
+        self.assertIn("first_launch_done = true", backup.read_text())
+        self.assertFalse(Backend(self.path).settings["firstLaunchDone"])
+        self.assertIsNone(config.reset(self.path))
+
     def test_values_outside_the_choices_are_ignored(self):
         self.backend.updateSettings({"checkIntervalHours": 5, "deleteOldDays": 1, "autoCheck": "yes", "bogus": 1})
-        self.assertEqual(self.backend.settings["checkIntervalHours"], 6)
+        self.assertEqual(self.backend.settings["checkIntervalHours"], 24)
         self.assertEqual(self.backend.settings["deleteOldDays"], 30)
         self.assertFalse(self.backend.settings["autoCheck"])
 

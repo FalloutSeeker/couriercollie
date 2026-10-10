@@ -52,13 +52,20 @@ Kirigami.ScrollablePage {
                     ]
 
                     delegate: QQC2.ToolButton {
+                        id: filterButton
+
                         required property var modelData
 
                         objectName: "filter:" + modelData.key
                         text: `${modelData.label} (${backend.counts[modelData.key]})`
-                        checkable: false
+                        // Checkable so KDE's style draws the highlight. A click would toggle it on its own, so after
+                        // each click it's tied back to the saved filter.
+                        checkable: true
                         checked: backend.filter === modelData.key
-                        onClicked: backend.filter = modelData.key
+                        onClicked: {
+                            backend.filter = modelData.key;
+                            checked = Qt.binding(() => backend.filter === filterButton.modelData.key);
+                        }
                     }
                 }
 

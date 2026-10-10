@@ -4,6 +4,14 @@ Newest first.
 
 ## 2026-10-10
 
+- Check intervals narrowed to daily / every 7 days / every 14 days / monthly (4 weeks); daily is the default. Older
+  saved values move to the next choice up (6 hours becomes daily).
+- The welcome screen didn't get a fair chance: the app started at 19:55 and the settings file was written with the
+  screen's starting answers in the same minute, so Done was likely hit by accident. Added `--reset` (renames the
+  settings file to a dated backup) and reset the real settings; the old file is
+  `~/.config/repoproject/repos.toml.backup-20261010-195941`.
+- My radio-button fix had stopped KDE's style from highlighting the active list filter. The filter buttons are
+  checkable again and re-tied to the saved filter after each click.
 - Check intervals: added 3 days, 2 weeks and "month" (4 weeks), as a fixed list rather than a number + unit. The
   interval is counted from the last check; a check missed while the PC was off will run soon after the next login
   (to build in stage 4).

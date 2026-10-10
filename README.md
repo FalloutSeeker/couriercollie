@@ -19,6 +19,13 @@ scanning, update checks and cleanup aren't built yet, so those settings have no 
 Needs only what Fedora KDE already has: Python 3, PySide6 (`python3-pyside6`) and Kirigami. Your tracked repos are
 saved in `~/.config/repoproject/repos.toml`.
 
+To start over as if newly installed (the welcome screen shows again), run it with `--reset`. Your settings file is
+renamed to a dated backup next to it, not deleted:
+
+```sh
+~/claudework/RepoProject/run.sh --reset
+```
+
 ## Tests
 
 ```sh

@@ -27,7 +27,7 @@ Kirigami.ScrollablePage {
         }
 
         QQC2.ComboBox {
-            Kirigami.FormData.label: "Check every:"
+            Kirigami.FormData.label: "How often:"
             enabled: page.s.autoCheck
             model: backend.checkIntervals.map(h => Labels.interval(h))
             currentIndex: backend.checkIntervals.indexOf(page.s.checkIntervalHours)

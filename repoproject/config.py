@@ -6,6 +6,7 @@ Lives at ~/.config/repoproject/repos.toml (or $REPOPROJECT_CONFIG). Plain text, 
 import os
 import tomllib
 from dataclasses import asdict, dataclass, field, fields
+from datetime import datetime
 from pathlib import Path
 
 from . import tomlwrite
@@ -15,8 +16,8 @@ FOLLOW_BRANCH = "branch"
 
 
 # The choices offered in the window (DESIGN.md §6, §7).
-# In hours: hour, 6 hours, 12 hours, day, 3 days, week, 2 weeks, "month" (4 weeks).
-CHECK_INTERVALS_HOURS = (1, 6, 12, 24, 72, 168, 336, 672)
+# In hours: daily, every 7 days, every 14 days, monthly (4 weeks).
+CHECK_INTERVALS_HOURS = (24, 168, 336, 672)
 DELETE_AFTER_DAYS = (7, 30, 90)
 
 
@@ -24,7 +25,7 @@ DELETE_AFTER_DAYS = (7, 30, 90)
 class Settings:
     first_launch_done: bool = False
     auto_check: bool = False
-    check_interval_hours: int = 6
+    check_interval_hours: int = 24
     toasts: bool = True
     scanning: bool = False
     delete_old: bool = False
@@ -75,6 +76,15 @@ def _from_dict(cls, data: dict):
     return cls(**{k: v for k, v in data.items() if k in known})
 
 
+def _nearest_interval(hours) -> int:
+    """Interval choices have changed over time; an old saved value becomes the next choice up (6 hours -> daily)."""
+    try:
+        hours = int(hours)
+    except (TypeError, ValueError):
+        return Settings.check_interval_hours
+    return next((h for h in CHECK_INTERVALS_HOURS if h >= hours), CHECK_INTERVALS_HOURS[-1])
+
+
 def load(path: Path | None = None) -> Config:
     path = path or default_path()
     if not path.exists():
@@ -82,10 +92,22 @@ def load(path: Path | None = None) -> Config:
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
         settings = _from_dict(Settings, data.get("settings", {}))
+        settings.check_interval_hours = _nearest_interval(settings.check_interval_hours)
         repos = [_from_dict(TrackedRepo, r) for r in data.get("repos", [])]
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, TypeError) as e:
         raise ConfigError(f"Couldn't read {path}: {e}") from e
     return Config(settings=settings, repos=repos)
+
+
+def reset(path: Path | None = None) -> Path | None:
+    """Back to a fresh start: the settings file is renamed to a dated backup, not deleted. Returns the backup's path,
+    or None if there was nothing to reset."""
+    path = path or default_path()
+    if not path.exists():
+        return None
+    backup = path.with_name(f"{path.name}.backup-{datetime.now():%Y%m%d-%H%M%S}")
+    os.replace(path, backup)
+    return backup
 
 
 def save(config: Config, path: Path | None = None) -> None:

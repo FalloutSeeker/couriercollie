@@ -9,6 +9,13 @@ QML_DIR = Path(__file__).parent / "qml"
 
 
 def main() -> int:
+    if "--reset" in sys.argv[1:]:
+        from . import config
+
+        backup = config.reset()
+        print(f"Settings reset. The old ones were saved as {backup}." if backup else "Nothing to reset.")
+        sys.argv.remove("--reset")
+
     # KDE's own look for buttons, lists, etc. Needs QApplication rather than QGuiApplication.
     os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "org.kde.desktop")
 

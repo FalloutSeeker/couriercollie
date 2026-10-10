@@ -60,7 +60,7 @@ Kirigami.Dialog {
 
                 objectName: "autoYes"
                 QQC2.ButtonGroup.group: autoGroup
-                text: "Yes, every"
+                text: "Yes:"
                 checked: true
             }
 
@@ -69,7 +69,7 @@ Kirigami.Dialog {
 
                 enabled: autoYes.checked
                 model: backend.checkIntervals.map(h => Labels.interval(h))
-                currentIndex: backend.checkIntervals.indexOf(6)
+                currentIndex: backend.checkIntervals.indexOf(24)
             }
         }
 

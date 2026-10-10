@@ -51,7 +51,7 @@ class ConfigTest(unittest.TestCase):
 
     def test_save_then_load(self):
         cfg = Config(
-            settings=Settings(auto_check=True, check_interval_hours=12),
+            settings=Settings(auto_check=True, check_interval_hours=336),
             repos=[
                 TrackedRepo(id="github.com/a/b", name="B", url="https://github.com/a/b", host="github",
                             asset_pattern="B-*-x86_64.AppImage", kind="AppImage"),
