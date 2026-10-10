@@ -114,7 +114,8 @@ up in the KDE launcher. Nothing in system folders except through dnf.
 
 ## D11. Deleting old versions
 
-Setting: **Delete old versions after** [7 / 30 / 90 days / Never]. Default 30 days.
+Global setting, **off by default** (old versions kept forever). Offered on first launch and in Settings. When on: delete
+after 7 / 30 / 90 days.
 
 - **Deletes:** what the app kept for undoing an update: the previous AppImage or program file, and old downloads in
   `~/.cache/repoproject`. These are all in your own folders, so no password is needed.
@@ -122,5 +123,13 @@ Setting: **Delete old versions after** [7 / 30 / 90 days / Never]. Default 30 da
   asking for a password. (Old RPM versions don't pile up anyway: dnf replaces them on update.)
 - **Git clones:** the old versions are the repo's own history, which isn't deleted.
 - Once an old version is deleted, that update can't be undone. The setting says so.
+
+**Status:** decided 2026-10-10 (made off-by-default the same day).
+
+## D12. Scanning the computer
+
+Global setting, **off by default**, because it looks through your files. Offered on first launch and in Settings.
+While it's off, the Scan button is hidden. Scan results start with nothing ticked. You pick specific repos or click
+**Select all**.
 
 **Status:** decided 2026-10-10.

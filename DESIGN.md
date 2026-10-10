@@ -13,8 +13,11 @@ Some software on a Fedora machine never gets updated, because it didn't come fro
 
 ### 1. Find what's already installed
 
-A **Scan** button looks through the machine for things that came from GitHub/GitLab and lists them. You tick the ones
-to track.
+Scanning is **off by default** (DECISIONS.md, D12), because it means looking through your files. You can turn it on
+during first launch (see 6) or later in Settings (see 7). While it's off, the Scan button is hidden.
+
+When it's on, a **Scan** button looks through the machine for things that came from GitHub/GitLab and lists them.
+Nothing is ticked to start with. You tick the ones to track, or use **Select all**.
 
 | Kind                         | Where it looks                                       | How it finds the source                          |
 | ---------------------------- | ---------------------------------------------------- | ------------------------------------------------ |
@@ -85,24 +88,30 @@ What "Update" does depends on the kind:
 | Program     | Downloads, unpacks, and swaps in the new program file                           |
 | Git clone   | Pulls the new commits. Re-running the project's install script is a separate, deliberate step |
 
-**Old versions** (DECISIONS.md, D11): the previous version is kept so an update can be undone, then deleted after a
-set time (see 7; default 30 days). Only files in your own folders are deleted. Anything that
-would need admin rights is skipped, never prompted for.
+**Old versions** (DECISIONS.md, D11): the previous version is kept so an update can be undone. Deleting old versions
+after a set time is **off by default** (kept forever). It's a global setting, offered on first launch and in
+Settings. Only files in your own folders are deleted. Anything that would need admin rights is skipped, never prompted
+for.
 
 ### 6. First launch
 
-A short setup screen asks one question and says it can be changed later in Settings:
+A short setup screen asks three things and says all of them can be changed later in Settings:
 
-- **Check for updates automatically?** If yes, pick how often. If no, checks only happen when you click Check now.
+1. **Check for updates automatically?** If yes, pick how often. If no, checks only happen when you click Check now.
+2. **Scan this computer for repos?** Off by default. If turned on, a scan runs when you click Done, and the scan
+   results let you tick specific repos or **Select all**.
+3. **Delete old versions automatically?** Off by default. If turned on, pick after how long: 7 / 30 / 90 days.
 
-Toasts are on by default whenever automatic checks are on, and can be turned off in Settings. Then the setup screen
-offers to run a **Scan** for things already installed.
+Toasts are on by default whenever automatic checks are on, and can be turned off in Settings.
 
 ### 7. Settings
 
+All global; there are no per-repo settings.
+
 - **Automatic checks**: on/off, and the interval.
 - **Toast notifications**: on/off. Off leaves only the taskbar badge and the ⬆ icons in the app.
-- **Delete old versions after**: 7 / 30 / 90 days / Never.
+- **Scanning**: on/off. On shows the Scan button in the main window.
+- **Delete old versions**: on/off, and after how long (7 / 30 / 90 days).
 - **GitHub account** (optional): Sign in / Sign out, with the explanation below.
 
 ### 8. Signing in to GitHub (optional)
@@ -151,12 +160,19 @@ Signing in is never required. The Settings section explains why someone would do
 │    ○ No, I'll click "Check now" myself                        │
 │                                                               │
 │  You'll get a notification when updates are found.            │
-│  You can change this later in Settings.                       │
-│                                       [Scan my system] [Done] │
+│                                                               │
+│  [ ] Scan this computer for repos I've already installed      │
+│      You'll choose which ones to track.                       │
+│                                                               │
+│  [ ] Delete old versions after [ 30 days ▾ ]                  │
+│      Kept versions let you undo an update.                    │
+│                                                               │
+│  You can change all of this later in Settings.                │
+│                                                       [Done]  │
 └───────────────────────────────────────────────────────────────┘
 ```
 
-**Main list**
+**Main list** (the Scan button only shows when scanning is on)
 
 ```
 ┌ RepoProject ────────────────────────────────────── [Scan] [+ Add] [⚙] ┐
@@ -191,13 +207,13 @@ Signing in is never required. The Settings section explains why someone would do
 **Scan results**
 
 ```
-┌ Found 11 items ───────────────────────────────────────────────┐
-│  [✓] AeroThemePlasma   git   ~/aero/aerothemeplasma  gitgud.io │
-│  [✓] smod              git   …/repos/smod            gitgud.io │
+┌ Found 11 items ────────────────────── [Select all] [Select none] ┐
+│  [ ] AeroThemePlasma   git   ~/aero/aerothemeplasma  gitgud.io │
+│  [ ] smod              git   …/repos/smod            gitgud.io │
 │  [ ] ultrakanban       git   ~/ultrakanban           github    │
 │  …                                                             │
-│                                       [Cancel] [Track selected]│
-└───────────────────────────────────────────────────────────────┘
+│                                  [Cancel] [Track selected (0)] │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ## How it works underneath (plain version)
