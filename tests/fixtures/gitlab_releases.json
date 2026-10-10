@@ -1,0 +1,92 @@
+[
+ {
+  "tag_name": "v0.18.0",
+  "name": "v0.18.0",
+  "released_at": "2026-01-23T19:44:10.199Z",
+  "created_at": "2026-01-23T19:44:10.199Z",
+  "upcoming_release": false,
+  "description": "## [0.18.0] - 2026-01-23\n\n### Added\n\n- State of the window is saved between game launches.\n- Barns that can spawn at the edge of towns.\n- One new dungeon track and two new town tracks.\n- You can now engage NPCs in two-way conversation.\n- NPCs can now be hired for a short time.\n- Pairs of Airships no",
+  "_links": {
+   "self": "https://gitlab.com/veloren/veloren/-/releases/v0.18.0"
+  },
+  "assets": {
+   "links": [
+    {
+     "name": "Linux (aarch64)",
+     "url": "https://gitlab.com/veloren/veloren/-/jobs/12844032199/artifacts/download",
+     "direct_asset_url": "https://gitlab.com/veloren/veloren/-/jobs/12844032199/artifacts/download",
+     "link_type": "other"
+    },
+    {
+     "name": "Linux (x86_64)",
+     "url": "https://gitlab.com/veloren/veloren/-/jobs/12844032182/artifacts/download",
+     "direct_asset_url": "https://gitlab.com/veloren/veloren/-/jobs/12844032182/artifacts/download",
+     "link_type": "other"
+    },
+    {
+     "name": "MacOS (aarch64)",
+     "url": "https://gitlab.com/veloren/veloren/-/jobs/12844032174/artifacts/download",
+     "direct_asset_url": "https://gitlab.com/veloren/veloren/-/jobs/12844032174/artifacts/download",
+     "link_type": "other"
+    },
+    {
+     "name": "MacOS (x86_64)",
+     "url": "https://gitlab.com/veloren/veloren/-/jobs/12844032166/artifacts/download",
+     "direct_asset_url": "https://gitlab.com/veloren/veloren/-/jobs/12844032166/artifacts/download",
+     "link_type": "other"
+    },
+    {
+     "name": "Windows (x86_64)",
+     "url": "https://gitlab.com/veloren/veloren/-/jobs/12844032151/artifacts/download",
+     "direct_asset_url": "https://gitlab.com/veloren/veloren/-/jobs/12844032151/artifacts/download",
+     "link_type": "other"
+    }
+   ]
+  }
+ },
+ {
+  "tag_name": "v0.17.0",
+  "name": "v0.17.0",
+  "released_at": "2024-12-27T23:00:00.000Z",
+  "created_at": "2024-12-29T10:40:15.858Z",
+  "upcoming_release": false,
+  "description": "## [0.17.0] - 2024-12-28\n\n### Added\n\n- Added reworked Cultist Dungeon\n- Petting animals tamed by you or someone else!\n- Updated furniture sprites.\n- Added Abyssal rings\n- Sprite models can now change depending on sprite attributes.\n- Dwarven-Mine update and activation.\n- Craftable orichalcum helmet\n",
+  "_links": {
+   "self": "https://gitlab.com/veloren/veloren/-/releases/v0.17.0"
+  },
+  "assets": {
+   "links": [
+    {
+     "name": "Windows (x86_64)",
+     "url": "https://gitlab.com/veloren/veloren/-/jobs/8735241158/artifacts/download",
+     "direct_asset_url": "https://gitlab.com/veloren/veloren/-/jobs/8735241158/artifacts/download",
+     "link_type": "other"
+    },
+    {
+     "name": "MacOS (x86_64)",
+     "url": "https://gitlab.com/veloren/veloren/-/jobs/8735241160/artifacts/download",
+     "direct_asset_url": "https://gitlab.com/veloren/veloren/-/jobs/8735241160/artifacts/download",
+     "link_type": "other"
+    },
+    {
+     "name": "MacOS (aarch64)",
+     "url": "https://gitlab.com/veloren/veloren/-/jobs/8735241161/artifacts/download",
+     "direct_asset_url": "https://gitlab.com/veloren/veloren/-/jobs/8735241161/artifacts/download",
+     "link_type": "other"
+    },
+    {
+     "name": "Linux (x86_64)",
+     "url": "https://gitlab.com/veloren/veloren/-/jobs/8735241155/artifacts/download",
+     "direct_asset_url": "https://gitlab.com/veloren/veloren/-/jobs/8735241155/artifacts/download",
+     "link_type": "other"
+    },
+    {
+     "name": "Linux (aarch64)",
+     "url": "https://gitlab.com/veloren/veloren/-/jobs/8735241157/artifacts/download",
+     "direct_asset_url": "https://gitlab.com/veloren/veloren/-/jobs/8735241157/artifacts/download",
+     "link_type": "other"
+    }
+   ]
+  }
+ }
+]

@@ -12,13 +12,15 @@ AeroThemePlasma and ultrakanban repos), and nothing in a stage can change your s
 | 5     | Click ⬆ to update                                                     | Yes, on your click   |
 | 6     | Old-version cleanup, GitHub sign-in, app icon, installable package    | No                   |
 
-## Stage 1: Skeleton
+**Progress:** stages 1 and 2 done (2026-10-10).
+
+## Stage 1: Skeleton (done)
 
 - Project layout, a Kirigami window that opens from a terminal command.
 - Reading and writing the settings file (`~/.config/repoproject/repos.toml`).
 - Automated tests set up, so later stages can be checked without clicking through everything.
 
-## Stage 2: Tracking repos by hand
+## Stage 2: Tracking repos by hand (done)
 
 - **Add** dialog: name + URL. Works for GitHub and GitLab (including gitgud.io).
 - Main list with the All / GitHub / GitLab filter.

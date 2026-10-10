@@ -4,6 +4,17 @@ Newest first.
 
 ## 2026-10-10
 
+- Built stages 1 and 2. Tested with 45 unit tests, and by driving the real window off-screen against live GitHub
+  (LocalSend) and gitgud.io (AeroThemePlasma).
+  - AeroThemePlasma moved from `wackyideas/aerothemeplasma` to `aeroshell/atp/aerothemeplasma`. The app follows the
+    redirect and saves the new address, and it publishes no releases, so it's followed by branch (`Plasma/6.7`).
+  - Found and fixed: the saved file pattern's `*` matched anything, so picking LocalSend's app tarball would also
+    have matched its separate command-line tool. `*` now only matches version numbers.
+  - Releases list only the files that suit this PC; the rest are behind "Show N files for other systems".
+  - If exactly one file in the newest release suits this PC, it's picked automatically when the repo is added.
+  - No extra packages needed: Python's own unittest, and a small TOML writer (tomli-w isn't installed by default).
+  - Known: Qt prints "Created graphical object was not placed in the graphics scene" when a repo page opens. It's
+    from how Kirigami creates pages; the page displays correctly.
 - Added D12: scanning is off by default, offered on first launch and in Settings, results start unticked with Select
   all. Made D11 (delete old versions) off by default too, also offered on first launch and in Settings.
 - Decided D7. All decisions are now settled. Wrote PLAN.md: six stages, and nothing changes the system before stage 5.

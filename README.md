@@ -6,7 +6,35 @@ schedule, and lets you update with a click.
 
 ## Status
 
-**Design done, ready to build.** All decisions are settled. No code yet. Building follows PLAN.md, stage by stage.
+**Stages 1 and 2 of PLAN.md are built.** You can add GitHub/GitLab repos, browse their releases, build files and
+branches, and pick what to follow. Nothing checks for updates or installs anything yet.
+
+## Running it
+
+```sh
+~/claudework/RepoProject/run.sh
+```
+
+Needs only what Fedora KDE already has: Python 3, PySide6 (`python3-pyside6`) and Kirigami. Your tracked repos are
+saved in `~/.config/repoproject/repos.toml`.
+
+## Tests
+
+```sh
+cd ~/claudework/RepoProject && python3 -m unittest discover -s tests -t .
+```
+
+They don't use the network: GitHub and GitLab answers are saved in `tests/fixtures/`.
+
+## Code layout
+
+| File                       | What it does                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| `repoproject/config.py`    | The settings file: global settings and tracked repos                           |
+| `repoproject/sources.py`   | Talking to GitHub and GitLab: addresses, releases, branches                    |
+| `repoproject/assets.py`    | Build files: which kind, whether it suits this PC, remembering your pick       |
+| `repoproject/backend.py`   | Connects the window to the above; runs network work in the background          |
+| `repoproject/qml/`         | The window: list page, repo page, Add dialog                                   |
 
 ## Files
 

@@ -1,0 +1,9 @@
+{
+ "id": 10174980,
+ "name": "veloren",
+ "path": "veloren",
+ "path_with_namespace": "veloren/veloren",
+ "description": "Veloren is a multiplayer voxel RPG written in Rust. It is inspired by games such as Cube World, Legend of Zelda: Breath of the Wild, Dwarf Fortress and Minecraft.",
+ "default_branch": "master",
+ "web_url": "https://gitlab.com/veloren/veloren"
+}

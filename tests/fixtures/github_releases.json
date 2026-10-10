@@ -1,0 +1,170 @@
+[
+ {
+  "tag_name": "v1.18.2",
+  "name": "v1.18.2",
+  "published_at": "2026-08-21T14:02:01Z",
+  "created_at": "2026-08-21T13:07:53Z",
+  "prerelease": false,
+  "draft": false,
+  "html_url": "https://github.com/localsend/localsend/releases/tag/v1.18.2",
+  "body": "This release fixes compatibility issues with 1.17.0 and earlier.\r\nNote: The Windows binaries have been updated to include a signature.\r\n\r\n- feat: drag and drop files into the \"Receive via link\" browser page\r\n- feat(desktop): allow customizing the web share pages by placing HTML files in a `web` fold",
+  "assets": [
+   {
+    "name": "LocalSend-1.18.2-android-arm32v7.apk",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-1.18.2-android-arm32v7.apk",
+    "size": 39333444,
+    "digest": "sha256:222b02d2813578a574cd3fbcfa7b8ff317d4887edb9ca0fb7b292816d222dc63"
+   },
+   {
+    "name": "LocalSend-1.18.2-android-arm64v8.apk",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-1.18.2-android-arm64v8.apk",
+    "size": 46558706,
+    "digest": "sha256:82ec3568fba2aa5295b9aae8b76f701d7a4703d86b9f8bad749472038fbaeab3"
+   },
+   {
+    "name": "LocalSend-1.18.2-android-google-play.apk",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-1.18.2-android-google-play.apk",
+    "size": 128293112,
+    "digest": "sha256:ca08306fbedad33790efa02240bc530c3f248e69a1a1ea780fa553f68202f436"
+   },
+   {
+    "name": "LocalSend-1.18.2-android-x64.apk",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-1.18.2-android-x64.apk",
+    "size": 48939435,
+    "digest": "sha256:93e30ddbf84121ad2048c5a61763f2b37738f593699a9f0cf39a8404177aa05b"
+   },
+   {
+    "name": "LocalSend-1.18.2-linux-arm-64.deb",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-1.18.2-linux-arm-64.deb",
+    "size": 24662482,
+    "digest": "sha256:bbd8347b7979f936d3bae176a3f0d9b81431605707c585270d6240f7670feb1f"
+   },
+   {
+    "name": "LocalSend-1.18.2-linux-arm-64.tar.gz",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-1.18.2-linux-arm-64.tar.gz",
+    "size": 32354331,
+    "digest": "sha256:dd61f74f1ce3f4e25aca41cd3ce650d6a99353d7baba81a8139807275b88e606"
+   },
+   {
+    "name": "LocalSend-1.18.2-linux-x86-64.AppImage",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-1.18.2-linux-x86-64.AppImage",
+    "size": 66471104,
+    "digest": "sha256:19f21613d1834f6caa69517113670461a3f10b80a2a315f86548c0663d9c0aaf"
+   },
+   {
+    "name": "LocalSend-1.18.2-linux-x86-64.deb",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-1.18.2-linux-x86-64.deb",
+    "size": 24665458,
+    "digest": "sha256:cc42a4f3eacdcb25ec31f0016b1272acb003145ab30484db8965450e20c72cd2"
+   },
+   {
+    "name": "LocalSend-1.18.2-linux-x86-64.tar.gz",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-1.18.2-linux-x86-64.tar.gz",
+    "size": 32011656,
+    "digest": "sha256:287690a9a8eb6da9c83cc97b3e3030ac67daf32a7331fcf307d0939300658d16"
+   },
+   {
+    "name": "LocalSend-1.18.2-windows-arm-64.zip",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-1.18.2-windows-arm-64.zip",
+    "size": 24414965,
+    "digest": "sha256:e441259257f24557e1b21f15783af106b70229e36e789a2525b6726841fb7bc1"
+   },
+   {
+    "name": "LocalSend-1.18.2-windows-x86-64-unsigned.exe",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-1.18.2-windows-x86-64-unsigned.exe",
+    "size": 18960550,
+    "digest": "sha256:f53856750ad087a17b996309171262fa7d89071c350e0dc5df6530f34dd8a2ae"
+   },
+   {
+    "name": "LocalSend-1.18.2-windows-x86-64.exe",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-1.18.2-windows-x86-64.exe",
+    "size": 19901144,
+    "digest": "sha256:122783e6abb4b0a1f1603d896f46a03aeda3004479ebd3175cab4ddac6b60919"
+   },
+   {
+    "name": "LocalSend-1.18.2-windows-x86-64.zip",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-1.18.2-windows-x86-64.zip",
+    "size": 26113764,
+    "digest": "sha256:737aab1829d901e1d798cddd1e5fdc06ba9dfcc9ea50cfe3805e047005d5e71a"
+   },
+   {
+    "name": "LocalSend-1.18.2.dmg",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-1.18.2.dmg",
+    "size": 52700247,
+    "digest": "sha256:126860d56f6f49b11845f601aac51de27a49b16d2b48102415da91e0e37e5155"
+   },
+   {
+    "name": "LocalSend-CLI-1.18.2-linux-arm-64.tar.gz",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-CLI-1.18.2-linux-arm-64.tar.gz",
+    "size": 4639269,
+    "digest": "sha256:b003e9837743470f7a423ca1205e664031ce3d2e865acc692f3e47577ea93f6d"
+   },
+   {
+    "name": "LocalSend-CLI-1.18.2-linux-x86-64.tar.gz",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-CLI-1.18.2-linux-x86-64.tar.gz",
+    "size": 4762297,
+    "digest": "sha256:f5a986e0b4701b9aafeb9747225a2f3e314e97aba61b3dd7c9d076226f512b08"
+   },
+   {
+    "name": "LocalSend-CLI-1.18.2-macos-arm-64.tar.gz",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-CLI-1.18.2-macos-arm-64.tar.gz",
+    "size": 4105018,
+    "digest": "sha256:c375664d632a3065c135e712175fb336ceff1613e5e54ee3e04911db82e1b0fc"
+   },
+   {
+    "name": "LocalSend-CLI-1.18.2-macos-x86-64.tar.gz",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-CLI-1.18.2-macos-x86-64.tar.gz",
+    "size": 4397211,
+    "digest": "sha256:bef783d8abce9e903a2e9bbb60471df206a22fc9840e831cc63e8221054488e6"
+   },
+   {
+    "name": "LocalSend-CLI-1.18.2-windows-arm-64.exe",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-CLI-1.18.2-windows-arm-64.exe",
+    "size": 8355328,
+    "digest": "sha256:0ff4c4c90ea68f0cc586b5a08c900f89bf71c02a454c78cd035bc3c4fc879bf7"
+   },
+   {
+    "name": "LocalSend-CLI-1.18.2-windows-x86-64.exe",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.2/LocalSend-CLI-1.18.2-windows-x86-64.exe",
+    "size": 9725952,
+    "digest": "sha256:ca0b267e7457324b3664a935de4e4956da701a7fa1045f6f99c72602f7f8dc38"
+   }
+  ]
+ },
+ {
+  "tag_name": "v1.18.1",
+  "name": "v1.18.1",
+  "published_at": "2026-08-12T13:11:17Z",
+  "created_at": "2026-08-11T16:21:10Z",
+  "prerelease": false,
+  "draft": false,
+  "html_url": "https://github.com/localsend/localsend/releases/tag/v1.18.1",
+  "body": "Android+iOS only hotfix update. See [1.18.0](https://github.com/localsend/localsend/releases/tag/v1.18.0) for the full release.\r\n\r\n- fix: revert button icon sizes to 24\r\n- fix: when sending a message that is accepted immediately, a ghost device list tile appears\r\n- fix(mobile): when sending a link m",
+  "assets": [
+   {
+    "name": "LocalSend-1.18.1-android-arm32v7.apk",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.1/LocalSend-1.18.1-android-arm32v7.apk",
+    "size": 39208952,
+    "digest": "sha256:11398bf9637a7364d2a322e2524222a5910c64f4f3f9ca6d2cf144e29a8b6053"
+   },
+   {
+    "name": "LocalSend-1.18.1-android-arm64v8.apk",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.1/LocalSend-1.18.1-android-arm64v8.apk",
+    "size": 46467598,
+    "digest": "sha256:6268f296558cd8fbd114490bda443567d8cbd7e6c2f452b5f006c4b7a9948070"
+   },
+   {
+    "name": "LocalSend-1.18.1-android-google-play.apk",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.1/LocalSend-1.18.1-android-google-play.apk",
+    "size": 127903992,
+    "digest": "sha256:913645e3963e060d75625f6d322e6f4e48ef44a317ab9ec52c0007ac11dbb13a"
+   },
+   {
+    "name": "LocalSend-1.18.1-android-x64.apk",
+    "browser_download_url": "https://github.com/localsend/localsend/releases/download/v1.18.1/LocalSend-1.18.1-android-x64.apk",
+    "size": 48831807,
+    "digest": "sha256:7e5aeabe150fbe629313b04d0cf5ed25f645b8a98cefcea8b82c593808b6717a"
+   }
+  ]
+ }
+]
