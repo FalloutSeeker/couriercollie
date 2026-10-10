@@ -35,6 +35,12 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(self.backend.settings["checkIntervalHours"], 12)
         self.assertEqual(self.backend.settings["deleteOldDays"], 7)
 
+    def test_longer_intervals(self):
+        # 3 days, week, 2 weeks, "month" (4 weeks).
+        for hours in (72, 168, 336, 672):
+            self.backend.updateSettings({"checkIntervalHours": hours})
+            self.assertEqual(self.backend.settings["checkIntervalHours"], hours)
+
     def test_values_outside_the_choices_are_ignored(self):
         self.backend.updateSettings({"checkIntervalHours": 5, "deleteOldDays": 1, "autoCheck": "yes", "bogus": 1})
         self.assertEqual(self.backend.settings["checkIntervalHours"], 6)

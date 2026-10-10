@@ -15,7 +15,8 @@ FOLLOW_BRANCH = "branch"
 
 
 # The choices offered in the window (DESIGN.md §6, §7).
-CHECK_INTERVALS_HOURS = (1, 6, 12, 24, 168)
+# In hours: hour, 6 hours, 12 hours, day, 3 days, week, 2 weeks, "month" (4 weeks).
+CHECK_INTERVALS_HOURS = (1, 6, 12, 24, 72, 168, 336, 672)
 DELETE_AFTER_DAYS = (7, 30, 90)
 
 

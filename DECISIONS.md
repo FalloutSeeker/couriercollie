@@ -43,7 +43,7 @@ Later option: the "custom dnf" idea, a local package repo the app fills, so `dnf
 ## D5. Checking and notifications
 
 - **One global setting**, asked on first launch, changeable in Settings: automatic checks **on** with an interval
-  (hour / 6 h / 12 h / day / week), or **off** (only the Check now button).
+  (hour / 6 h / 12 h / day / 3 days / week / 2 weeks / month, where month = 4 weeks), or **off** (only the Check now button).
 - **No per-repo intervals.** Simpler, and one pass over all repos uses less of the system than many separate timers.
 - Automatic checks run from a systemd user timer: the checker starts, checks everything, and exits. Nothing stays
   running in between.

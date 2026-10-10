@@ -10,7 +10,10 @@ QtObject {
             "6": "6 hours",
             "12": "12 hours",
             "24": "day",
-            "168": "week"
+            "72": "3 days",
+            "168": "week",
+            "336": "2 weeks",
+            "672": "month"
         }[hours] || `${hours} hours`;
     }
 }

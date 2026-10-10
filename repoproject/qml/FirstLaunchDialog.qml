@@ -49,10 +49,17 @@ Kirigami.Dialog {
             text: "Check for updates automatically?"
         }
 
+        // The two choices are in different rows, so they need a group to switch each other off.
+        QQC2.ButtonGroup {
+            id: autoGroup
+        }
+
         RowLayout {
             QQC2.RadioButton {
                 id: autoYes
 
+                objectName: "autoYes"
+                QQC2.ButtonGroup.group: autoGroup
                 text: "Yes, every"
                 checked: true
             }
@@ -67,6 +74,8 @@ Kirigami.Dialog {
         }
 
         QQC2.RadioButton {
+            objectName: "autoNo"
+            QQC2.ButtonGroup.group: autoGroup
             text: "No, I'll click “Check now” myself"
         }
 

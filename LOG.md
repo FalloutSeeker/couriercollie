@@ -4,6 +4,14 @@ Newest first.
 
 ## 2026-10-10
 
+- Check intervals: added 3 days, 2 weeks and "month" (4 weeks), as a fixed list rather than a number + unit. The
+  interval is counted from the last check; a check missed while the PC was off will run soon after the next login
+  (to build in stage 4).
+- Fixed radio buttons. On the welcome screen "Yes" and "No" were in different rows, so both stayed ticked and Done
+  saved "Yes" even after picking "No". The list's filter buttons could un-highlight when clicked twice. Buttons that
+  show a saved choice (filters, build files, branches) now only display it; a click asks the app, and the app's
+  answer decides what's marked. Checked by simulating mouse clicks on the real window, which failed on the old
+  screens and passes on the new ones.
 - Built the first-launch screen and the Settings page early (they were planned for stage 4, but were expected now).
   The first start asks the three questions; answers are saved and the screen doesn't come back. Settings can change
   them anytime. The features behind them (scanning, background checks, cleanup) come in stages 3, 4 and 6.

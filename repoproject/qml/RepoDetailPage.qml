@@ -266,7 +266,9 @@ Kirigami.ScrollablePage {
 
                             required property var modelData
 
+                            objectName: "asset:" + modelData.name
                             Layout.fillWidth: true
+                            checkable: false
                             checked: modelData.selected
                             opacity: modelData.suits || modelData.selected ? 1 : 0.5
                             onClicked: backend.pickAsset(page.repoId, release.modelData.tag, modelData.name)
@@ -352,7 +354,9 @@ Kirigami.ScrollablePage {
 
                 required property var modelData
 
+                objectName: "branch:" + modelData.name
                 Layout.fillWidth: true
+                checkable: false
                 checked: modelData.selected
                 onClicked: backend.setBranch(page.repoId, modelData.name)
 

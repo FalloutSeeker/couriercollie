@@ -61,7 +61,8 @@ system.
 
 One global setting, chosen on first launch (see 6) and changeable in Settings:
 
-- **Automatic checks on**, with an interval: every hour / 6 hours / 12 hours / day / week. Checks run in the background
+- **Automatic checks on**, with an interval: every hour / 6 hours / 12 hours / day / 3 days / week / 2 weeks / month (4 weeks). The
+  time is counted from the last check, not from a weekday. Checks run in the background
   even when the window is closed.
 - **Automatic checks off**: nothing runs in the background. The **Check now** button in the main window still works.
 

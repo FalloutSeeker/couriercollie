@@ -54,8 +54,9 @@ Kirigami.ScrollablePage {
                     delegate: QQC2.ToolButton {
                         required property var modelData
 
+                        objectName: "filter:" + modelData.key
                         text: `${modelData.label} (${backend.counts[modelData.key]})`
-                        checkable: true
+                        checkable: false
                         checked: backend.filter === modelData.key
                         onClicked: backend.filter = modelData.key
                     }
