@@ -53,20 +53,23 @@ Clicking a tracked repo shows:
 
 ### 4. Checking on a schedule
 
-- A default check interval in Settings (e.g. every 6 hours), changeable per repo.
-- Checks run in the background even when the window is closed, and a KDE notification says when something has a new
-  version. Clicking the notification opens that repo's page.
+- A global check interval, chosen on first launch (see 6): every hour / 6 hours / 12 hours / day / week, or
+  **Never (manual only)**. Each repo can override it.
+- With an interval set, checks run in the background even when the window is closed. With Never, the app only checks
+  when you click **Check now**.
+- New versions show up in the app (marked "new", with an update count), plus a KDE toast unless you turned toasts off.
+  Clicking the toast opens that repo's page.
 
 ### 5. Updating
 
-**Update mode** (DECISIONS.md, D4). Each repo uses one of:
+**Nothing ever installs on its own** (DECISIONS.md, D4), so the app never shows a password prompt you didn't ask for.
+**Update mode**: each repo uses one of:
 
-- **Auto-update**: installs new versions by itself.
 - **Notify + click**: notifies you, then installs when you click Update.
-- **Notify only**: notifies you and links the page.
+- **Notify only**: notifies you and links the project page.
 
-On first launch the app asks which mode to use for everything, and says you can change it later in Settings. Each
-repo's detail page can then override it ("Use global setting" is the default).
+The global mode is chosen on first launch (see 6). Each repo's detail page can override it ("Use global setting" is
+the default).
 
 What "Update" does depends on the kind:
 
@@ -77,7 +80,40 @@ What "Update" does depends on the kind:
 | Program     | Downloads, unpacks, and swaps in the new program file                           |
 | Git clone   | Pulls the new commits. Re-running the project's install script is a separate, deliberate step |
 
+**Old versions** (DECISIONS.md, D11): the previous version is kept so an update can be undone, then deleted after a
+set time (Settings: 7 / 30 / 90 days / Never; default 30). Only files in your own folders are deleted. Anything that
+would need admin rights is skipped, never prompted for.
+
+### 6. First launch
+
+A short setup screen asks three things, and says all of them can be changed later in Settings:
+
+1. **How should updates work?** Notify + click / Notify only.
+2. **How often should it check?** Every hour / 6 hours / 12 hours / day / week / Never (I'll click Check now).
+3. **Desktop notifications (toasts)?** On / Off. Not asked if the interval is Never, since then you're always in the
+   app when a check happens.
+
+Then it offers to run a **Scan** for things already installed.
+
 ## Screens (rough sketches)
+
+**First launch**
+
+```
+┌ Welcome to RepoProject ───────────────────────────────────────┐
+│  How should updates work?                                     │
+│    ◉ Tell me, and I'll click Update                           │
+│    ○ Just tell me (link to the project page)                  │
+│                                                               │
+│  How often should it check?   [ Every 6 hours ▾ ]             │
+│    (Never = only when you click Check now)                    │
+│                                                               │
+│  Desktop notifications        [✓]                             │
+│                                                               │
+│  You can change all of this later in Settings.                │
+│                                       [Scan my system] [Done] │
+└───────────────────────────────────────────────────────────────┘
+```
 
 **Main list**
 
@@ -128,10 +164,12 @@ What "Update" does depends on the kind:
 
 - **One settings file** (`~/.config/repoproject/repos.toml`) lists what's tracked, which build file to follow, and
   intervals. It's plain text, so you can read or back it up.
-- **A background checker** runs on a systemd user timer. It asks GitHub/GitLab for each repo's latest release or
-  commit, compares it with what's installed, and sends a notification if newer.
+- **A background checker** runs on a systemd user timer (only if an interval is set). It asks GitHub/GitLab for each
+  repo's latest release or commit, compares it with what's installed, records what's new for the window to show, and
+  sends a toast if those are on. It never installs anything.
 - **The window** is a separate program that reads the same settings file. Closing it doesn't stop checks.
-- **Downloads** are kept in `~/.cache/repoproject` so a failed update can roll back to the previous file.
+- **Downloads** are kept in `~/.cache/repoproject` so a failed update can roll back to the previous file, and are
+  cleaned up after the "delete old versions" period.
 
 Proposed tools (see DECISIONS.md, D1): Python, with Qt and KDE's Kirigami for the window so it looks native on KDE.
 Both are already installed on this machine.

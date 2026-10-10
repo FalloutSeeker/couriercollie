@@ -50,26 +50,34 @@ repo."* This could mean any of:
 Later option: the "custom dnf" idea, a local package repo the app fills, so `dnf upgrade` / Discover pick these up too.
 More moving parts (signing keys, repo metadata), so not first.
 
-**Status:** decided 2026-10-10. There are three **update modes**, chosen by the user:
+**Status:** decided 2026-10-10, revised the same day. **No auto-update.** The app never installs anything on its own,
+so it never pops up a password prompt the user didn't ask for. There are two **update modes**:
 
-| Mode                  | What happens when a new version is found                          |
-| --------------------- | ----------------------------------------------------------------- |
-| **Auto-update**       | Downloads and installs it                                         |
-| **Notify + click**    | Sends a notification; installs when you click Update              |
-| **Notify only**       | Sends a notification and links the page; you update by hand       |
+| Mode                  | What happens when a new version is found                                  |
+| --------------------- | ------------------------------------------------------------------------- |
+| **Notify + click**    | Shows it in the app, plus a toast; installs when you click Update         |
+| **Notify only**       | Shows it in the app, plus a toast, with a link to the project page; you update by hand |
 
+- **In-app notice** is always on: the repo is marked "new" in the list, and the window shows a count of updates.
+- **Toast** (a KDE desktop notification) can be turned off in Settings.
 - **Global setting**, asked on first launch, then changeable in Settings. The first-launch screen says so.
 - **Per-repo override**: each repo can use the global setting (the default) or its own mode.
-- The rest of the recommendation still applies in every mode: RPM installs ask for your password (so auto-update of an
-  RPM shows a password prompt when it's ready, rather than installing silently). Git clones only pull, and a
-  project's install script never runs automatically.
+- RPM installs ask for your password, but only after you click Update. Git clones only pull, and a project's install
+  script never runs automatically.
 
 ## D5. Background checking
 
 **Recommendation:** a systemd user timer runs the checker, so checks happen with the window closed, plus a KDE
 notification when something's new. Optional tray icon later.
 
-**Status:** open
+**Status:** decided 2026-10-10.
+
+- **Check interval is global**, asked on first launch: every hour / 6 hours / 12 hours / day / week, or
+  **Never (manual only)**. With Never, nothing runs in the background and the app only checks when you click
+  **Check now**. Changeable later in Settings.
+- When an interval is set, a systemd user timer runs the checks, so they happen with the window closed.
+- Each repo can still override the interval on its detail page (default: use the global setting), as in the original
+  feature list. If you'd rather it be global only, we drop the override.
 
 ## D6. Safety rules
 
@@ -81,6 +89,19 @@ notification when something's new. Optional tray icon later.
 - Never run a project's own install script automatically.
 
 **Status:** open
+
+## D11. Deleting old versions
+
+**Status:** decided 2026-10-10. Setting: **Delete old versions after** [7 / 30 / 90 days / Never]. Proposed default:
+30 days.
+
+- **What it deletes:** files the app kept for undoing an update: the previous AppImage or program file, and old
+  downloads in `~/.cache/repoproject`. All of these are in your own folders, so no password is needed.
+- **What it never touches:** anything that would need admin rights. In practice that's nothing to worry about: dnf
+  already replaces the old version when an RPM is updated. If something ever does need admin rights to delete, the app
+  skips it rather than asking for a password.
+- **Git clones:** the old versions are the repo's own history, which isn't deleted.
+- Once an old version is deleted, undoing that update isn't possible any more. The setting says so.
 
 ## D7. GitHub request limit
 

@@ -4,6 +4,11 @@ Newest first.
 
 ## 2026-10-10
 
+- Revised D4: auto-update dropped, so the app never prompts for a password unasked. Two modes remain (Notify + click,
+  Notify only), with an in-app notice always and an optional toast.
+- Decided D5: global check interval asked on first launch, including "Never (manual only)".
+- Added and decided D11: delete old versions after a set time, skipping anything that needs admin rights.
+- Added a first-launch setup screen to DESIGN (update mode, interval, toasts, then offer a scan).
 - Decided: D2 (GitHub + GitLab, with a filter in the list), D3 (build files and branches; no repo groups),
   D4 (three update modes: a global setting asked on first launch, plus per-repo overrides), D9 (local git repo).
 - Project folder created. Wrote README, DESIGN and DECISIONS.
