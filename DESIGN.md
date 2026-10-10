@@ -103,6 +103,42 @@ offers to run a **Scan** for things already installed.
 - **Automatic checks**: on/off, and the interval.
 - **Toast notifications**: on/off. Off leaves only the taskbar badge and the ⬆ icons in the app.
 - **Delete old versions after**: 7 / 30 / 90 days / Never.
+- **GitHub account** (optional): Sign in / Sign out, with the explanation below.
+
+### 8. Signing in to GitHub (optional)
+
+Signing in is never required. The Settings section explains why someone would do it:
+
+```
+┌ GitHub account ───────────────────────────────────────────────┐
+│  Not signed in                               [Sign in…]       │
+│                                                               │
+│  GitHub limits how often apps can ask it about releases:      │
+│  60 requests an hour without signing in, 5,000 an hour with.  │
+│                                                               │
+│  Each check uses about one request per repo that publishes    │
+│  releases. Repos you cloned with git don't count.             │
+│                                                               │
+│  You're tracking 12 release repos, checked every 6 hours:     │
+│  about 12 requests per check. You don't need to sign in.      │
+│                                                               │
+│  Sign in if you track a lot of repos or check often.          │
+│  RepoProject only reads public release info with it. It       │
+│  doesn't change anything on GitHub. The login is kept in      │
+│  KDE Wallet, and you can sign out anytime.                    │
+└───────────────────────────────────────────────────────────────┘
+```
+
+- **The "you're tracking…" lines are worked out live** from the number of release repos and the check interval, so
+  the advice fits the user. When usage is close to the limit, they say "Signing in is recommended" instead.
+- **When the limit is actually hit**, the main window shows a bar: "GitHub's hourly limit was reached, so 8 repos
+  weren't checked. They'll be checked after 15:00. [Sign in to GitHub] [Dismiss]". Repos that weren't checked keep
+  their last known status. Nothing is shown as an error.
+- **Sign in…** offers to reuse the `gh` login if one exists ("Use your existing GitHub CLI login as FalloutSeeker?").
+  Otherwise it shows a short code and opens github.com/login/device to enter it.
+- **Signed in** shows the account name and how many requests are left this hour, with **Sign out**.
+- **Permissions:** the sign-in asks for no extra access beyond reading public data, since checking releases only
+  reads public information. (Tracking a *private* repo would need read access to it. That's a later decision.)
 
 ## Screens (rough sketches)
 

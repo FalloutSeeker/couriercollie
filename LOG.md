@@ -4,6 +4,8 @@ Newest first.
 
 ## 2026-10-10
 
+- Designed the optional GitHub sign-in (DESIGN §8): it explains the 60 vs 5,000 an hour limit, gives a live "do you
+  need this?" estimate, shows a friendly bar when the limit is hit, and asks for read-only, public-data access.
 - Simplified notifications: dropped update modes (Notify + click / Notify only) and per-repo overrides. Updates are
   always a click on the ⬆ icon. Dropped per-repo check intervals (one global schedule, lighter on the system).
   First launch now asks one question: automatic checks on (with interval) or off. Toasts on by default when checks
