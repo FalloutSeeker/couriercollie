@@ -1,133 +1,125 @@
-# Decisions to settle
+# Decisions
 
-Each one has a recommendation. **Status** is `open` until you pick, then `decided` with the date.
+Each one has a recommendation. **Status** is `open` until you pick, then `decided` with the date. LOG.md records how
+decisions changed along the way.
 
 ---
 
 ## D1. What to build it with
 
-**Recommendation:** Python + PySide6 (Qt) + Kirigami (KDE's interface toolkit).
+Python + PySide6 (Qt) + Kirigami (KDE's interface toolkit).
 
 - Looks and behaves like other KDE apps (Discover, System Settings).
 - Python is the easiest of the options to read and change later.
 - Both `python3-pyside6` and `kf6-kirigami` are already installed here.
 
-Alternative: C++ with Qt. More native, much harder to work on. Not worth it here.
-
-**Status:** open
+**Status:** decided 2026-10-10.
 
 ## D2. Which sites to support
 
-**Recommendation:** GitHub and GitLab (which includes gitgud.io) in the first version. Codeberg/Gitea later.
-
-Your AeroThemePlasma repos are on gitgud.io, so GitHub alone would miss most of what you'd actually track.
+GitHub and GitLab (which includes gitgud.io, where the AeroThemePlasma repos are). Codeberg/Gitea maybe later.
 
 **Status:** decided 2026-10-10. GitHub + GitLab, **plus a filter in the main list** to show All / GitHub / GitLab.
 
 ## D3. What "multiple versions" in a repo means
 
-Your note: *"If the repo has multiple repositories (i.e. different build versions), list them when clicking into the
-repo."* This could mean any of:
-
 - **a) Build files**: one release ships several files (RPM, AppImage, ARM, Intel…). You pick one to follow.
-- **b) Branches**: e.g. AeroThemePlasma has `Plasma/6.7` and `master`. You pick which to follow.
-- **c) Related repos**: one project made of several repos (AeroThemePlasma + its 8 `repos/` sub-projects), shown
-  together as a group.
+- **b) Branches**: for repos without releases, e.g. AeroThemePlasma's `Plasma/6.7` and `master`. You pick one.
 
-**Recommendation:** a) and b) in the first version (both are in DESIGN.md). c) as a later "group" feature.
-
-**Status:** decided 2026-10-10. **a) build files and b) branches.** c) isn't planned.
+**Status:** decided 2026-10-10. Both a) and b). Grouping related repos together isn't planned.
 
 ## D4. How updates get installed
 
-**Recommendation for the first version:**
-
-- **Notify, and update when you click.** Nothing installs on its own.
-- RPMs install with `dnf install ./file.rpm`, which asks for your password.
+- **Nothing installs on its own.** You click the ⬆ icon next to a repo (or Update on its page). So the app never pops
+  up a password prompt you didn't ask for.
+- RPMs install with `dnf install ./file.rpm`, which asks for your password after you click.
 - Git clones only pull. Re-running a project's install script (AeroThemePlasma has one) is a separate button, and the
   app shows you what it will run first.
 
 Later option: the "custom dnf" idea, a local package repo the app fills, so `dnf upgrade` / Discover pick these up too.
-More moving parts (signing keys, repo metadata), so not first.
-
-**Status:** decided 2026-10-10, revised the same day. **No auto-update.** The app never installs anything on its own,
-so it never pops up a password prompt the user didn't ask for. There are two **update modes**:
-
-| Mode                  | What happens when a new version is found                                  |
-| --------------------- | ------------------------------------------------------------------------- |
-| **Notify + click**    | Shows it in the app, plus a toast; installs when you click Update         |
-| **Notify only**       | Shows it in the app, plus a toast, with a link to the project page; you update by hand |
-
-- **In-app notice** is always on: the repo is marked "new" in the list, and the window shows a count of updates.
-- **Toast** (a KDE desktop notification) can be turned off in Settings.
-- **Global setting**, asked on first launch, then changeable in Settings. The first-launch screen says so.
-- **Per-repo override**: each repo can use the global setting (the default) or its own mode.
-- RPM installs ask for your password, but only after you click Update. Git clones only pull, and a project's install
-  script never runs automatically.
-
-## D5. Background checking
-
-**Recommendation:** a systemd user timer runs the checker, so checks happen with the window closed, plus a KDE
-notification when something's new. Optional tray icon later.
 
 **Status:** decided 2026-10-10.
 
-- **Check interval is global**, asked on first launch: every hour / 6 hours / 12 hours / day / week, or
-  **Never (manual only)**. With Never, nothing runs in the background and the app only checks when you click
-  **Check now**. Changeable later in Settings.
-- When an interval is set, a systemd user timer runs the checks, so they happen with the window closed.
-- Each repo can still override the interval on its detail page (default: use the global setting), as in the original
-  feature list. If you'd rather it be global only, we drop the override.
+## D5. Checking and notifications
+
+- **One global setting**, asked on first launch, changeable in Settings: automatic checks **on** with an interval
+  (hour / 6 h / 12 h / day / week), or **off** (only the Check now button).
+- **No per-repo intervals.** Simpler, and one pass over all repos uses less of the system than many separate timers.
+- Automatic checks run from a systemd user timer: the checker starts, checks everything, and exits. Nothing stays
+  running in between.
+- **When updates are found:** a toast (on by default). Clicking it opens the main window, where each repo with an
+  update has a ⬆ icon. The app's taskbar icon shows a badge with the number of updates.
+- **Toasts can be turned off**, leaving just the badge and the ⬆ icons.
+
+**Status:** decided 2026-10-10.
 
 ## D6. Safety rules
-
-**Recommendation (these become fixed rules):**
 
 - Never run anything as root without you clicking and entering your password.
 - Verify downloads against the checksum file when the project publishes one; warn when it doesn't.
 - Keep the previous version until the new one is installed, so an update can be undone.
 - Never run a project's own install script automatically.
 
-**Status:** open
+**Status:** decided 2026-10-10.
 
-## D11. Deleting old versions
+## D7. How the app talks to GitHub and GitLab
 
-**Status:** decided 2026-10-10. Setting: **Delete old versions after** [7 / 30 / 90 days / Never]. Proposed default:
-30 days.
+**The limits.** GitHub's API allows **60 requests an hour per IP address** without logging in, and 5,000 an hour
+with a login. GitLab.com's limits are much looser, and self-hosted GitLab sites like gitgud.io set their own. These
+limits apply **per user**: every copy of the app runs on its own machine and sends its own requests, so users don't
+share a limit and there's no server of ours to run or pay for.
 
-- **What it deletes:** files the app kept for undoing an update: the previous AppImage or program file, and old
-  downloads in `~/.cache/repoproject`. All of these are in your own folders, so no password is needed.
-- **What it never touches:** anything that would need admin rights. In practice that's nothing to worry about: dnf
-  already replaces the old version when an RPM is updated. If something ever does need admin rights to delete, the app
-  skips it rather than asking for a password.
-- **Git clones:** the old versions are the repo's own history, which isn't deleted.
-- Once an old version is deleted, undoing that update isn't possible any more. The setting says so.
+**How the app stays well under them, without needing a login:**
 
-## D7. GitHub request limit
+1. **Git clones use `git ls-remote`**, not the API. It asks the server which commit a branch is on, a few hundred
+   bytes per repo, and isn't counted against the API limit at all. Most of what you'd track today is git clones.
+2. **One request per repo per check** for release-tracked repos (just "what's the latest release?"). The full release
+   list is fetched only when you open a repo's page.
+3. **"Has anything changed?" requests.** The app remembers each answer's fingerprint (an ETag) and asks "only send
+   it if it changed". When nothing changed, GitHub answers "not modified", and for logged-in requests those don't
+   count against the limit.
+4. **Back off when told to.** If a site says "slow down", the app waits until the time it gives and tries again next
+   round instead of retrying in a loop.
 
-GitHub allows 60 checks an hour without logging in. Tracking 20 repos every hour would hit that.
+**Rough math:** 30 release-tracked repos checked every 6 hours is 30 requests per check, well under 60 an hour,
+with no login. You'd only hit the limit with something like 60+ release repos checked hourly.
 
-**Recommendation:** reuse the GitHub login that's already on this machine (`gh`, logged in as FalloutSeeker), which
-raises the limit to 5,000 an hour. Fall back to the low limit if it's not available.
+**Optional login, for heavy use:** Settings → "Sign in to GitHub", which raises the limit to 5,000 an hour.
+- If the `gh` command is already logged in (it is on this machine), the app offers to reuse that login.
+- Otherwise it uses GitHub's sign-in code page (the same "enter this code at github.com/login/device" flow the
+  ultrakanban Setup page uses).
+- The login token is stored in KDE Wallet, never in the plain settings file.
+- The app **never ships with a built-in token**. Anyone could pull it out of the app and use it, and GitHub would
+  revoke it.
 
-**Status:** open
+**Status:** open. Recommendation: the four points above, working without a login by default, with optional sign-in.
 
 ## D8. Where downloaded apps go
 
-**Recommendation:** AppImages in `~/Applications`, loose programs in `~/.local/bin`, with a menu entry created for
-AppImages so they show up in the KDE launcher. Nothing in system folders except via dnf.
+AppImages in `~/Applications`, loose programs in `~/.local/bin`, with a menu entry created for AppImages so they show
+up in the KDE launcher. Nothing in system folders except through dnf.
 
-**Status:** open
+**Status:** decided 2026-10-10.
 
 ## D9. Keeping this project in git
-
-**Recommendation:** make `RepoProject` a git repo now (and later push it to a private GitHub repo), so every design
-change and code change is saved and can be undone.
 
 **Status:** decided 2026-10-10. Local git repo only, no GitHub for now.
 
 ## D10. Name
 
-"RepoProject" is the working name. Pick a real one whenever. It only matters once it has an app icon and menu entry.
+"RepoProject" stays as the working name until there's an app icon and menu entry to put a real name on.
 
-**Status:** open
+**Status:** decided 2026-10-10 (keep the working name for now).
+
+## D11. Deleting old versions
+
+Setting: **Delete old versions after** [7 / 30 / 90 days / Never]. Default 30 days.
+
+- **Deletes:** what the app kept for undoing an update: the previous AppImage or program file, and old downloads in
+  `~/.cache/repoproject`. These are all in your own folders, so no password is needed.
+- **Never touches:** anything that would need admin rights. If something ever does, the app skips it rather than
+  asking for a password. (Old RPM versions don't pile up anyway: dnf replaces them on update.)
+- **Git clones:** the old versions are the repo's own history, which isn't deleted.
+- Once an old version is deleted, that update can't be undone. The setting says so.
+
+**Status:** decided 2026-10-10.

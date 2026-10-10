@@ -4,6 +4,11 @@ Newest first.
 
 ## 2026-10-10
 
+- Simplified notifications: dropped update modes (Notify + click / Notify only) and per-repo overrides. Updates are
+  always a click on the ⬆ icon. Dropped per-repo check intervals (one global schedule, lighter on the system).
+  First launch now asks one question: automatic checks on (with interval) or off. Toasts on by default when checks
+  are on, can be turned off, leaving the taskbar badge and in-app icons.
+- Decided D1, D6, D8, D10 as recommended. Wrote up D7 (how the app talks to GitHub/GitLab within their limits).
 - Revised D4: auto-update dropped, so the app never prompts for a password unasked. Two modes remain (Notify + click,
   Notify only), with an in-app notice always and an optional toast.
 - Decided D5: global check interval asked on first launch, including "Never (manual only)".
