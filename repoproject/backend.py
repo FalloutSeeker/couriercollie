@@ -67,6 +67,7 @@ class Backend(QObject):
     addFinished = Signal(str)  # repo id
     addFailed = Signal(str)  # message for the user
     detailsChanged = Signal(str)  # repo id
+    settingsChanged = Signal()
     _deliver = Signal(object)
 
     def __init__(self, config_path: Path | None = None, parent=None):
@@ -171,6 +172,46 @@ class Backend(QObject):
     @Property(bool, notify=addingChanged)
     def adding(self):
         return self._adding
+
+    # -- settings ---------------------------------------------------------------------------------------------------
+
+    @Property("QVariantMap", notify=settingsChanged)
+    def settings(self):
+        s = self._config.settings
+        return {
+            "firstLaunchDone": s.first_launch_done,
+            "autoCheck": s.auto_check,
+            "checkIntervalHours": s.check_interval_hours,
+            "toasts": s.toasts,
+            "scanning": s.scanning,
+            "deleteOld": s.delete_old,
+            "deleteOldDays": s.delete_old_days,
+        }
+
+    @Property("QVariantList", constant=True)
+    def checkIntervals(self):
+        return list(config.CHECK_INTERVALS_HOURS)
+
+    @Property("QVariantList", constant=True)
+    def deleteAfterDays(self):
+        return list(config.DELETE_AFTER_DAYS)
+
+    @Slot("QVariantMap")
+    def updateSettings(self, changes):
+        """Change any of the settings (same names as the `settings` property) and save. Unknown names and values
+        outside the offered choices are ignored."""
+        s = self._config.settings
+        bools = {"firstLaunchDone": "first_launch_done", "autoCheck": "auto_check", "toasts": "toasts",
+                 "scanning": "scanning", "deleteOld": "delete_old"}
+        for key, attr in bools.items():
+            if isinstance(changes.get(key), bool):
+                setattr(s, attr, changes[key])
+        if int(changes.get("checkIntervalHours", 0) or 0) in config.CHECK_INTERVALS_HOURS:
+            s.check_interval_hours = int(changes["checkIntervalHours"])
+        if int(changes.get("deleteOldDays", 0) or 0) in config.DELETE_AFTER_DAYS:
+            s.delete_old_days = int(changes["deleteOldDays"])
+        self._save()
+        self.settingsChanged.emit()
 
     @Slot(str, result="QVariantMap")
     def repo(self, repo_id):

@@ -12,7 +12,7 @@ AeroThemePlasma and ultrakanban repos), and nothing in a stage can change your s
 | 5     | Click ⬆ to update                                                     | Yes, on your click   |
 | 6     | Old-version cleanup, GitHub sign-in, app icon, installable package    | No                   |
 
-**Progress:** stages 1 and 2 done (2026-10-10).
+**Progress:** stages 1 and 2 done, plus the first-launch screen and Settings page from stage 4 (2026-10-10).
 
 ## Stage 1: Skeleton (done)
 

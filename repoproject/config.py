@@ -14,6 +14,11 @@ FOLLOW_RELEASES = "releases"
 FOLLOW_BRANCH = "branch"
 
 
+# The choices offered in the window (DESIGN.md §6, §7).
+CHECK_INTERVALS_HOURS = (1, 6, 12, 24, 168)
+DELETE_AFTER_DAYS = (7, 30, 90)
+
+
 @dataclass
 class Settings:
     first_launch_done: bool = False

@@ -14,6 +14,12 @@ Kirigami.ScrollablePage {
             icon.name: "list-add"
             text: "Add"
             onTriggered: applicationWindow().showAddDialog()
+        },
+        Kirigami.Action {
+            icon.name: "configure"
+            text: "Settings"
+            displayHint: Kirigami.DisplayHint.IconOnly
+            onTriggered: applicationWindow().openSettings()
         }
     ]
 

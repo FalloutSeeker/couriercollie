@@ -7,7 +7,8 @@ schedule, and lets you update with a click.
 ## Status
 
 **Stages 1 and 2 of PLAN.md are built.** You can add GitHub/GitLab repos, browse their releases, build files and
-branches, and pick what to follow. Nothing checks for updates or installs anything yet.
+branches, and pick what to follow. The first-launch questions and the Settings page work and save your answers, but
+scanning, update checks and cleanup aren't built yet, so those settings have no effect for now.
 
 ## Running it
 

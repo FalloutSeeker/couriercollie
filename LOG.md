@@ -4,6 +4,9 @@ Newest first.
 
 ## 2026-10-10
 
+- Built the first-launch screen and the Settings page early (they were planned for stage 4, but were expected now).
+  The first start asks the three questions; answers are saved and the screen doesn't come back. Settings can change
+  them anytime. The features behind them (scanning, background checks, cleanup) come in stages 3, 4 and 6.
 - Built stages 1 and 2. Tested with 45 unit tests, and by driving the real window off-screen against live GitHub
   (LocalSend) and gitgud.io (AeroThemePlasma).
   - AeroThemePlasma moved from `wackyideas/aerothemeplasma` to `aeroshell/atp/aerothemeplasma`. The app follows the
