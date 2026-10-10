@@ -92,7 +92,8 @@ with no login. You'd only hit the limit with something like 60+ release repos ch
 - The app **never ships with a built-in token**. Anyone could pull it out of the app and use it, and GitHub would
   revoke it.
 
-**Status:** open. Recommendation: the four points above, working without a login by default, with optional sign-in.
+**Status:** decided 2026-10-10 ("works for now"): the four points above, working without a login by default, with
+optional sign-in as designed in DESIGN.md §8.
 
 ## D8. Where downloaded apps go
 

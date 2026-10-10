@@ -6,15 +6,16 @@ schedule, and lets you update with a click.
 
 ## Status
 
-**Design phase.** No code yet. We're agreeing on what it does before building it.
+**Design done, ready to build.** All decisions are settled. No code yet. Building follows PLAN.md, stage by stage.
 
 ## Files
 
-| File                             | What's in it                                                          |
-| -------------------------------- | --------------------------------------------------------------------- |
-| [DESIGN.md](DESIGN.md)           | What the app does: features, screens, and how it works underneath     |
-| [DECISIONS.md](DECISIONS.md)     | Choices to settle before building, each with a recommendation        |
-| [LOG.md](LOG.md)                 | Dated notes on what we decided and did, newest first                  |
+| File                         | What's in it                                                      |
+| ---------------------------- | ----------------------------------------------------------------- |
+| [DESIGN.md](DESIGN.md)       | What the app does: features, screens, and how it works underneath |
+| [DECISIONS.md](DECISIONS.md) | The choices made, and why                                         |
+| [PLAN.md](PLAN.md)           | The build order, in stages                                        |
+| [LOG.md](LOG.md)             | Dated notes on what we decided and did, newest first              |
 
 ## Background
 

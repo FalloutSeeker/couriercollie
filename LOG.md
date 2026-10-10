@@ -4,6 +4,7 @@ Newest first.
 
 ## 2026-10-10
 
+- Decided D7. All decisions are now settled. Wrote PLAN.md: six stages, and nothing changes the system before stage 5.
 - Designed the optional GitHub sign-in (DESIGN §8): it explains the 60 vs 5,000 an hour limit, gives a live "do you
   need this?" estimate, shows a friendly bar when the limit is hit, and asks for read-only, public-data access.
 - Simplified notifications: dropped update modes (Notify + click / Notify only) and per-repo overrides. Updates are
