@@ -218,11 +218,13 @@ Kirigami.ScrollablePage {
             Layout.fillWidth: true
             spacing: Kirigami.Units.largeSpacing
 
-            Kirigami.Icon {
+            RepoIcon {
                 Layout.alignment: Qt.AlignTop
                 Layout.preferredWidth: Kirigami.Units.iconSizes.large
                 Layout.preferredHeight: Kirigami.Units.iconSizes.large
                 source: page.repo.icon || ""
+                letter: page.repo.monogram || ""
+                color: page.repo.monogramColor || "transparent"
             }
 
             ColumnLayout {

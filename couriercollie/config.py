@@ -39,6 +39,8 @@ class Settings:
     # the account's name, to show.
     github_login: str = ""
     github_user: str = ""
+    # Which way repo icons were looked up (icons.py). Raised when that changes, so saved icons are looked up again.
+    icon_lookup: int = 0
 
 
 @dataclass

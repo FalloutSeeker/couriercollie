@@ -157,8 +157,10 @@ Kirigami.Dialog {
                 contentItem: RowLayout {
                     spacing: Kirigami.Units.largeSpacing
 
-                    Kirigami.Icon {
-                        source: row.modelData.icon
+                    RepoIcon {
+                        source: ""  // finds have no picture yet: it's looked up once one is tracked
+                        letter: row.modelData.monogram
+                        color: row.modelData.monogramColor
                         Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                         Layout.preferredHeight: Kirigami.Units.iconSizes.medium
                     }

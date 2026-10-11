@@ -86,7 +86,7 @@ without signing in, and 5,000 with.
 - couriercollie uses its registered app identity to ask GitHub for a read-only, public-data token on behalf of
   whoever signs in.
 - That login can't see anything private or change anything.
-- It's kept in your desktop's password store (KDE Wallet, GNOME Keyring, …).
+- It's kept in your desktop's password store (KDE Wallet, GNOME Keyring, etc.).
 - You can revoke it anytime in GitHub's Settings → Applications.
 
 **What does a scan find?** Only what your package manager can't update:

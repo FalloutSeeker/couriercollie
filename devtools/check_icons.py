@@ -1,6 +1,6 @@
 """Look up icons for your tracked repos (from a copy of your settings, with a temporary cache folder) and show
-what each one got: an installed app's icon, the project's picture from its site, or the default. Also checks the
-corner mark on scanned repos, and that icons aren't looked up a second time.
+what each one got: the app's own icon, the project's picture from its site, or its monogram. Also checks that icons
+aren't looked up a second time.
 
     python3 -I devtools/check_icons.py
 """
@@ -22,8 +22,7 @@ calls = []
 def report():
     for r in b._config.repos:
         print(f"  {r.name:8} {r.source:8} -> {r.icon or '(still looking)'}   shown as: {b.repo(r.id)['icon']}")
-        h.check(f"{r.name}: corner mark only if scanned",
-                (h.find("scannedMark:" + r.id) is not None) == (r.source == "scanned"))
+        h.check(f"{r.name}: shows its icon", h.find("repoIcon:" + r.id) is not None)
     h.shot("icons")
     import couriercollie.icons as icons
     real = icons.resolve

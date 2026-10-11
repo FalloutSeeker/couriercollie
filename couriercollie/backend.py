@@ -5,6 +5,7 @@ so the window never freezes; results are handed back to the main thread through 
 """
 
 import dataclasses
+import hashlib
 import os
 import re
 import urllib.parse
@@ -24,17 +25,11 @@ from .updating import (Updating, _can_clone, _can_update, _head, _is_appimage, _
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, Config, ConfigError, TrackedRepo
 from .sources import RepoRef, SourceError
 
-KIND_ICONS = {
-    assets.KIND_GIT: "folder-git",
-    assets.KIND_RPM: "application-x-rpm",
-    assets.KIND_DEB: "application-vnd.debian.binary-package",
-    assets.KIND_ARCH: "package-x-generic",
-    assets.KIND_FLATPAK: "application-vnd.flatpak",
-    assets.KIND_APPIMAGE: "application-vnd.appimage",
-    assets.KIND_PROGRAM: "application-x-executable",
-    assets.KIND_FILE: "application-x-executable",
-    assets.KIND_VERSIONS: "tag",
-}
+# The way icons are looked up now (icons.py); saved icons from an older way are looked up again.
+ICON_LOOKUP = 2
+# Monogram colours (a repo without a picture shows its first letter on one): each carries a white letter on light and
+# dark themes alike, and a repo always gets the same one.
+MONOGRAM_COLORS = ("#3b78b8", "#2b8a68", "#b9532b", "#7d52b5", "#b53d71", "#4a7f2a", "#8f6e00", "#525fb3")
 FILTERS = ("all", "github", "gitlab")
 # How your version compares with the newest, for the repo page's status box (colour and icon).
 STATUS_UPDATE, STATUS_CURRENT, STATUS_NOT_INSTALLED = "update", "current", "notInstalled"
@@ -72,6 +67,13 @@ class Details:
     branch_on_disk: str = ""
     # A scanned clone's install scripts (updater.install_scripts), offered to run by hand.
     install_scripts: list[str] = field(default_factory=list)
+
+
+def _monogram(name: str, repo_id: str) -> dict:
+    """A picture-less repo's icon: its first letter or digit, on a colour picked from its address."""
+    letter = next((c for c in name if c.isalnum()), "?").upper()
+    color = MONOGRAM_COLORS[int(hashlib.sha1(repo_id.lower().encode()).hexdigest(), 16) % len(MONOGRAM_COLORS)]
+    return {"monogram": letter, "monogramColor": color}
 
 
 def _version_text(version: str) -> str:
@@ -275,6 +277,11 @@ class Backend(QObject, Updating, Account):
             # Start empty, and don't save, so the broken file isn't overwritten.
             self._config = Config()
             self._config_error = str(e)
+        if self._config.settings.icon_lookup < ICON_LOOKUP and not self._config_error:
+            # Looked up an older way (which guessed): look them up again.
+            for r in self._config.repos:
+                r.icon = ""
+            self._config.settings.icon_lookup = ICON_LOOKUP
         self._filter = "all"
         self._adding = False
         self._details: dict[str, Details] = {}
@@ -368,6 +375,7 @@ class Backend(QObject, Updating, Account):
             "assetPattern": r.asset_pattern,
             "prereleases": r.prereleases,
             "icon": self._icon_source(r),
+            **_monogram(r.name, r.id),
             "followText": follow_text,
             "scanned": r.source == config.SOURCE_SCANNED,
             "shownPath": updater.shown(r.local_path),  # as shown: ~ for your home folder
@@ -379,13 +387,13 @@ class Backend(QObject, Updating, Account):
 
     @staticmethod
     def _icon_source(r: TrackedRepo) -> str:
-        """What the window shows: the icon found for the repo, or the default for its kind (also if a found picture
-        has since been deleted)."""
+        """The repo's picture for the window, or "" for none (also if a found picture has since been deleted): the
+        window then shows its monogram."""
         if r.icon.startswith("theme:"):
             return r.icon.removeprefix("theme:")
         if r.icon.startswith("file:") and Path(r.icon.removeprefix("file:")).is_file():
             return "file://" + r.icon.removeprefix("file:")
-        return KIND_ICONS.get(r.kind, "package-x-generic")
+        return ""
 
     # -- checking for updates ----------------------------------------------------------------------------------------
 
@@ -561,7 +569,7 @@ class Backend(QObject, Updating, Account):
         if not self._find_icons or not repo or repo.icon or repo_id in self._icons_pending:
             return
         self._icons_pending.add(repo_id)
-        name, local_path = repo.name, repo.local_path
+        local_path = repo.local_path
 
         def done(result, error):
             self._icons_pending.discard(repo_id)
@@ -570,7 +578,7 @@ class Backend(QObject, Updating, Account):
             repo.icon = result
             self._changed()
 
-        self._run(lambda: icons.resolve(repo_id, name, local_path, icon_url), done)
+        self._run(lambda: icons.resolve(repo_id, local_path, icon_url), done)
 
     # -- the list ---------------------------------------------------------------------------------------------------
 
@@ -950,7 +958,7 @@ class Backend(QObject, Updating, Account):
                 "address": f.id,
                 "path": f.path,
                 "kind": f.kind,
-                "icon": KIND_ICONS.get(f.kind, "package-x-generic"),
+                **_monogram(f.name, f.id),
                 "status": "problem" if c.problem else ("similar" if similar else "new"),
                 "similarTo": similar.id if similar else "",
                 "note": _scan_note(f, c.problem, similar),

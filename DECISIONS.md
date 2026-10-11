@@ -90,13 +90,15 @@ setting. A clone's history is its own and isn't touched.
 
 ## D13. Repo icons
 
-Looked up once, then saved. The first that turns something up:
+Every repo shows either its own picture or a monogram: its first letter on a colour of its own, the same every time.
 
-1. On this computer: an installed package's menu entry, an AppImage's own icon (read, never run), an icon file in a
-   clone, or an installed app with the same name.
-2. The project's picture on its site: a GitLab project's icon or group picture; on GitHub, an organization's picture
-   (never a person's).
-3. The default icon for the kind of repo.
+- **Only pictures that are certainly the project's:** the installed app's own icon (its package's menu entry, its
+  AppImage's icon, its Flatpak's), or the project's picture on its site (a GitLab project's icon or group picture; a
+  GitHub organization's picture, never a person's).
+  - **Why:** guesses (an installed app with a similar name, a logo found in a clone) sometimes picked the wrong
+    picture, and icons by kind of repo looked different on every icon theme.
+- **Looked up once and saved.** Downloads: PNG, JPEG or WebP only, at most 1 MB. SVG only from an app on this
+  computer, never from a site.
 
 ## D14. Categories
 

@@ -571,27 +571,13 @@ Kirigami.ScrollablePage {
                                      label: row.modelData.name })
                         }
 
-                        // The repo's icon (icons.py), with a corner mark when it was found on this computer by a scan.
-                        Item {
+                        RepoIcon {
+                            objectName: "repoIcon:" + row.modelData.id
                             Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                             Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-
-                            Kirigami.Icon {
-                                anchors.fill: parent
-                                source: row.modelData.icon
-                            }
-
-                            Kirigami.Icon {
-                                objectName: "scannedMark:" + row.modelData.id
-                                visible: row.modelData.scanned
-                                source: "emblem-mounted"
-                                width: Kirigami.Units.iconSizes.small
-                                height: Kirigami.Units.iconSizes.small
-                                anchors.right: parent.right
-                                anchors.bottom: parent.bottom
-                                anchors.rightMargin: -Kirigami.Units.smallSpacing
-                                anchors.bottomMargin: -Kirigami.Units.smallSpacing
-                            }
+                            source: row.modelData.icon
+                            letter: row.modelData.monogram
+                            color: row.modelData.monogramColor
                         }
 
                         ColumnLayout {

@@ -1,10 +1,11 @@
 """An icon for each tracked repo, found once when the repo first appears and then saved (DECISIONS.md, D13).
 
-In order, the first that turns something up:
-1. On this computer: an installed package's menu entry, a scanned AppImage's own icon (read with 7z, never run), an icon
-   file in a scanned clone, or an installed app whose menu entry matches the repo's name.
-2. The project's picture on its site (sources.ProjectInfo.icon_url), downloaded once.
-3. Nothing: NONE is saved, and the window shows the default icon for the kind of repo.
+Only pictures that are certainly the project's, so none is a wrong guess. In order, the first that turns something up:
+1. On this computer, the app's own icon: an installed package's menu entry, an AppImage's own icon (read with 7z,
+   never run), or an installed Flatpak's.
+2. The project's picture on its site (sources.ProjectInfo.icon_url), downloaded once: PNG, JPEG or WebP only, as
+   those are the simplest to read safely from a site we don't control.
+3. Nothing: NONE is saved, and the window shows the project's monogram (its first letter on a colour of its own).
 
 The result is "theme:<name>" (an icon from the desktop's icon theme), "file:<path>" (a picture in the cache folder or
 on disk), or NONE.
@@ -12,31 +13,20 @@ on disk), or NONE.
 
 import hashlib
 import os
-import re
 import shutil
 import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-from . import packages, sources
+from . import flatpaks, packages, sources
 
 NONE = "-"
 MAX_BYTES = 1024 * 1024
-IMAGE_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/svg+xml": ".svg", "image/gif": ".gif",
-               "image/webp": ".webp"}
-IMAGE_SUFFIXES = (".png", ".svg", ".jpg", ".jpeg", ".gif", ".webp")
-APPLICATION_DIRS = ("~/.local/share/applications", "/usr/local/share/applications", "/usr/share/applications",
-                    "~/.local/share/flatpak/exports/share/applications", "/var/lib/flatpak/exports/share/applications")
+# Pictures from a site, by the type it says they are.
+IMAGE_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
 ICON_DIRS = ("~/.local/share/icons", "/usr/local/share/icons", "/usr/share/icons",
              "~/.local/share/flatpak/exports/share/icons", "/var/lib/flatpak/exports/share/icons")
-# Where projects usually keep their icon, relative to the clone ("{name}" is the project's name).
-CLONE_ICON_FILES = ("icon.svg", "icon.png", "logo.svg", "logo.png", "{name}.svg", "{name}.png",
-                    "assets/icon.svg", "assets/icon.png", "assets/logo.svg", "assets/logo.png",
-                    "data/icon.svg", "data/icon.png", "resources/icon.svg", "resources/icon.png",
-                    "images/logo.svg", "images/logo.png", "docs/logo.svg", "docs/logo.png")
-
-
 def cache_dir() -> Path:
     base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
     return base / "couriercollie" / "icons"
@@ -46,11 +36,12 @@ def _cache_name(repo_id: str, suffix: str) -> Path:
     return cache_dir() / (hashlib.sha1(repo_id.lower().encode()).hexdigest()[:16] + suffix)
 
 
-def _keep(repo_id: str, data: bytes, suffix: str) -> str:
-    """Save a picture in the cache folder. Returns "file:<path>", or "" if it's too big or not a picture."""
-    if not data or len(data) > MAX_BYTES or suffix not in IMAGE_SUFFIXES:
+def _keep(repo_id: str, data: bytes, suffix: str, svg: bool = False) -> str:
+    """Save a picture in the cache folder. Returns "file:<path>", or "" if it's too big or not a picture. An SVG only
+    if `svg`: it's taken from an app on this computer, never from a site."""
+    if not data or len(data) > MAX_BYTES:
         return ""
-    if suffix != ".svg" and not _looks_like_image(data):
+    if not (svg and suffix == ".svg" and b"<svg" in data[:4096]) and not _looks_like_image(data):
         return ""
     path = _cache_name(repo_id, suffix)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -59,11 +50,8 @@ def _keep(repo_id: str, data: bytes, suffix: str) -> str:
 
 
 def _looks_like_image(data: bytes) -> bool:
-    return data.startswith((b"\x89PNG", b"\xff\xd8", b"GIF8")) or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")
-
-
-def _plain(text: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", text.lower())
+    """PNG, JPEG or WebP, by the bytes they start with."""
+    return data.startswith((b"\x89PNG", b"\xff\xd8")) or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -134,55 +122,23 @@ def from_appimage(repo_id: str, path: Path) -> str:
         data, suffix = read(target), Path(target).suffix.lower()
     else:
         suffix = ".svg" if b"<svg" in data[:1024] else ".png"
-    return _keep(repo_id, data, suffix)
+    return _keep(repo_id, data, suffix, svg=True)
 
 
-def from_clone(repo_id: str, folder: Path, name: str) -> str:
-    for relative in CLONE_ICON_FILES:
-        path = folder / relative.format(name=name)
-        if path.is_file():
-            try:
-                if icon := _keep(repo_id, path.read_bytes(), path.suffix.lower()):
-                    return icon
-            except OSError:
-                continue
-    return ""
+def from_flatpak(app_id: str) -> str:
+    """An installed Flatpak's icon: Flatpak puts it in the icon theme under the app's ID."""
+    return f"theme:{app_id}" if theme_icon_exists(app_id) else ""
 
 
-def from_installed_app(names: list[str]) -> str:
-    """An installed app whose menu entry matches one of these names (its file name, a part of it like the "localsend"
-    in "org.localsend.localsend", or its Name=). Very short names are skipped, to avoid chance matches."""
-    wanted = {_plain(n) for n in names if len(_plain(n)) >= 4}
-    if not wanted:
-        return ""
-    for d in APPLICATION_DIRS:
-        folder = Path(d).expanduser()
-        if not folder.is_dir():
-            continue
-        for path in sorted(folder.glob("*.desktop")):
-            parts = {_plain(path.stem)} | {_plain(p) for p in path.stem.split(".")}
-            entry = None
-            if not parts & wanted:
-                entry = _desktop_entry(path)
-                if _plain(entry.get("Name", "")) not in wanted:
-                    continue
-            entry = entry or _desktop_entry(path)
-            if icon := _from_icon_key(entry.get("Icon", "")):
-                return icon
-    return ""
-
-
-def on_this_computer(repo_id: str, name: str, project: str, local_path: str) -> str:
+def on_this_computer(repo_id: str, local_path: str) -> str:
+    """The app's own icon, if what's tracked is installed here (a package, an AppImage or a Flatpak)."""
     if package := packages.from_place(local_path):
-        if icon := from_package(*package):
-            return icon
-    elif local_path.lower().endswith(".appimage"):
-        if icon := from_appimage(repo_id, Path(local_path)):
-            return icon
-    elif local_path and (Path(local_path) / ".git").exists():
-        if icon := from_clone(repo_id, Path(local_path), project):
-            return icon
-    return from_installed_app([name, project])
+        return from_package(*package)
+    if app_id := flatpaks.from_place(local_path)[0]:
+        return from_flatpak(app_id)
+    if local_path.lower().endswith(".appimage"):
+        return from_appimage(repo_id, Path(local_path))
+    return ""
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -215,11 +171,10 @@ def download(repo_id: str, url: str) -> str:
 # ---------------------------------------------------------------------------------------------------------------------
 
 
-def resolve(repo_id: str, name: str, local_path: str, icon_url: str | None = None) -> str:
+def resolve(repo_id: str, local_path: str, icon_url: str | None = None) -> str:
     """Find an icon for a repo, in the order at the top of this file. `icon_url` is the site's picture address if
     it's already known (None: ask the site, one request). Raises Unreachable if the site couldn't be asked."""
-    project = sources.RepoRef.from_id(repo_id).name
-    if icon := on_this_computer(repo_id, name, project, local_path):
+    if icon := on_this_computer(repo_id, local_path):
         return icon
     if icon_url is None:
         try:

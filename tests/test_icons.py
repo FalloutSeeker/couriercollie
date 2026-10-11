@@ -7,7 +7,7 @@ import urllib.request
 from pathlib import Path
 
 from couriercollie import config, icons, sources
-from couriercollie.backend import Backend
+from couriercollie.backend import ICON_LOOKUP, MONOGRAM_COLORS, Backend
 from couriercollie.config import TrackedRepo
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 32
@@ -36,60 +36,50 @@ class SitePictureTest(unittest.TestCase):
 
 
 class OnThisComputerTest(unittest.TestCase):
+    """Only the app's own icon: never a guess from a similar name or a picture found in a clone."""
+
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
         self.root = Path(self.dir.name)
-        self.saved = (icons.APPLICATION_DIRS, icons.ICON_DIRS, os.environ.get("XDG_CACHE_HOME"))
-        self.apps = self.root / "applications"
-        self.apps.mkdir()
+        self.saved = (icons.ICON_DIRS, os.environ.get("XDG_CACHE_HOME"), icons.packages.files_of)
         theme = self.root / "icons"
         (theme / "hicolor/48x48/apps").mkdir(parents=True)
         (theme / "hicolor/48x48/apps/localsend.png").write_bytes(PNG)
-        icons.APPLICATION_DIRS, icons.ICON_DIRS = (str(self.apps),), (str(theme),)
+        (theme / "hicolor/48x48/apps/org.example.Tool.png").write_bytes(PNG)
+        icons.ICON_DIRS = (str(theme),)
         os.environ["XDG_CACHE_HOME"] = str(self.root / "cache")
 
     def tearDown(self):
-        icons.APPLICATION_DIRS, icons.ICON_DIRS, cache = self.saved
+        icons.ICON_DIRS, cache, icons.packages.files_of = self.saved
         if cache is None:
             os.environ.pop("XDG_CACHE_HOME", None)
         else:
             os.environ["XDG_CACHE_HOME"] = cache
         self.dir.cleanup()
 
-    def entry(self, file_name, name, icon):
-        (self.apps / file_name).write_text(f"[Desktop Entry]\nType=Application\nName={name}\nIcon={icon}\n")
+    def test_an_installed_packages_menu_entry(self):
+        entry = self.root / "applications" / "localsend.desktop"
+        entry.parent.mkdir()
+        entry.write_text("[Desktop Entry]\nType=Application\nName=LocalSend\nIcon=localsend\n")
+        icons.packages.files_of = lambda kind, name: ["/usr/bin/localsend", str(entry)]
+        self.assertEqual(icons.on_this_computer("github.com/localsend/localsend", "RPM package \u201clocalsend\u201d"),
+                         "theme:localsend")
 
-    def test_installed_app_by_file_name_part_or_name(self):
-        self.entry("org.localsend.localsend_app.desktop", "LocalSend", "localsend")
-        self.assertEqual(icons.from_installed_app(["localsend"]), "theme:localsend")
-        self.assertEqual(icons.from_installed_app(["LocalSend"]), "theme:localsend")
+    def test_an_installed_flatpaks_icon(self):
+        self.assertEqual(icons.on_this_computer("github.com/e/tool", "Flatpak \u201corg.example.Tool\u201d"),
+                         "theme:org.example.Tool")
 
-    def test_installed_app_icon_must_exist(self):
-        self.entry("ghost.desktop", "Ghost", "no-such-icon")
-        self.assertEqual(icons.from_installed_app(["ghost"]), "")
-        picture = self.root / "pic.png"
-        picture.write_bytes(PNG)
-        self.entry("ghost.desktop", "Ghost", str(picture))
-        self.assertEqual(icons.from_installed_app(["ghost"]), f"file:{picture}")
-
-    def test_short_names_dont_match_by_chance(self):
-        self.entry("obt.desktop", "obt", "localsend")
-        self.assertEqual(icons.from_installed_app(["obt"]), "")
-
-    def test_icon_file_in_a_clone(self):
+    def test_no_guessing(self):
         clone = self.root / "smod"
         (clone / ".git").mkdir(parents=True)
-        (clone / "assets").mkdir()
-        (clone / "assets/logo.png").write_bytes(PNG)
-        icon = icons.on_this_computer("gitgud.io/aeroshell/smod", "SMOD", "smod", str(clone))
-        self.assertTrue(icon.startswith("file:") and Path(icon[5:]).read_bytes() == PNG, icon)
-        self.assertEqual(Path(icon[5:]).parent, icons.cache_dir())
+        (clone / "logo.png").write_bytes(PNG)  # could be anyone's logo: not used
+        self.assertEqual(icons.on_this_computer("gitgud.io/aeroshell/smod", str(clone)), "")
 
-    def test_not_a_picture_is_ignored(self):
-        clone = self.root / "x"
-        (clone / ".git").mkdir(parents=True)
-        (clone / "icon.png").write_bytes(b"not really a png")
-        self.assertEqual(icons.from_clone("github.com/a/x", clone, "x"), "")
+    def test_an_svg_only_from_an_app_here_never_from_a_site(self):
+        svg = b'<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+        self.assertTrue(icons._keep("a/b/c", svg, ".svg", svg=True).startswith("file:"))
+        self.assertEqual(icons._keep("a/b/c", svg, ".svg"), "")
+        self.assertEqual(icons._keep("a/b/c", b"not really a png", ".png"), "")
 
     @unittest.skipUnless(SAMPLE_APPIMAGE.is_file() and icons.shutil.which("7z"), "needs the sample AppImage and 7z")
     def test_appimage_icon_read_without_running_it(self):
@@ -134,6 +124,8 @@ class DownloadTest(unittest.TestCase):
         self.assertEqual(self.urls, ["https://avatars.githubusercontent.com/u/1?v=4&s=128"])
 
     def test_not_a_picture(self):
+        self.serve(b"<svg/>", "image/svg+xml")  # not from a site
+        self.assertEqual(icons.download("a/b/c", "https://x/y"), "")
         self.serve(b"<html>", "text/html")
         self.assertEqual(icons.download("a/b/c", "https://x/y"), "")
         self.serve(b"x" * (icons.MAX_BYTES + 10))
@@ -159,20 +151,20 @@ class OrderTest(unittest.TestCase):
     def test_order(self):
         icons.on_this_computer = lambda *a: "theme:localsend"
         icons.download = lambda *a: self.fail("the site isn't asked when the computer has an icon")
-        self.assertEqual(icons.resolve("github.com/localsend/localsend", "LocalSend", ""), "theme:localsend")
+        self.assertEqual(icons.resolve("github.com/localsend/localsend", ""), "theme:localsend")
         icons.on_this_computer = lambda *a: ""
         icons.download = lambda repo_id, url: "file:/c/x.png" if url else ""
-        self.assertEqual(icons.resolve("github.com/a/b", "B", "", icon_url="https://x/y.png"), "file:/c/x.png")
-        self.assertEqual(icons.resolve("github.com/a/b", "B", "", icon_url=""), icons.NONE)
+        self.assertEqual(icons.resolve("github.com/a/b", "", icon_url="https://x/y.png"), "file:/c/x.png")
+        self.assertEqual(icons.resolve("github.com/a/b", "", icon_url=""), icons.NONE)
 
     def test_site_asked_only_if_its_answer_isnt_known(self):
         icons.on_this_computer = lambda *a: ""
         icons.download = lambda repo_id, url: ""
         asked = []
         sources.project_info = lambda ref: asked.append(ref) or sources.ProjectInfo(ref, "github", "b", "", "main")
-        icons.resolve("github.com/a/b", "B", "", icon_url="")
+        icons.resolve("github.com/a/b", "", icon_url="")
         self.assertEqual(asked, [])
-        icons.resolve("github.com/a/b", "B", "")
+        icons.resolve("github.com/a/b", "")
         self.assertEqual(len(asked), 1)
 
     def test_unreachable_site(self):
@@ -183,7 +175,7 @@ class OrderTest(unittest.TestCase):
 
         sources.project_info = offline
         with self.assertRaises(icons.Unreachable):
-            icons.resolve("github.com/a/b", "B", "")
+            icons.resolve("github.com/a/b", "")
 
 
 class OnceTest(unittest.TestCase):
@@ -192,7 +184,7 @@ class OnceTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
         self.path = Path(self.dir.name) / "repos.toml"
-        config.save(config.Config(repos=[
+        config.save(config.Config(settings=config.Settings(icon_lookup=ICON_LOOKUP), repos=[
             TrackedRepo(id="github.com/a/b", name="B", url="", host="github"),
             TrackedRepo(id="github.com/c/d", name="D", url="", host="github", icon="theme:already"),
         ]), self.path)
@@ -202,7 +194,7 @@ class OnceTest(unittest.TestCase):
         self.answer = "theme:found"
         self.saved = icons.resolve
 
-        def resolve(repo_id, name, local_path, icon_url=None):
+        def resolve(repo_id, local_path, icon_url=None):
             self.calls.append(repo_id)
             if self.answer is None:
                 raise icons.Unreachable("offline")
@@ -234,7 +226,8 @@ class OnceTest(unittest.TestCase):
         self.backend.loadIcons()
         self.backend.loadIcons()
         self.assertEqual(self.calls, ["github.com/a/b"])
-        self.assertEqual(self.backend.repo("github.com/a/b")["icon"], "package-x-generic")  # the default
+        row = self.backend.repo("github.com/a/b")
+        self.assertEqual((row["icon"], row["monogram"]), ("", "B"))  # the monogram instead
 
     def test_unreachable_is_tried_again_next_time(self):
         self.answer = None
@@ -244,6 +237,21 @@ class OnceTest(unittest.TestCase):
         self.backend.loadIcons()
         self.assertEqual(self.calls, ["github.com/a/b", "github.com/a/b"])
         self.assertEqual(config.load(self.path).find("github.com/a/b").icon, "theme:found")
+
+    def test_icons_from_the_old_way_are_looked_up_again(self):
+        config.save(config.Config(repos=[TrackedRepo(id="github.com/c/d", name="D", url="", host="github",
+                                                     icon="theme:guessed")]), self.path)
+        backend = Backend(self.path, find_icons=True)
+        backend._run = self.backend._run
+        backend.loadIcons()
+        backend.shutdown()
+        self.assertEqual(self.calls, ["github.com/c/d"])
+        self.assertEqual(config.load(self.path).settings.icon_lookup, ICON_LOOKUP)
+
+    def test_monograms_are_steady(self):
+        row = self.backend.repo("github.com/a/b")
+        self.assertEqual(row["monogramColor"], self.backend.repo("github.com/a/b")["monogramColor"])
+        self.assertIn(row["monogramColor"], MONOGRAM_COLORS)
 
     def test_off_unless_turned_on(self):
         backend = Backend(self.path)
@@ -263,8 +271,8 @@ class OnceTest(unittest.TestCase):
             self.assertEqual(self.backend.repo("github.com/a/b")["icon"], f"file://{picture}")
             self.backend.removeRepo("github.com/a/b")
             self.assertFalse(picture.exists())
-            repo.icon = f"file:{picture}"  # a picture that's gone shows the default icon
-            self.assertEqual(Backend._icon_source(repo), "package-x-generic")
+            repo.icon = f"file:{picture}"  # a picture that's gone: the monogram instead
+            self.assertEqual(Backend._icon_source(repo), "")
         finally:
             if old is None:
                 os.environ.pop("XDG_CACHE_HOME", None)
