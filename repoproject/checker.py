@@ -152,7 +152,10 @@ def _check_branch(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
         count = "1 new commit" if c.total == 1 else f"{c.total} new commits"
         return Result(UPDATE, f"{count} on {branch}", head)
     if c.relation == sources.AHEAD:
-        return Result(OTHER, f"Your version is newer than {branch}", head)
+        disk = scan.branch_on_disk(repo.local_path) if repo.source == SOURCE_SCANNED and repo.local_path else ""
+        if disk and disk != branch:
+            return Result(OTHER, f"Nothing new on {branch} (your clone is on {disk})", head)
+        return Result(OTHER, f"Ahead of {branch}", head)
     if c.relation == sources.SAME:
         return Result(UP_TO_DATE, "Up to date", head)
     return Result(OTHER, f"Not comparable with {branch}", head)

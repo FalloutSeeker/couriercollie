@@ -1114,6 +1114,8 @@ class Backend(QObject, Updating):
         version = self._version_info(repo, d, shown) if repo and d.state == "ready" else {}
         c = self._current_comparison(repo, d) if repo else None
         behind = c is not None and c.relation == sources.BEHIND
+        follow_disk = d.branch_on_disk if (repo and _is_clone(repo) and repo.follow == FOLLOW_BRANCH and d.branch_on_disk
+                                           and d.branch_on_disk != current_branch) else ""
         return {
             "newCommits": [{"sha": x.sha[:7], "title": x.title} for x in c.commits[:5]] if behind else [],
             "newCommitsTotal": c.total if behind else 0,
@@ -1137,7 +1139,9 @@ class Backend(QObject, Updating):
             # A file was picked, but the newest release doesn't have it (renamed or dropped by the project).
             "yourFileMissing": bool(pattern) and latest is not None and not latest["hasSelected"],
             "branchError": d.branch_error,
-            "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing,
+            # Update can't pull a branch the clone isn't on (it would refuse): offered is following that one instead.
+            "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing and not follow_disk,
+            "followDiskBranch": follow_disk,
             "isClone": bool(repo) and _is_clone(repo),
             # Install clones the project into clonesFolder.
             "installClones": bool(repo) and _can_clone(repo),
@@ -1221,12 +1225,21 @@ class Backend(QObject, Updating):
                               "that commit (for example, one that was never pushed), or couldn\u2019t be reached; "
                               "Refresh tries again.",
                     "updateAvailable": False, "statusKind": STATUS_PROBLEM, "headline": "Couldn\u2019t compare"}
+        # A clone that's on another branch than the one followed (Follow <it> is offered on the page).
+        disk = d.branch_on_disk if d.branch_on_disk and d.branch_on_disk != branch else ""
         if c.relation == sources.BEHIND:
-            return {"status": f"Newer commits on {branch} (you have {yours_text})", "updateAvailable": True,
-                    "statusKind": STATUS_UPDATE, "headline": f"New commits on {branch}"}
+            status = f"Newer commits on {branch} (you have {yours_text})" if not disk else \
+                f"{branch} has commits your clone doesn\u2019t, but your clone is on {disk}, so Update can\u2019t " \
+                f"bring them in. Follow {disk} instead, or switch the clone to {branch} (git switch {branch})."
+            return {"status": status, "updateAvailable": True, "statusKind": STATUS_UPDATE,
+                    "headline": f"New commits on {branch}"}
         if c.relation == sources.AHEAD:
-            return {"status": f"Your version is newer than {branch}", "updateAvailable": False,
-                    "statusKind": STATUS_AHEAD, "headline": f"Newer than {branch}"}
+            if disk:
+                return {"status": f"Everything on {branch} is already in your clone, which is on {disk} ({branch} "
+                                  f"was probably merged into it). Follow {disk} to hear about its new commits.",
+                        "updateAvailable": False, "statusKind": STATUS_AHEAD, "headline": f"Nothing new on {branch}"}
+            return {"status": f"Your version has everything on {branch}, plus commits that aren\u2019t on it.",
+                    "updateAvailable": False, "statusKind": STATUS_AHEAD, "headline": f"Ahead of {branch}"}
         if c.relation == sources.SAME:
             return {"status": "Up to date", "updateAvailable": False, "statusKind": STATUS_CURRENT,
                     "headline": "Up to date"}

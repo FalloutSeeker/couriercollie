@@ -484,8 +484,14 @@ class ScannedClonePageTest(unittest.TestCase):
         self.backend.loadDetails(smod, True)
         self.backend.setBranch(smod, "master")
         d = self.backend.details(smod)
-        self.assertEqual((d["status"], d["updateAvailable"]), ("Your version is newer than master", False))
+        # The clone is on Plasma/6.7, which has everything on master: nothing new there, and following its own
+        # branch is offered (Update isn't: it can't pull a branch the clone isn't on).
+        self.assertEqual((d["headline"], d["updateAvailable"]), ("Nothing new on master", False))
+        self.assertIn("already in your clone, which is on Plasma/6.7", d["status"])
         self.assertEqual(d["statusKind"], "ahead")
+        self.assertEqual((d["followDiskBranch"], d["canUpdate"]), ("Plasma/6.7", False))
+        self.backend.setBranch(smod, d["followDiskBranch"])  # Follow Plasma/6.7
+        self.assertEqual(self.backend.details(smod)["followDiskBranch"], "")
         self.backend.setBranch(smod, "hidpi-functionality")
         d = self.backend.details(smod)
         self.assertEqual(d["status"], "Not comparable with hidpi-functionality: your clone is on Plasma/6.7.")

@@ -4,6 +4,11 @@ Newest first.
 
 ## 2026-10-11
 
+- Following a branch other than the one your clone is on: instead of "Your version is newer than X", the page says
+  "Nothing new on X" (everything on it is already in your clone, likely merged) or that Update can't bring X's commits
+  into a clone on another branch, with a **Follow <your clone's branch>** button. Update isn't offered there (it
+  would refuse). Elsewhere "newer than" became "Ahead of X: your version has everything on X, plus commits that
+  aren't on it". The Branches heading says which branch the clone is on. (Asked about for ultrakanban.)
 - Stage 6, GNOME: the window uses KDE's control style only where it's installed, else Qt's Fusion (tested: every page
   works in it). Icons the desktop's theme lacks come from Breeze (Adwaita alone lacks 5 the app uses).
 - Repo pages load the newest 10 releases, with Show Older Releases for a full page (30) when there may be more.

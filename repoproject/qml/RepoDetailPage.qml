@@ -25,6 +25,8 @@ Kirigami.ScrollablePage {
     // or installs it if you don't have it yet.
     readonly property bool installing: (details.isDownload === true || details.installClones === true)
                                        && details.statusKind === "notInstalled"
+    // A clone on another branch than the one followed: Follow <its branch> is offered.
+    readonly property bool canFollowDisk: ready && (details.followDiskBranch || "") !== "" && !details.updating
     readonly property bool canUpdate: ready && details.canUpdate === true && !details.updating
                                       && (details.updateAvailable === true || installing)
 
@@ -367,10 +369,10 @@ Kirigami.ScrollablePage {
                     }
                 }
 
-                // Why it couldn't be compared, in full.
+                // Why it couldn't be compared, or what "ahead" means here, in full.
                 QQC2.Label {
                     Layout.fillWidth: true
-                    visible: statusBox.kind === "problem"
+                    visible: statusBox.kind === "problem" || statusBox.kind === "ahead" || page.canFollowDisk
                     text: page.details.status || ""
                     wrapMode: Text.Wrap
                 }
@@ -472,7 +474,7 @@ Kirigami.ScrollablePage {
                 }
 
                 RowLayout {
-                    visible: page.canUpdate || page.canMarkUpToDate || page.canMarkNotInstalled
+                    visible: page.canUpdate || page.canMarkUpToDate || page.canMarkNotInstalled || page.canFollowDisk
 
                     // Only from this click: nothing is ever updated on its own (DECISIONS.md, D4).
                     QQC2.Button {
@@ -482,6 +484,16 @@ Kirigami.ScrollablePage {
                         text: (page.installing ? "Install" : "Update") + (page.details.updateNeedsPassword ? "\u2026" : "")
                         icon.name: page.installing ? "download" : "system-software-update"
                         onClicked: backend.updateRepo(page.repoId)
+                    }
+
+                    // A clone on another branch than the one followed: follow the one it's on.
+                    QQC2.Button {
+                        objectName: "followDiskBranch"
+                        visible: page.canFollowDisk
+                        highlighted: true
+                        text: `Follow ${page.details.followDiskBranch}`
+                        icon.name: "vcs-branch"
+                        onClicked: backend.setBranch(page.repoId, page.details.followDiskBranch)
                     }
 
                     QQC2.Button {
@@ -975,7 +987,9 @@ Kirigami.ScrollablePage {
         QQC2.Label {
             Layout.fillWidth: true
             visible: !page.followsReleases && page.ready
-            text: page.details.branchError !== "" ? page.details.branchError : "Choose the branch to follow for new commits."
+            text: page.details.branchError !== "" ? page.details.branchError
+                : "Choose the branch to follow for new commits." + (page.details.isClone && page.details.branchOnDisk
+                  ? ` Your clone is on ${page.details.branchOnDisk}; Update only pulls the branch it\u2019s on.` : "")
             wrapMode: Text.Wrap
             opacity: 0.7
         }

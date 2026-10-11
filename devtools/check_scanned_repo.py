@@ -69,8 +69,11 @@ h.run([
     *([] if REPO != "gitgud.io/aeroshell/smod" else [
         (0, lambda: h.click("branch:master")),
         h.until(compared, 30000),
-        (2500, lambda: h.check("master: your version is newer",
-                               b.details(REPO)["status"] == "Your version is newer than master", b.details(REPO)["status"])),
+        (2500, lambda: h.check("master: nothing new there, already in the clone",
+                               b.details(REPO)["headline"] == "Nothing new on master", b.details(REPO)["status"])),
+        (0, lambda: h.check("…and following the clone's branch is offered", h.find("followDiskBranch") is not None
+                            and h.find("updateNow") is None)),
+        (0, lambda: h.shot("scanned-repo-merged-branch")),
         (0, lambda: h.click("branch:hidpi-functionality")),
         h.until(compared, 30000),
         (2500, lambda: h.check("hidpi-functionality: not comparable, clone is on Plasma/6.7",
@@ -79,7 +82,8 @@ h.run([
         (0, lambda: h.shot("scanned-repo-other-branch")),
         (0, lambda: h.click("branch:Plasma/6.7")),
         h.until(compared, 30000),
-        (2500, lambda: h.check("back on Plasma/6.7: as it was at the start", b.details(REPO)["status"] == started["status"],
+        (2500, lambda: h.check("back on Plasma/6.7, the clone's own branch: nothing offered to follow instead",
+                               b.details(REPO)["followDiskBranch"] == "" and h.find("followDiskBranch") is None,
                                b.details(REPO)["status"])),
     ]),
 ])
