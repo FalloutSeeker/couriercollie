@@ -25,6 +25,7 @@ If you try it elsewhere, please say how it went in a GitHub issue, whether it wo
 ```sh
 devtools/build_rpm.sh                                # builds dist/colliecourier-<version>.noarch.rpm from the last commit
 sudo dnf install dist/colliecourier-*.noarch.rpm     # then it's in the menu, and `colliecourier` runs it
+devtools/build_arch.sh                               # Arch's package (packaging/arch/PKGBUILD), built and tried in a container
 ```
 
 Installed, it uses the system's menu entry and icon. Running it from this folder still works alongside.

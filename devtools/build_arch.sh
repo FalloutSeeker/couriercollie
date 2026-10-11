@@ -6,7 +6,8 @@ set -eu
 cd "$(dirname "$0")/.."
 version=$(python3 -c 'import colliecourier; print(colliecourier.__version__)')
 work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
+# Files made in the container belong to its users: removed from inside podman's user namespace.
+trap 'podman unshare rm -rf "$work"' EXIT
 cp packaging/arch/PKGBUILD "$work/"
 # Where makepkg would download the release from: the same snapshot, already here.
 git archive --format=tar.gz --prefix="colliecourier-$version/" -o "$work/colliecourier-$version.tar.gz" HEAD
