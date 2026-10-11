@@ -34,7 +34,7 @@ def check(if_due: bool) -> int:
     checker.save_state(state)
     names = {r.id: r.name for r in cfg.repos}
     for repo_id, result in state.results.items():
-        print(f"{names.get(repo_id, repo_id)}: {result.text}")
+        print(f"{names.get(repo_id, repo_id)}: {result.text}" + (" (not rechecked)" if result.not_rechecked else ""))
     if fresh and cfg.settings.toasts:
         integration.notify_and_open_on_click(*integration.updates_message([names[i] for i in fresh]))
     return 0
