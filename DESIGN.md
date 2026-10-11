@@ -48,6 +48,9 @@ Top to bottom:
   runs here, it's tracked by version only.
 - **Built only for other systems** (Android, Windows, macOS, another distro's packages, other processors): tracked by
   version only, and never installed, whatever is clicked or followed. Install never clones such a project's source.
+  - **The page:** an info banner says what its builds are for ("…builds are for Android"). Only Mark as Up to Date
+    (or Set as My Version on a release); never Mark as Not Installed.
+  - **Before you set a version:** "Version not set", not "Not installed", on the page and in the list.
 - **Releases:** the newest 10, with notes. **Show Older Releases** loads up to 30. Pictures in notes become links, so
   opening notes downloads nothing.
 - **Branches:** for following new commits.

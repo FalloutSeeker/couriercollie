@@ -171,6 +171,41 @@ def _fit_files(repo: TrackedRepo, d: Details) -> bool:
     return changed or (repo.asset_pattern, repo.kind) != before
 
 
+# Packages for another distro's package manager, by the distros that use them.
+_PACKAGE_SYSTEMS = {"Debian package": "Debian/Ubuntu", "RPM": "Fedora/openSUSE", "Arch package": "Arch Linux"}
+
+
+def _and(items: list[str]) -> str:
+    return (", ".join(items[:-1]) + " and " + items[-1]) if len(items) > 1 else "".join(items)
+
+
+def _other_systems_note(d: Details) -> str:
+    """For a project built only for other systems (TrackedRepo.other_systems): what its builds are for, said once on
+    its page: "…builds are for Android", or "…for Windows and macOS"."""
+    if d.state != "ready" or not d.releases:
+        return ""
+    newest = next((r for r in d.releases if not r.prerelease), d.releases[0])
+    systems: list[str] = []
+    processors: list[str] = []
+    for a in newest.assets:
+        info = assets.classify(a.name, a.url)
+        if not info.build or info.suits:
+            continue
+        # The note says why: "for Android", "for riscv64 processors", "Debian package: not supported on your distro".
+        if info.note.endswith(" processors"):
+            what, into = info.note.removeprefix("for ").removesuffix(" processors"), processors
+        else:
+            what = info.note.removeprefix("for ") if info.note.startswith("for ") else info.note.split(":", 1)[0]
+            what, into = _PACKAGE_SYSTEMS.get(what, what), systems
+        if what and what not in into:
+            into.append(what)
+    if processors:
+        systems.append(_and(processors) + " processors")
+    listed = _and(systems)
+    builds = f"this project\u2019s builds are for {listed}" if listed else "none of this project\u2019s builds run here"
+    return f"Not supported on this computer: {builds}. Only its versions are tracked."
+
+
 def _match_tag(repo: TrackedRepo, d: Details) -> bool:
     """A version found on disk ("1.18.2", from an RPM or AppImage) as the release's tag ("v1.18.2")."""
     if repo.follow != FOLLOW_RELEASES or not repo.installed or repo.installed == NOT_INSTALLED or d.state != "ready":
@@ -407,7 +442,7 @@ class Backend(QObject, Updating, Account):
             "canUpdate": _can_update(r) and not _new_copy(r),
             "updateNeedsPassword": _needs_password(r),
             "updating": r.id in self._updating,
-            **self._check_dict(r.id),
+            **self._check_dict(r.id, r),
         }
 
     @staticmethod
@@ -422,7 +457,7 @@ class Backend(QObject, Updating, Account):
 
     # -- checking for updates ----------------------------------------------------------------------------------------
 
-    def _check_dict(self, repo_id: str) -> dict:
+    def _check_dict(self, repo_id: str, repo: TrackedRepo | None = None) -> dict:
         result = self._checks.results.get(repo_id)
         failed = bool(result) and result.status in (checker.FAILED, checker.UNREACHABLE)
         kept = bool(result) and result.not_rechecked
@@ -435,6 +470,8 @@ class Backend(QObject, Updating, Account):
                       else "The site couldn\u2019t be reached") + "; this is the last check\u2019s result."
         else:
             text, detail = (result.text if result else ""), ""
+        if repo and repo.other_systems:
+            text = text.replace("Not installed", "Version not set", 1)  # it can't be installed here, only noted
         return {
             "checkText": text,
             "checkDetail": detail,
@@ -1236,6 +1273,8 @@ class Backend(QObject, Updating, Account):
             "installClones": bool(repo) and _can_clone(repo),
             # Installed by the package manager or Flatpak: shown only, never updated here.
             "managedBy": repo.managed_by if repo else "",
+            # Built only for other systems: its versions are noted, never installed here.
+            "otherSystems": _other_systems_note(d) if repo and repo.other_systems else "",
             "clonesFolder": updater.shown(updater.clones_dir()),
             "updateNeedsPassword": bool(repo) and _needs_password(repo),
             "isPackage": bool(repo) and _is_package(repo),
@@ -1304,6 +1343,10 @@ class Backend(QObject, Updating, Account):
             text, status, kind, headline = d.managed_version or "Installed", \
                 f"{'Flatpak' if repo.managed_by == 'Flatpak' else 'Your package manager'} installed it, and keeps it " \
                 f"up to date. The newest here is {newest_text}.", STATUS_MANAGED, checker.installed_with(repo.managed_by)
+        elif installed == NOT_INSTALLED and repo.other_systems:
+            # Built for other systems: never installed here, so there's only your version to note, not "installed".
+            text, status, kind, headline = "Not set", f"The newest is {newest_text}. Mark it as up to date once " \
+                "you have it.", STATUS_NOT_INSTALLED, "Version not set"
         elif installed == NOT_INSTALLED:
             text, status, kind, headline = "Not installed", f"The newest is {newest_text}.", STATUS_NOT_INSTALLED, \
                 "Not installed"
@@ -1367,7 +1410,10 @@ class Backend(QObject, Updating, Account):
     @Slot(str, str)
     def setInstalled(self, repo_id, version):
         version = version.strip()
-        if (repo := self._config.find(repo_id)) and version and version != repo.installed:
+        repo = self._config.find(repo_id)
+        if repo and repo.other_systems and version == NOT_INSTALLED:
+            return  # built for other systems: never installed here, so never "not installed" either
+        if repo and version and version != repo.installed:
             repo.installed = version
             self._version_changed(repo)
             self._changed(repo_id)

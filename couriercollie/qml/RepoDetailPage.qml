@@ -22,8 +22,10 @@ Kirigami.ScrollablePage {
     // A scanned repo's version is read from disk, so it isn't set by hand.
     readonly property bool canMarkUpToDate: ready && !managed && !details.versionFromDisk && !details.updating
                                             && details.status !== "" && details.status !== "Up to date"
-    readonly property bool canMarkNotInstalled: ready && !managed && !details.versionFromDisk && !details.updating
-                                                && details.versionText !== ""
+    // Built only for other systems: it can never be installed here, so it's never "not installed" either.
+    readonly property bool otherSystems: (details.otherSystems || "") !== ""
+    readonly property bool canMarkNotInstalled: ready && !managed && !otherSystems && !details.versionFromDisk
+                                                && !details.updating && details.versionText !== ""
                                                 && details.installed !== "-"
     // Update pulls a clone's new commits or moves it to the newest release; for an AppImage it downloads the newest,
     // or installs it if you don't have it yet.
@@ -273,6 +275,16 @@ Kirigami.ScrollablePage {
             visible: page.ready && (page.details.managedElsewhere || "") !== ""
             type: Kirigami.MessageType.Warning
             text: page.details.managedElsewhere || ""
+        }
+
+        // Built only for other systems (Android, Windows, etc.): nothing here can install it.
+        Kirigami.InlineMessage {
+            objectName: "otherSystems"
+            Layout.fillWidth: true
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 34
+            visible: page.ready && page.otherSystems
+            type: Kirigami.MessageType.Information
+            text: page.details.otherSystems || ""
         }
 
         Kirigami.InlineMessage {
@@ -830,7 +842,9 @@ Kirigami.ScrollablePage {
         ColumnLayout {
             Layout.fillWidth: true
             Layout.topMargin: Kirigami.Units.gridUnit
+            // Not when the banner above already says why (built for other systems).
             visible: page.followsReleases && page.ready && page.details.versionOnly === true && !page.details.isClone
+                     && !page.otherSystems
             spacing: Kirigami.Units.smallSpacing
 
             Kirigami.Heading {

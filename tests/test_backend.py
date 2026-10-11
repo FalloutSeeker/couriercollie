@@ -312,6 +312,36 @@ class BackendTest(unittest.TestCase):
         self.backend.setInstalled(LOCALSEND, "-")
         self.assertFalse(self.backend.details(LOCALSEND)["canUpdate"])
 
+    def test_a_project_for_other_systems_says_so_and_is_never_not_installed(self):
+        from couriercollie import assets, checker
+
+        b = self.backend
+        repo = b._config.find(LOCALSEND)
+        repo.installed = "-"
+        self.releases_with(self.OTHER_SYSTEMS["android"])
+        b._checks.results[LOCALSEND] = checker.releases_result(b._details[LOCALSEND].releases, "-")
+        d = b.details(LOCALSEND)
+        self.assertEqual(d["otherSystems"], "Not supported on this computer: this project\u2019s builds are for "
+                                            "Android. Only its versions are tracked.")
+        # Never "installed" here, so never "not installed" either: only your version, once you have it.
+        self.assertEqual((d["headline"], d["versionText"]), ("Version not set", "Not set"))
+        self.assertTrue(b.repo(LOCALSEND)["checkText"].startswith("Version not set \u00b7 newest"))
+        b.markUpToDate(LOCALSEND)
+        b.setInstalled(LOCALSEND, "-")  # what Mark as Not Installed would do: refused
+        self.assertEqual(repo.installed, b._details[LOCALSEND].releases[0].tag)
+        # Several systems, processors together, other distros by name.
+        self.releases_with(self.OTHER_SYSTEMS["mixed"])
+        self.assertIn("builds are for Android, Windows and macOS.", b.details(LOCALSEND)["otherSystems"])
+        self.addCleanup(setattr, assets, "PACKAGE_TOOLS", assets.PACKAGE_TOOLS)
+        assets.PACKAGE_TOOLS = {"dnf"}
+        self.releases_with(["app_1.2-1_amd64.deb", "app-1.2-1-x86_64.pkg.tar.zst", "app-1.2-riscv64.AppImage",
+                            "app-1.2-s390x.AppImage"])
+        self.assertIn("builds are for Debian/Ubuntu, Arch Linux and riscv64 and s390x processors.",
+                      b.details(LOCALSEND)["otherSystems"])
+        # Something for this computer in a later release: an ordinary project again, no banner.
+        self.releases_with(["LocalSend-1.18.2-linux-x86-64.AppImage", "App-1.2.apk"])
+        self.assertEqual((repo.other_systems, b.details(LOCALSEND)["otherSystems"]), (False, ""))
+
     def test_a_project_built_for_other_systems_is_never_installed(self):
         # Like Obtainium (Android only): Mark as Not Installed, or following a branch, used to offer Install, which
         # cloned the phone app's source into ~/src.
