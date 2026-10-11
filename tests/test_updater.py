@@ -98,6 +98,33 @@ class PullTest(UpstreamCase):
         self.assertEqual(len(asked), 1)  # fetch and fast-forward in one go
         self.assertIn("merge --ff-only", asked[0])
 
+    def test_as_root_the_clones_hooks_and_your_programs_dont_run(self):
+        self.push_upstream()
+        self.as_owner(0)
+        ran = Path(self.dir.name) / "ran"
+        hook = self.clone / ".git" / "hooks" / "post-merge"
+        hook.write_text(f"#!/bin/sh\necho hook >> {ran}\n")
+        hook.chmod(0o755)
+        # A "git" in a folder you can write to, first in your PATH. As you, it may run (it passes everything on to
+        # the real git); the steps run as root (fetch, merge) must never go through it.
+        fake, used = Path(self.dir.name) / "bin", Path(self.dir.name) / "fake-git-used"
+        fake.mkdir()
+        (fake / "git").write_text(f'#!/bin/sh\necho "$@" >> {used}\nexec /usr/bin/git "$@"\n')
+        (fake / "git").chmod(0o755)
+        saved = os.environ["PATH"]
+        os.environ["PATH"] = f"{fake}:{saved}"
+        self.addCleanup(os.environ.__setitem__, "PATH", saved)
+        updater.pull(str(self.clone), "main", [])
+        self.assertFalse(ran.exists(), ran.read_text() if ran.exists() else "")
+        as_you = used.read_text() if used.exists() else ""
+        self.assertNotIn("fetch", as_you)
+        self.assertNotIn("merge", as_you)
+        os.environ["PATH"] = saved
+        updater._writable = lambda path: True  # as you, your own hooks run as usual
+        self.push_upstream(text="three\n")
+        updater.pull(str(self.clone), "main", [])
+        self.assertEqual(ran.read_text(), "hook\n")
+
     def test_no_password_no_change(self):
         self.push_upstream()
         self.as_owner(0, root=["sh", "-c", "exit 126", "polkit"])  # the password dialog was cancelled

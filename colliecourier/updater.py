@@ -32,7 +32,11 @@ FETCH_TIMEOUT = 300
 # As root, the time also covers typing the password.
 ROOT_TIMEOUT = 600
 # How a clone that belongs to the system is updated: through polkit, which asks for your password (DECISIONS.md, D6).
-ROOT = ["pkexec"]
+ROOT = ["/usr/bin/pkexec"]
+# What runs as root is named by its full path, and finds anything else only in the system's folders: a program of the
+# same name in a folder you can write to (~/.local/bin, say) must never be the one run.
+SYSTEM_PATH = "/usr/sbin:/usr/bin:/sbin:/bin"
+GIT_AS_ROOT = "/usr/bin/git"
 # Names an install script goes by, in the clone's top folder. "uninstall.sh" and the like are left out on purpose.
 INSTALL_SCRIPTS = ("install.sh", "install", "setup.sh")
 # Scripts bigger than this aren't shown (or offered): something that large isn't a script to read before running.
@@ -122,9 +126,10 @@ def _run_steps(path: str, steps: list[list[str]], as_root: bool) -> subprocess.C
             if result.returncode != 0:
                 break
         return result
-    git = shutil.which("git") or "git"
-    script = "export LC_ALL=C GIT_TERMINAL_PROMPT=0; " + " && ".join(
-        shlex.join([git, "-C", path, *step]) for step in steps)
+    # As root: git from the system's folder, and none of the clone's hooks (scripts git would otherwise run).
+    script = f"export PATH={SYSTEM_PATH} LC_ALL=C GIT_TERMINAL_PROMPT=0; " + " && ".join(
+        shlex.join([GIT_AS_ROOT, "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false",
+                    "-c", f"safe.directory={path}", "-C", path, *step]) for step in steps)
     try:
         result = subprocess.run([*ROOT, "/bin/sh", "-c", script], capture_output=True, text=True,
                                 timeout=ROOT_TIMEOUT)
@@ -605,7 +610,7 @@ def program_version(link: Path) -> str:
 # RPMs: the release's .rpm is downloaded, checked, and installed by dnf, as root, which asks for your password
 # (DECISIONS.md, D4, D6). Only RPMs installed from a downloaded file are tracked: dnf doesn't update those itself.
 
-DNF = ["dnf"]
+DNF = ["/usr/bin/dnf"]
 RPM_MAGIC = b"\xed\xab\xee\xdb"
 # Installing can take a while (dnf may download what the package needs), plus typing the password.
 DNF_TIMEOUT = 1800
@@ -632,6 +637,7 @@ def rpm_info(path: Path) -> tuple[str, str, str]:
 # was checked (sha256 $3), then install that copy with the dnf command that follows ($4…).
 _CHANGED = 3
 _INSTALL_COPY = (
+    f'export PATH={SYSTEM_PATH}; '
     'src=$1; name=$2; sum=$3; shift 3; '
     'dir=$(mktemp -d) || exit 1; trap \'rm -rf "$dir"\' EXIT; '
     'cp -- "$src" "$dir/$name" || exit 1; '
