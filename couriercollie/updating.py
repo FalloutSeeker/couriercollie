@@ -208,9 +208,9 @@ class Updating:
         self._run(work, done)
 
     def _update_download(self, repo: TrackedRepo):
-        """Download the newest release's AppImage or program archive, check it, and put it in place
-        (updater.install_appimage, install_program). An AppImage you don't have yet goes into ~/Applications, with a
-        menu entry; a program is unpacked into its own folder, with a link in ~/.local/bin."""
+        """Download the newest release's file, check it, and put it in place: an AppImage (into ~/Applications, with a
+        menu entry, if you don't have it yet), a program from an archive (its own folder, with a link in
+        ~/.local/bin), a package (the package manager) or a Flatpak bundle (for you). See updater.py."""
         repo_id, d = repo.id, self._details.get(repo.id)
         is_program, is_package, package, kind = _is_program(repo), _is_package(repo), _package_name(repo), repo.kind
         is_flatpak, app_id = _is_flatpak(repo), flatpaks.from_place(repo.local_path)[0]
@@ -238,6 +238,8 @@ class Updating:
                                             self.detailsChanged.emit(repo_id)))
 
         def work():
+            """Returns (the release's tag, where it now is, whether it was checked against a published checksum,
+            what was done, in a sentence)."""
             rels = known if known is not None else sources.releases(ref, host)
             release = next((r for r in rels if not r.prerelease), rels[0] if rels else None)
             if not release:
@@ -246,6 +248,7 @@ class Updating:
             if not asset:
                 raise updater.UpdateError(f"The newest release ({release.tag}) doesn\u2019t include your file "
                                           f"({pattern}). Choose it again under Your Build File.")
+            tag = release.tag
             if is_package:
                 def installing():
                     self._deliver.emit(lambda: (self._phases.__setitem__(repo_id, "installing"),
@@ -253,14 +256,21 @@ class Updating:
 
                 found, _version, verified, tool = updater.install_package(asset, release.assets, kind, package,
                                                                           progress, installing)
-                return release.tag, found, verified, bool(package), tool
+                return tag, packages.place(kind, found), verified, (
+                    f"Updated to {tag} with {tool}." if package else
+                    f"Installed {tag} with {tool} (package \u201c{found}\u201d).")
             if is_flatpak:
                 found, verified = updater.install_flatpak(asset, release.assets, app_id, progress)
-                return release.tag, found, verified, bool(app_id)
+                return tag, flatpaks.place(found), verified, (
+                    f"Updated to {tag}." if app_id else f"Installed {tag} with Flatpak, for you (\u201c{found}\u201d).")
             if is_program:
-                link, verified, replaced = updater.install_program(repo_id, release.tag, asset, release.assets, wanted,
+                link, verified, replaced = updater.install_program(repo_id, tag, asset, release.assets, wanted,
                                                                     hints, progress)
-                return release.tag, link, verified, replaced
+                on_path = str(updater.bin_dir()) in os.environ.get("PATH", "").split(os.pathsep)
+                run = f" Run it as \u201c{link.name}\u201d." if on_path else \
+                    f" Run it as {updater.shown(link)} ({updater.shown(updater.bin_dir())} isn\u2019t where your " \
+                    "terminal looks for commands)."
+                return tag, str(link), verified, (f"Updated to {tag}." if replaced else f"Installed {tag}.") + run
             new, verified = updater.install_appimage(asset, release.assets, folder, old, progress)
             if old:
                 updater.repoint_menu_entries(old, new)
@@ -268,7 +278,8 @@ class Updating:
                 found = icons.from_appimage(repo_id, new)
                 updater.write_menu_entry(repo_id, name, new, found.removeprefix("file:") if found
                                          else icon.removeprefix("theme:") if icon.startswith("theme:") else "")
-            return release.tag, new, verified, bool(old)
+            return tag, str(new), verified, (
+                f"Updated to {tag}." if old else f"Installed {tag} as {updater.shown(new)}, with a menu entry.")
 
         def done(result, error):
             self._updating.discard(repo_id)
@@ -279,41 +290,12 @@ class Updating:
                 self._update_notes[repo_id] = ("error", self._error_text(error))
                 if isinstance(error, updater.SeveralPrograms):
                     self._program_choices[repo_id] = error.choices
-            elif repo and is_package:
-                tag, found, verified, had_it, tool = result
-                # From now on its version is read from the installed package, like one a scan found.
-                repo.source, repo.local_path, repo.installed = config.SOURCE_SCANNED, packages.place(kind, found), tag
-                self._version_changed(repo)
-                self._changed(repo_id)
-                check = " Checked against the project\u2019s published checksum." if verified else \
-                    " The project publishes no checksum for it, so the download couldn\u2019t be checked."
-                what = f"Updated to {tag} with {tool}." if had_it else \
-                    f"Installed {tag} with {tool} (package \u201c{found}\u201d)."
-                self._update_notes[repo_id] = ("done" if verified else "warning", what + check)
-            elif repo and is_flatpak:
-                tag, found, verified, had_it = result
-                # From now on its version is read from the installed app, like one a scan found.
-                repo.source, repo.local_path, repo.installed = config.SOURCE_SCANNED, flatpaks.place(found), tag
-                self._version_changed(repo)
-                self._changed(repo_id)
-                check = " Checked against the project\u2019s published checksum." if verified else \
-                    " The project publishes no checksum for it, so the download couldn\u2019t be checked."
-                what = f"Updated to {tag}." if had_it else f"Installed {tag} with Flatpak, for you (“{found}”)."
-                self._update_notes[repo_id] = ("done" if verified else "warning", what + check)
             elif repo:
-                tag, new, verified, replaced = result
-                repo.source, repo.local_path, repo.installed = config.SOURCE_SCANNED, str(new), tag
+                tag, where, verified, what = result
+                # From now on its version is read from where it is, like one a scan found.
+                repo.source, repo.local_path, repo.installed = config.SOURCE_SCANNED, where, tag
                 self._version_changed(repo)
                 self._changed(repo_id)
-                if is_program:
-                    on_path = str(updater.bin_dir()) in os.environ.get("PATH", "").split(os.pathsep)
-                    run = f" Run it as \u201c{new.name}\u201d." if on_path else \
-                        f" Run it as {updater.shown(new)} ({updater.shown(updater.bin_dir())} isn\u2019t where your " \
-                        "terminal looks for commands)."
-                    what = (f"Updated to {tag}." if replaced else f"Installed {tag}.") + run
-                else:
-                    what = f"Updated to {tag}." if replaced else \
-                        f"Installed {tag} as {updater.shown(new)}, with a menu entry."
                 check = " Checked against the project\u2019s published checksum." if verified else \
                     " The project publishes no checksum for it, so the download couldn\u2019t be checked."
                 self._update_notes[repo_id] = ("done" if verified else "warning", what + check)

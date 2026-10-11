@@ -14,6 +14,7 @@ fast-forward only, so nothing of yours is merged, rebased or thrown away. A proj
 window you can watch (and type your password into, if it asks).
 """
 
+import contextlib
 import hashlib
 import os
 import platform
@@ -633,6 +634,23 @@ def downloads_dir() -> Path:
     return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "couriercollie" / "downloads"
 
 
+@contextlib.contextmanager
+def _downloaded(asset, others: list, progress, get_text):
+    """The release's file, downloaded into downloads_dir() and checked: (its path, whether it was checked against a
+    published checksum). Deleted afterwards, whatever happens."""
+    folder = downloads_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    name = Path(asset.name).name  # never a path from the site
+    part, file = folder / f".{name}.part", folder / name
+    try:
+        verified = _download_checked(asset, part, others, progress, get_text)
+        os.replace(part, file)  # installers go by the file's name
+        yield file, verified
+    finally:
+        part.unlink(missing_ok=True)
+        file.unlink(missing_ok=True)
+
+
 # Run as root: copy the package ($1, named $2) into a new folder only root can write to, check it's still the file
 # that was checked (sha256 $3), then install that copy with the command that follows ($4…).
 _CHANGED = 3
@@ -657,16 +675,10 @@ def install_package(asset, others: list, kind: str, package: str = "", progress=
     if not tool:
         raise UpdateError(f"There\u2019s no package manager here for {packages.A_LABEL[kind]}, so it wasn\u2019t "
                           "installed.")
-    folder = downloads_dir()
-    folder.mkdir(parents=True, exist_ok=True)
-    name = Path(asset.name).name
-    part, file = folder / f".{name}.part", folder / name
-    try:
-        verified = _download_checked(asset, part, others, progress, get_text)
-        with part.open("rb") as f:
+    with _downloaded(asset, others, progress, get_text) as (file, verified):
+        with file.open("rb") as f:
             if not f.read(8).startswith(packages.MAGIC[kind]):
-                raise UpdateError(f"{name} isn\u2019t {packages.A_LABEL[kind]}, so it wasn\u2019t installed.")
-        os.replace(part, file)  # package managers go by the file's name
+                raise UpdateError(f"{file.name} isn\u2019t {packages.A_LABEL[kind]}, so it wasn\u2019t installed.")
         try:
             found, version, arch = packages.file_info(kind, file)
         except ValueError as e:
@@ -683,49 +695,37 @@ def install_package(asset, others: list, kind: str, package: str = "", progress=
         with file.open("rb") as f:
             checked = hashlib.file_digest(f, "sha256").hexdigest()
         try:
-            result = subprocess.run([*ROOT, "/bin/sh", "-c", _INSTALL_COPY, "sh", str(file), name, checked,
+            result = subprocess.run([*ROOT, "/bin/sh", "-c", _INSTALL_COPY, "sh", str(file), file.name, checked,
                                      *packages.INSTALL[tool]], capture_output=True, text=True, timeout=INSTALL_TIMEOUT)
         except subprocess.TimeoutExpired as e:
             raise UpdateError(f"{tool} took too long; check a terminal to see if it\u2019s still busy.") from e
         except OSError as e:
             raise UpdateError(f"Couldn\u2019t run {tool}: {e}") from e
-        if ROOT and result.returncode in (126, 127):
-            raise UpdateError("The password wasn\u2019t given, so nothing was installed.")
-        if result.returncode == _CHANGED:
-            raise UpdateError("The downloaded file changed after it was checked, so nothing was installed.")
-        if result.returncode != 0:
-            raise UpdateError(f"{tool} couldn\u2019t install it: {_last_line(result)}")
-        return found, version, verified, tool
-    finally:
-        part.unlink(missing_ok=True)
-        file.unlink(missing_ok=True)
+    if ROOT and result.returncode in (126, 127):
+        raise UpdateError("The password wasn\u2019t given, so nothing was installed.")
+    if result.returncode == _CHANGED:
+        raise UpdateError("The downloaded file changed after it was checked, so nothing was installed.")
+    if result.returncode != 0:
+        raise UpdateError(f"{tool} couldn\u2019t install it: {_last_line(result)}")
+    return found, version, verified, tool
 
 
 def install_flatpak(asset, others: list, app_id: str = "", progress=None, get_text=fetch_text) -> tuple[str, bool]:
     """Downloads a release's Flatpak bundle, checks it, and installs it for you (flatpaks.py). `app_id`: the app you
     have, which the bundle must hold. Returns (the app's ID, whether the download was checked against a published
     checksum). The download is deleted afterwards."""
-    folder = downloads_dir()
-    folder.mkdir(parents=True, exist_ok=True)
-    name = Path(asset.name).name
-    part, file = folder / f".{name}.part", folder / name
-    try:
-        verified = _download_checked(asset, part, others, progress, get_text)
-        os.replace(part, file)
+    with _downloaded(asset, others, progress, get_text) as (file, verified):
         found, arch = flatpaks.bundle_app(file)
         if not found:
-            raise UpdateError(f"{name} isn\u2019t a Flatpak bundle, so it wasn\u2019t installed.")
+            raise UpdateError(f"{file.name} isn\u2019t a Flatpak bundle, so it wasn\u2019t installed.")
         if app_id and found != app_id:
-            raise UpdateError(f"The new file holds the app “{found}”, not “{app_id}” that you have, so it "
-                              "wasn\u2019t installed. The project may have renamed it.")
+            raise UpdateError(f"The new file holds the app \u201c{found}\u201d, not \u201c{app_id}\u201d that you have, "
+                              "so it wasn\u2019t installed. The project may have renamed it.")
         if arch != platform.machine():
             raise UpdateError(f"The new file is for {arch} computers, not this one, so it wasn\u2019t installed.")
         result = flatpaks.install(file)
-        if result is None:
-            raise UpdateError("Couldn\u2019t run flatpak.")
-        if result.returncode != 0:
-            raise UpdateError(f"flatpak couldn\u2019t install it: {_last_line(result)}")
-        return found, verified
-    finally:
-        part.unlink(missing_ok=True)
-        file.unlink(missing_ok=True)
+    if result is None:
+        raise UpdateError("Couldn\u2019t run flatpak.")
+    if result.returncode != 0:
+        raise UpdateError(f"flatpak couldn\u2019t install it: {_last_line(result)}")
+    return found, verified

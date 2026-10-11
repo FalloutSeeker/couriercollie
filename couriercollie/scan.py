@@ -132,13 +132,17 @@ def parse_rpm_list(text: str) -> list[Found]:
     return found
 
 
-def _dnf(*args: str) -> str | None:
-    """dnf's answer (its standard output), or None if it couldn't be asked."""
+def _run_out(*args: str) -> str | None:
+    """A command's standard output, or None if it couldn't be run or failed."""
     try:
-        result = subprocess.run(["dnf", *args], capture_output=True, text=True, timeout=120)
+        result = subprocess.run(list(args), capture_output=True, text=True, timeout=120)
     except (OSError, subprocess.TimeoutExpired):
         return None
     return result.stdout if result.returncode == 0 else None
+
+
+def _dnf(*args: str) -> str | None:
+    return _run_out("dnf", *args)
 
 
 def offered_by_repos(names: list[str], dnf=_dnf) -> set[str] | None:
@@ -159,15 +163,6 @@ def find_rpms(dnf=_dnf) -> list[Found]:
     if offered is None:
         return []
     return [f for f in candidates if f.name not in offered]
-
-
-def _run_out(*args: str) -> str | None:
-    """A command's standard output, or None if it couldn't be run or failed."""
-    try:
-        result = subprocess.run(list(args), capture_output=True, text=True, timeout=120)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    return result.stdout if result.returncode == 0 else None
 
 
 def _from_homepages(kind: str, lines: str) -> list[Found]:
