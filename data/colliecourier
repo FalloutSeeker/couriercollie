@@ -1,0 +1,4 @@
+#!/bin/sh
+# The colliecourier command, as installed by the app's packages (RPM, AUR).
+# -I: only the installed app, never a "colliecourier" folder in the current one.
+exec /usr/bin/python3 -I -m colliecourier "$@"

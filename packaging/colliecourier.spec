@@ -40,11 +40,7 @@ updates them with a click.
 install -d %{buildroot}%{python3_sitelib}
 cp -a colliecourier %{buildroot}%{python3_sitelib}/
 find %{buildroot}%{python3_sitelib}/colliecourier -name __pycache__ -prune -exec rm -rf {} +
-install -Dm755 /dev/stdin %{buildroot}%{_bindir}/colliecourier <<'LAUNCHER'
-#!/bin/sh
-# -I: only the installed app, never a "colliecourier" folder in the current one.
-exec /usr/bin/python3 -I -m colliecourier "$@"
-LAUNCHER
+install -Dm755 data/colliecourier %{buildroot}%{_bindir}/colliecourier
 install -Dm644 data/colliecourier.desktop %{buildroot}%{_datadir}/applications/colliecourier.desktop
 install -Dm644 data/colliecourier.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/colliecourier.svg
 
