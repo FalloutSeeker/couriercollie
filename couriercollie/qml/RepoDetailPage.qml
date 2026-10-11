@@ -622,7 +622,9 @@ Kirigami.ScrollablePage {
             QQC2.Label {
                 objectName: "followedValue"
                 Layout.fillWidth: true
-                text: !page.followsReleases ? (page.currentBranch || "Loading…")
+                // The saved branch while branches load, or if they couldn't be listed.
+                text: !page.followsReleases ? (page.currentBranch || page.repo.branch
+                                               || (page.ready ? "The default branch" : "Loading\u2026"))
                     : page.details.isClone ? "Each release\u2019s source code: Update moves the clone to its tag"
                     : page.repo.assetPattern ? page.repo.assetPattern
                     : page.details.versionOnly === true ? "None (versions only)"

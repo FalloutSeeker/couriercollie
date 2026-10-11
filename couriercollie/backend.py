@@ -390,6 +390,7 @@ class Backend(QObject, Updating, Account):
             "domain": ref.domain,
             "path": ref.path,
             "follow": r.follow,
+            "branch": r.branch,
             "assetPattern": r.asset_pattern,
             "prereleases": r.prereleases,
             "icon": self._icon_source(r),
