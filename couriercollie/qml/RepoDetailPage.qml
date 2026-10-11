@@ -514,8 +514,7 @@ Kirigami.ScrollablePage {
                     }
                 }
 
-                QQC2.Label {
-                    Layout.fillWidth: true
+                Hint {
                     visible: page.canUpdate && page.installing
                     text: page.details.installClones
                           ? (page.followsReleases ? `Clones the project at ${page.details.newestText} into a folder in ${page.details.clonesFolder}.`
@@ -527,9 +526,6 @@ Kirigami.ScrollablePage {
                           : page.details.isProgram
                           ? `Downloads the newest release\u2019s ${page.repo.assetPattern}, unpacks it into ${page.details.programsFolder}, and puts a link to its program in ${page.details.binFolder}, so it runs as a command.`
                           : `Downloads the newest release\u2019s ${page.repo.assetPattern || "file"} into ${page.details.installFolder}, and adds it to the menu.`
-                    font: Kirigami.Theme.smallFont
-                    wrapMode: Text.Wrap
-                    opacity: 0.7
                 }
 
                 QQC2.Label {
@@ -542,13 +538,9 @@ Kirigami.ScrollablePage {
                     wrapMode: Text.Wrap
                 }
 
-                QQC2.Label {
-                    Layout.fillWidth: true
+                Hint {
                     visible: page.details.versionFromDisk === true && !page.details.localMissing
                     text: "Your version is read from this computer when the page first opens, and again on Refresh."
-                    font: Kirigami.Theme.smallFont
-                    wrapMode: Text.Wrap
-                    opacity: 0.7
                 }
             }
         }
@@ -592,13 +584,9 @@ Kirigami.ScrollablePage {
                     onActivated: index => backend.setFollow(page.repoId, index === 1 ? "branch" : "releases")
                 }
 
-                QQC2.Label {
-                    Layout.fillWidth: true
+                Hint {
                     visible: page.ready && !page.details.hasReleases
                     text: "This project doesn’t publish releases, so new commits on a branch are followed instead."
-                    font: Kirigami.Theme.smallFont
-                    wrapMode: Text.Wrap
-                    opacity: 0.7
                 }
             }
 
@@ -720,12 +708,8 @@ Kirigami.ScrollablePage {
                     wrapMode: Text.Wrap
                 }
 
-                QQC2.Label {
-                    Layout.fillWidth: true
+                Hint {
                     text: "The project\u2019s own installer. It isn\u2019t run by Update; you read it first, then it runs in a terminal window."
-                    font: Kirigami.Theme.smallFont
-                    wrapMode: Text.Wrap
-                    opacity: 0.7
                 }
             }
         }

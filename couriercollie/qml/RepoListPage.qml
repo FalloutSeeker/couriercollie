@@ -539,15 +539,11 @@ Kirigami.ScrollablePage {
                         wrapMode: Text.Wrap
                     }
 
-                    QQC2.Label {
-                        Layout.fillWidth: true
+                    Hint {
                         Layout.leftMargin: Kirigami.Units.largeSpacing + Kirigami.Units.iconSizes.smallMedium + Kirigami.Units.smallSpacing
                         Layout.bottomMargin: Kirigami.Units.smallSpacing
                         visible: row.modelData.total === 0 && row.modelData.category !== ""
                         text: "Empty. Drag repos here by their handles."
-                        font: Kirigami.Theme.smallFont
-                        opacity: 0.7
-                        wrapMode: Text.Wrap
                     }
 
                     Kirigami.Separator {

@@ -37,15 +37,11 @@ ColumnLayout {
         }
     }
 
-    QQC2.Label {
-        Layout.fillWidth: true
+    Hint {
         visible: root.account.way === "" && root.account.signIn === ""
         text: root.account.store !== ""
               ? `Read-only: it can see public information only. Kept in ${root.account.store}.`
               : "Signing in needs a password store to keep the login safely, and this desktop has none running."
-        wrapMode: Text.Wrap
-        font: Kirigami.Theme.smallFont
-        opacity: 0.7
     }
 
     // ---- Signing in: the code to enter on GitHub ----
@@ -143,13 +139,9 @@ ColumnLayout {
         onClicked: backend.signOut()
     }
 
-    QQC2.Label {
-        Layout.fillWidth: true
+    Hint {
         visible: root.account.way !== ""
         text: `Signing out removes the login from ${root.account.store || "this computer"}. To remove couriercollie’s access on GitHub too: Settings → Applications on github.com.`
-        wrapMode: Text.Wrap
-        font: Kirigami.Theme.smallFont
-        opacity: 0.7
     }
 
     Kirigami.InlineMessage {

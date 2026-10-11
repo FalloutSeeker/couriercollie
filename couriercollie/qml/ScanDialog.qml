@@ -83,15 +83,11 @@ Kirigami.Dialog {
             }
         }
 
-        QQC2.Label {
+        Hint {
             objectName: "scanOnlyUnmanaged"
-            Layout.fillWidth: true
             // Long text would otherwise widen the dialog to its full, unwrapped length.
             Layout.maximumWidth: Kirigami.Units.gridUnit * 36
             text: "Only what your package manager can\u2019t update is listed. Anything it or Flatpak updates is left out: a package is only included if it was installed from a downloaded file and no repository you have enabled offers it."
-            font: Kirigami.Theme.smallFont
-            wrapMode: Text.Wrap
-            opacity: 0.7
         }
 
         Kirigami.InlineMessage {
