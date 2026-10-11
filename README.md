@@ -6,9 +6,11 @@ schedule, and lets you update with a click.
 
 ## Status
 
-**Stages 1–4 of PLAN.md are built.** You can add GitHub/GitLab repos by hand or scan this computer for them, browse
-their releases, build files and branches, and set which version you have, and check for updates (by hand or in the background,
-with notifications). Installing updates (stage 5) and cleanup (stage 6) aren't built yet.
+**Stages 1–5 of PLAN.md are built.** You can add GitHub/GitLab repos by hand or scan this computer for them, sort
+them into categories, browse their releases, build files and branches, set which version you have, check for updates
+(by hand or in the background, with notifications), and update with a click: git clones are pulled (or moved to the
+newest release), AppImages and programs from release archives are downloaded, checked and swapped in, and RPMs are
+installed with dnf. Stage 6 (GitHub sign-in, packaging, GNOME) and stage 7 (release) aren't built yet.
 
 ## Running it
 
@@ -32,6 +34,10 @@ Other ways to run it:
   (Settings). Turning them off removes the timer. To remove it by hand:
   `systemctl --user disable --now repoproject-check.timer`.
 - `~/.local/state/repoproject/checks.json`: the last check's results. `~/.cache/repoproject/icons/`: repo icons.
+- Only when you install or update something: AppImages in `~/Applications` (or beside the one you had), with a menu
+  entry `~/.local/share/applications/repoproject-<repo>.desktop`; programs unpacked in
+  `~/.local/share/repoproject/programs/`, with a link in `~/.local/bin`; RPMs through dnf (downloaded first to
+  `~/.cache/repoproject/downloads/`, then deleted).
 
 To start over as if newly installed (the welcome screen shows again), run it with `--reset`. Your settings file is
 renamed to a dated backup next to it, not deleted:
@@ -46,7 +52,8 @@ renamed to a dated backup next to it, not deleted:
 cd ~/claudework/RepoProject && python3 -m unittest discover -s tests -t .
 ```
 
-They don't use the network: GitHub and GitLab answers are saved in `tests/fixtures/`.
+They don't use the network: GitHub and GitLab answers are saved in `tests/fixtures/`, and downloads come from a
+small local server the tests start.
 
 `devtools/` has checks that drive the real window off-screen (clicks, screenshots in `.uicheck/`), using a temporary
 copy of your settings:
