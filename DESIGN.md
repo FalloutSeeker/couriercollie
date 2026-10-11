@@ -124,12 +124,21 @@ What "Update" does depends on the kind:
 | Program     | Downloads, unpacks, and swaps in the new program file                           |
 | Git clone   | Pulls the new commits. Re-running the project's install script is a separate, deliberate step |
 
-**Git clones (built 2026-10-11).** For clones found by a scan that follow a branch. Update (on the repo page, or the
-⬆ button in the list) fetches the followed branch from the clone's remote for the project and fast-forwards to it.
-It refuses, saying why and changing nothing, when: the clone is on another branch; it has commits of its own; files
-you changed would be overwritten; or the folder belongs to another user (it shows the `sudo git pull` to run
-yourself). Afterwards your version, the page and the list say Up to date, without asking the site. A failed update
-from the list opens the repo's page, where the reason is.
+**Git clones (built 2026-10-11).** For clones found by a scan. Update is on the repo page, and the ⬆ in the list
+becomes a button.
+
+- **Following a branch:** fetches the branch from the clone's remote for the project and fast-forwards to it.
+- **Following releases:** the clone's version is the release tag it's at (else its commit). Update fetches the newest
+  release's tag and moves the clone to it; the branch it was on is left as it was (`git switch <branch>` goes back).
+  No build-file picker for a clone.
+- **Refuses**, saying why and changing nothing, when: the clone is on another branch than the one followed; it has
+  commits of its own; files you changed would be overwritten; moving to a release would strand commits that aren't
+  on any branch; or the clone is someone else's (it shows the command to run as them).
+- **Clones that belong to the system** (e.g. in `/opt`): Update asks for your password once (polkit, as Discover
+  does) and runs the git commands as root. The page says so beforehand.
+- Afterwards your version, the page and the list say Up to date, without asking the site. A failed update from the
+  list opens the repo's page, where the reason is. Changing what a repo follows clears the old result until the next
+  check.
 
 **Install scripts.** A clone's `install.sh`, `install` or `setup.sh` (never `uninstall.sh`) gets a "Show and Run…"
 button under Tracking. The script is shown in full first; Run in Terminal opens Konsole in the clone's folder, as

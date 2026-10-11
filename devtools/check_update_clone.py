@@ -1,5 +1,5 @@
-"""Updating a git clone, with a simulated mouse: the Update button on the repo page and in the list, the result, and
-showing then running an install script. Uses a temporary project repo and clone, and no network: the site's answers
+"""Updating a git clone, with a simulated mouse: the Update button on the repo page and in the list, the result,
+showing then running an install script, and a clone that follows releases moving to the newest. Uses a temporary project repo and clone, and no network: the site's answers
 are faked, and the "terminal" is a plain shell that leaves a file behind, so nothing on this computer is touched.
 
     python3 -I devtools/check_update_clone.py
@@ -51,11 +51,25 @@ from PySide6.QtCore import QObject  # noqa: E402
 
 from repoproject import checker, sources, updater  # noqa: E402
 
-sources.releases = lambda ref, host: []
+releases = []  # the project's releases, as the site would list them; one is added later
+sources.releases = lambda ref, host: list(releases)
 sources.branches = lambda ref: ("main", [sources.Branch("main", newest)])
 sources.compare = lambda ref, host, yours, head: sources.Comparison(
     sources.SAME if yours == head else sources.BEHIND, 2, [sources.Commit(newest, "change 2")])
 updater.terminal_command = lambda path, name: ("/bin/sh", [f"./{name}"])  # instead of a terminal window
+
+
+released = {}
+
+
+def tag_release():
+    (other / "README.md").write_text("release 3\n")
+    git("commit", "-q", "-am", "release 3", cwd=other)
+    git("tag", "v3", cwd=other)
+    git("push", "-q", "origin", "HEAD:main", "v3", cwd=other)
+    released["sha"] = git("rev-parse", "HEAD", cwd=other)
+    releases.append(sources.Release("v3", "v3", None, False, "", "",
+                                    [sources.Asset("project.tar.gz", "https://example.invalid/project.tar.gz")]))
 
 
 def checked_once():
@@ -102,4 +116,22 @@ h.run([
     (0, lambda: h.check("…saying why", "not main" in details()["updateNote"], details()["updateNote"])),
     (0, lambda: h.check("…and nothing changed", git("rev-parse", "HEAD", cwd=clone) == start)),
     (0, lambda: h.shot("update-clone-3-refused")),
+    # Following releases: the project tags a release; the clone (on its own branch, not at a tag) moves to it.
+    (0, tag_release),
+    (0, lambda: b.setFollow(ID, "releases")),
+    (0, lambda: b.loadDetails(ID, True)),
+    h.until(lambda: details()["state"] == "ready"),
+    (500, lambda: h.check("releases: your version is the clone's commit", details()["versionText"].startswith("commit "),
+                          details()["versionText"])),
+    (0, lambda: h.check("…and v3 is offered", details()["newestText"] == "v3" and h.find("updateNow") is not None)),
+    (0, lambda: h.check("…with no build-file picker for a clone", h.find("asset:project.tar.gz") is None)),
+    (0, lambda: h.shot("update-clone-4-releases")),
+    (0, lambda: h.click("updateNow")),
+    h.until(lambda: not details()["updating"], 30000),
+    (500, lambda: h.check("moved to v3", git("rev-parse", "HEAD", cwd=clone) == released["sha"])),
+    (0, lambda: h.check("your version is v3, up to date", b._config.find(ID).installed == "v3"
+                        and details()["statusKind"] == "current")),
+    (0, lambda: h.check("says your branch is kept", "Your branch mine is unchanged" in details()["updateNote"],
+                        details()["updateNote"])),
+    (0, lambda: h.shot("update-clone-5-release")),
 ])

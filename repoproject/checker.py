@@ -108,7 +108,7 @@ def due(settings: Settings, state: State, at: datetime | None = None) -> bool:
 def _yours(repo: TrackedRepo) -> str:
     """Your version: read from disk for a scanned repo (it may have been updated outside the app)."""
     if repo.source == SOURCE_SCANNED and repo.local_path:
-        version, _present = scan.version_on_disk(repo.local_path)
+        version, _present = scan.version_on_disk(repo.local_path, releases=repo.follow != FOLLOW_BRANCH)
         if version:
             return version
     return repo.installed

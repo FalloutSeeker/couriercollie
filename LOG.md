@@ -10,6 +10,10 @@ Newest first.
   Konsole in the clone's folder. Tested against real git repos made for the tests; your own clones weren't touched.
   - Also: a branch whose newest commit is your version is no longer asked about (it's the same, no request).
   - The scanned-repo window check now waits for each comparison to come back, rather than a fixed time.
+- Clones following releases (version = the release tag the clone is at; Update moves it to the newest tag, leaving its
+  branch alone) and clones that belong to the system (Update asks for the password once, through polkit). Git can now
+  read clones owned by another user (the version of a clone in `/opt` couldn't be read before). Switching what a
+  clone follows reads its version from disk straight away, instead of showing nothing until Refresh.
 - Review before stage 5, for requests and weight:
   - A branch is only compared after it stays chosen for 0.4 s, so clicking quickly through branches makes one
     request, not one per click.

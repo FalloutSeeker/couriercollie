@@ -81,10 +81,76 @@ class PullTest(UpstreamCase):
         self.assertEqual(git(self.clone, "rev-parse", "HEAD"), self.start)
 
     @unittest.skipIf(os.geteuid() == 0, "root can write anywhere")
-    def test_a_clone_you_cant_write_says_how_to_do_it_yourself(self):
+    def test_a_read_only_clone_of_yours_is_left_alone(self):
         os.chmod(self.clone / ".git", 0o555)
-        with self.assertRaisesRegex(updater.UpdateError, "sudo git pull --ff-only"):
+        with self.assertRaisesRegex(updater.UpdateError, "permissions"):
             updater.pull(str(self.clone), "main", [])
+
+    def test_someone_elses_clone_is_left_alone(self):
+        self.as_owner(1234)
+        with self.assertRaisesRegex(updater.UpdateError, "As that user.*git pull --ff-only"):
+            updater.pull(str(self.clone), "main", [])
+
+    def test_the_systems_clone_asks_for_the_password_once(self):
+        newest = self.push_upstream()
+        asked = self.as_owner(0)
+        self.assertEqual(updater.pull(str(self.clone), "main", [])[1:], (newest, 1))
+        self.assertEqual(len(asked), 1)  # fetch and fast-forward in one go
+        self.assertIn("merge --ff-only", asked[0])
+
+    def test_no_password_no_change(self):
+        self.push_upstream()
+        self.as_owner(0, root=["sh", "-c", "exit 126", "polkit"])  # the password dialog was cancelled
+        with self.assertRaisesRegex(updater.UpdateError, "password wasn\u2019t given"):
+            updater.pull(str(self.clone), "main", [])
+        self.assertEqual(git(self.clone, "rev-parse", "HEAD"), self.start)
+
+    def as_owner(self, uid, root=None):
+        """Pretend the clone belongs to `uid` and can't be written as you. Returns the requests that would ask for the
+        password, one per update."""
+        asked = []
+        saved = updater._writable, updater._owner, updater.ROOT
+        updater._writable, updater._owner = (lambda path: False), (lambda path: uid)
+        updater.ROOT = root or ["env"]  # runs the commands as you, where pkexec would ask for the password
+        self.addCleanup(lambda: (setattr(updater, "_writable", saved[0]), setattr(updater, "_owner", saved[1]),
+                                 setattr(updater, "ROOT", saved[2])))
+        real_run = updater._run_steps
+
+        def run(path, steps, as_root):
+            if as_root:
+                asked.append(" ".join(" ".join(step) for step in steps))
+            return real_run(path, steps, as_root)
+
+        updater._run_steps = run
+        self.addCleanup(setattr, updater, "_run_steps", real_run)
+        return asked
+
+    def test_follows_releases(self):
+        # The project's releases are tags; your clone is on main, at v1.
+        git(self.other, "tag", "v1")
+        newest = self.push_upstream()
+        git(self.other, "tag", "v2")
+        git(self.other, "push", "-q", "origin", "v1", "v2")
+        git(self.clone, "fetch", "-q", "--tags")
+        from repoproject import scan
+
+        self.assertEqual(scan.version_on_disk(str(self.clone), releases=True), ("v1", True))
+        self.assertEqual(updater.checkout_release(str(self.clone), "v2", []), (self.start, "main"))
+        self.assertEqual(git(self.clone, "rev-parse", "HEAD"), newest)
+        self.assertEqual(scan.version_on_disk(str(self.clone), releases=True), ("v2", True))
+        self.assertEqual(git(self.clone, "rev-parse", "main"), self.start)  # your branch is as it was
+
+    def test_moving_to_a_release_never_strands_your_commits(self):
+        git(self.other, "tag", "v2")
+        git(self.other, "push", "-q", "origin", "v2")
+        git(self.clone, "switch", "-q", "--detach")
+        (self.clone / "b.txt").write_text("mine\n")
+        git(self.clone, "add", ".")
+        git(self.clone, "commit", "-q", "-m", "mine, on no branch")
+        mine = git(self.clone, "rev-parse", "HEAD")
+        with self.assertRaisesRegex(updater.UpdateError, "aren\u2019t on any branch"):
+            updater.checkout_release(str(self.clone), "v2", [])
+        self.assertEqual(git(self.clone, "rev-parse", "HEAD"), mine)
 
     def test_the_remote_matching_the_project_is_used(self):
         # The clone's "origin" is someone's fork; the tracked project is another remote.
@@ -199,7 +265,23 @@ class UpdateClickedTest(UpstreamCase):
         self.assertEqual(self.config.load(self.path).repos[0].installed, self.start)
         self.assertTrue(self.backend.repo(self.id)["updateAvailable"])
 
-    def test_only_scanned_clones_following_a_branch(self):
+    def test_a_clone_following_releases_moves_to_the_newest(self):
+        from repoproject import sources
+
+        git(self.other, "tag", "v2")
+        git(self.other, "push", "-q", "origin", "v2")
+        repo = self.backend._config.find(self.id)
+        repo.follow, repo.installed = "releases", self.start
+        d = self.backend._details[self.id]
+        d.releases = [sources.Release("v2", "v2", None, False, "", "", [])]
+        self.backend.updateRepo(self.id)
+        d = self.backend.details(self.id)
+        self.assertEqual(git(self.clone, "rev-parse", "HEAD"), self.newest)
+        self.assertEqual(self.config.load(self.path).repos[0].installed, "v2")
+        self.assertEqual(d["statusKind"], "current")
+        self.assertEqual(d["updateNote"], "Now at v2. Your branch main is unchanged; git switch main goes back to it.")
+
+    def test_only_clones_found_by_a_scan(self):
         repo = self.backend._config.find(self.id)
         repo.source = "manual"
         self.assertFalse(self.backend.repo(self.id)["canUpdate"])

@@ -125,8 +125,8 @@ def _set_baseline(repo: TrackedRepo, d: Details) -> bool:
 def _fit_files(repo: TrackedRepo, d: Details) -> bool:
     """Only files that run on this computer can be followed. A pick of any other file is dropped, and a project with
     nothing for this computer is tracked by version only. Returns True if the repo changed."""
-    if repo.follow != FOLLOW_RELEASES or d.state != "ready" or not d.releases:
-        return False
+    if repo.follow != FOLLOW_RELEASES or d.state != "ready" or not d.releases or _is_clone(repo):
+        return False  # a clone following releases follows the source at each release's tag, not a file
     before = (repo.asset_pattern, repo.kind)
     if repo.asset_pattern:
         picked = [a for r in d.releases for a in r.assets if assets.matches(repo.asset_pattern, a.name)]
@@ -175,18 +175,23 @@ def _compare(ref: RepoRef, host: str, yours: str, head: str) -> sources.Comparis
         return None
 
 
+def _is_clone(repo: TrackedRepo) -> bool:
+    """A git clone on this computer, found by a scan."""
+    return repo.source == config.SOURCE_SCANNED and repo.kind == assets.KIND_GIT and bool(repo.local_path)
+
+
 def _can_update(repo: TrackedRepo) -> bool:
-    """Whether Update can do anything for this repo yet. Stage 5 so far: git clones found by a scan, following a
-    branch."""
-    return repo.source == config.SOURCE_SCANNED and repo.kind == assets.KIND_GIT and repo.follow == FOLLOW_BRANCH \
-        and bool(repo.local_path)
+    """Whether Update can do anything for this repo yet. Stage 5 so far: git clones found by a scan, following a branch
+    (pulled) or releases (moved to the newest release's tag)."""
+    return _is_clone(repo)
 
 
-def _on_disk(scanned: bool, local_path: str) -> tuple[tuple[str, bool] | None, str]:
-    """A scanned repo's (version, still there) and checked-out branch, read from disk."""
+def _on_disk(scanned: bool, local_path: str, releases: bool = False) -> tuple[tuple[str, bool] | None, str]:
+    """A scanned repo's (version, still there) and checked-out branch, read from disk. A clone following releases is
+    at a release tag, if it's at one."""
     if not scanned:
         return None, ""
-    return scan.version_on_disk(local_path), scan.branch_on_disk(local_path)
+    return scan.version_on_disk(local_path, releases), scan.branch_on_disk(local_path)
 
 
 def _fetch_branches(ref: RepoRef) -> tuple[str, list[sources.Branch], str]:
@@ -305,6 +310,8 @@ class Backend(QObject):
         ref = RepoRef.from_id(r.id)
         if r.follow == FOLLOW_BRANCH:
             follow_text = f"Branch {r.branch}" if r.branch else "A branch"
+        elif _is_clone(r):
+            follow_text = "Release tags"
         elif r.asset_pattern:
             follow_text = r.asset_pattern
         elif r.kind == assets.KIND_VERSIONS:
@@ -937,7 +944,7 @@ class Backend(QObject):
         # One API request for the releases, and one for what's new on a branch you're behind on. Branches and the
         # version on disk come from git, which doesn't count against API limits.
         def work():
-            on_disk, branch_on_disk = _on_disk(scanned, local_path)
+            on_disk, branch_on_disk = _on_disk(scanned, local_path, follow == FOLLOW_RELEASES)
             rels = sources.releases(ref, host)
             default, branches, branch_error = _fetch_branches(ref)
             yours = on_disk[0] if on_disk and on_disk[0] else installed
@@ -972,6 +979,26 @@ class Backend(QObject):
             self.detailsChanged.emit(repo_id)
 
         self._run(work, done)
+
+    def _read_disk_version(self, repo_id):
+        """Your version for a scanned repo, read from disk again (no request): after switching what it follows, since
+        a clone's version is then a commit or a release tag."""
+        repo = self._config.find(repo_id)
+        scanned, local_path, releases = True, repo.local_path, repo.follow == FOLLOW_RELEASES
+
+        def done(result, error):
+            repo, d = self._config.find(repo_id), self._details.get(repo_id)
+            if error or not repo or not result[0] or not result[0][0]:
+                return
+            repo.installed = result[0][0]
+            if d:
+                _match_tag(repo, d)
+            self._version_changed(repo)
+            self._changed(repo_id)
+            if repo.follow == FOLLOW_BRANCH:
+                self._refresh_whats_new(repo_id)
+
+        self._run(lambda: _on_disk(scanned, local_path, releases), done)
 
     @Slot(str, result="QVariantMap")
     def details(self, repo_id):
@@ -1033,6 +1060,8 @@ class Backend(QObject):
             "yourFileMissing": bool(pattern) and latest is not None and not latest["hasSelected"],
             "branchError": d.branch_error,
             "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing,
+            "isClone": bool(repo) and _is_clone(repo),
+            "updateNeedsPassword": bool(repo) and _is_clone(repo) and updater.needs_password(repo.local_path),
             "updating": repo_id in self._updating,
             "updateNoteKind": self._update_notes.get(repo_id, ("", ""))[0],
             "updateNote": self._update_notes.get(repo_id, ("", ""))[1],
@@ -1069,7 +1098,9 @@ class Backend(QObject):
             if not shown:
                 return {}
             newest = shown[0].tag
-            newest_text, yours_text = newest, installed
+            # A clone that isn't at a release tag: its commit.
+            looks_like_commit = len(installed) == 40 and all(c in "0123456789abcdef" for c in installed)
+            newest_text, yours_text = newest, f"commit {installed[:7]}" if looks_like_commit else installed
             newer_text, update_headline = f"Newer version available: {newest}", "Update available"
         if installed == NOT_INSTALLED:
             text, status, kind, headline = "Not installed", f"The newest is {newest_text}.", STATUS_NOT_INSTALLED, \
@@ -1137,8 +1168,18 @@ class Backend(QObject):
         repo = self._config.find(repo_id)
         if not repo or follow not in (FOLLOW_RELEASES, FOLLOW_BRANCH) or follow == repo.follow:
             return
+        clone = _is_clone(repo)
         repo.follow = follow
-        if follow == FOLLOW_BRANCH:
+        # The last check's result and update message were about what it followed before.
+        self._update_notes.pop(repo_id, None)
+        if self._checks.results.pop(repo_id, None):
+            try:
+                checker.save_state(self._checks, self._state_path)
+            except OSError:
+                pass
+            self.checksChanged.emit()
+            self._update_badge()
+        if follow == FOLLOW_BRANCH or clone:
             repo.kind = assets.KIND_GIT
             if not repo.branch:
                 repo.branch = self._details.get(repo_id, Details()).default_branch
@@ -1153,6 +1194,8 @@ class Backend(QObject):
         _set_baseline(repo, self._details.get(repo_id, Details()))
         _fit_files(repo, self._details.get(repo_id, Details()))
         self._changed(repo_id)
+        if repo.source == config.SOURCE_SCANNED:
+            self._read_disk_version(repo_id)  # a commit for a branch, a release tag for releases
 
     @Slot(str, str)
     def setBranch(self, repo_id, branch):
@@ -1162,6 +1205,7 @@ class Backend(QObject):
         if not repo or branch == repo.branch:
             return
         repo.branch = branch
+        self._update_notes.pop(repo_id, None)
         _set_baseline(repo, self._details.get(repo_id, Details()))  # only if your version isn't known yet
         self._changed(repo_id)
         self._refresh_whats_new(repo_id)
@@ -1220,8 +1264,17 @@ class Backend(QObject):
         repo = self._config.find(repo_id)
         if not repo or repo_id in self._updating or not _can_update(repo):
             return
-        branch = repo.branch or self._details.get(repo_id, Details()).default_branch
-        path, ids = repo.local_path, [repo.id, *repo.aliases]
+        d = self._details.get(repo_id)
+        branch = repo.branch or (d.default_branch if d else "")
+        path, ids, by_branch = repo.local_path, [repo.id, *repo.aliases], repo.follow == FOLLOW_BRANCH
+        # The release to move to: the newest the page or the last check knows of.
+        result = self._checks.results.get(repo_id)
+        tag = (_newest_version(repo, d) if d and d.state == "ready" else "") or (result.newest if result else "")
+        if not by_branch and not tag:
+            self._update_notes[repo_id] = ("error", "The newest release isn\u2019t known yet: Refresh, then try "
+                                                    "again.")
+            self.detailsChanged.emit(repo_id)
+            return
         self._updating.add(repo_id)
         self._update_notes.pop(repo_id, None)
         self.reposChanged.emit()
@@ -1232,17 +1285,25 @@ class Backend(QObject):
             repo = self._config.find(repo_id)
             if repo and error:
                 self._update_notes[repo_id] = ("error", self._error_text(error))
-            elif repo:
+            elif repo and by_branch:
                 _before, after, count = result
                 self._pulled(repo, branch, after)
                 self._update_notes[repo_id] = ("done", "Already up to date." if not count else
                                                "Pulled 1 new commit." if count == 1 else f"Pulled {count} new commits.")
+            elif repo:
+                _before, left = result
+                repo.installed = tag
+                self._version_changed(repo)
+                self._changed(repo_id)
+                back = f" Your branch {left} is unchanged; git switch {left} goes back to it." if left else ""
+                self._update_notes[repo_id] = ("done", f"Now at {tag}.{back}")
             self.reposChanged.emit()
             self.detailsChanged.emit(repo_id)
             if repo and error:
                 self.updateFailed.emit(repo_id)
 
-        self._run(lambda: updater.pull(path, branch, ids), done)
+        self._run(lambda: updater.pull(path, branch, ids) if by_branch else updater.checkout_release(path, tag, ids),
+                  done)
 
     def _pulled(self, repo: TrackedRepo, branch: str, head: str):
         """After a pull, the clone is at the branch's newest commit (as just fetched): your version, the page and the

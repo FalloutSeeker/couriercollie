@@ -631,7 +631,7 @@ Kirigami.ScrollablePage {
                                 icon.name: "update-low"
                                 text: "Update"
                                 display: QQC2.AbstractButton.IconOnly
-                                QQC2.ToolTip.text: "Update: pull the new commits"
+                                QQC2.ToolTip.text: "Update"
                                 QQC2.ToolTip.visible: hovered
                                 QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
                                 onClicked: backend.updateRepo(row.modelData.id)

@@ -60,7 +60,9 @@ class Found:
 def _git(path: str, *args: str) -> str:
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"}
     try:
-        result = subprocess.run(["git", "-C", path, *args], capture_output=True, text=True, timeout=10, env=env)
+        # safe.directory: git won't otherwise read a clone that belongs to another user (e.g. the system, in /opt).
+        result = subprocess.run(["git", "-c", f"safe.directory={path}", "-C", path, *args], capture_output=True,
+                                text=True, timeout=10, env=env)
     except (OSError, subprocess.TimeoutExpired):
         return ""
     return result.stdout.strip() if result.returncode == 0 else ""
@@ -218,9 +220,10 @@ def find_all(folders: Iterable[str] = DEFAULT_SCAN_FOLDERS, rpms: Callable[[], l
     return list(by_id.values())
 
 
-def version_on_disk(path: str) -> tuple[str, bool]:
+def version_on_disk(path: str, releases: bool = False) -> tuple[str, bool]:
     """What's on this computer now for a scanned repo, read from where the scan found it: (version, still there).
-    A clone's commit, an AppImage's version from its file name, or an RPM's installed version."""
+    A clone's commit (or, when it follows releases, the release tag it's at), an AppImage's version from its file
+    name, or an RPM's installed version."""
     if m := re.fullmatch(r"RPM package \u201c(.+)\u201d", path):
         try:
             result = subprocess.run(["rpm", "-q", "--qf", "%{VERSION}", m.group(1)], capture_output=True, text=True,
@@ -230,7 +233,8 @@ def version_on_disk(path: str) -> tuple[str, bool]:
         return (result.stdout.strip(), True) if result.returncode == 0 else ("", False)
     p = Path(path)
     if (p / ".git").exists():
-        return _git(path, "rev-parse", "HEAD"), True
+        tags = _git(path, "tag", "--points-at", "HEAD").split() if releases else []
+        return (tags[0] if tags else _git(path, "rev-parse", "HEAD")), True
     if p.is_file() and p.suffix.lower() == ".appimage":
         return appimage_version(p.name), True
     return "", False

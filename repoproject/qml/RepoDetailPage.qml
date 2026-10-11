@@ -398,7 +398,7 @@ Kirigami.ScrollablePage {
                     }
 
                     QQC2.Label {
-                        text: "Pulling the new commits\u2026"
+                        text: page.followsReleases ? "Moving to the new release\u2026" : "Pulling the new commits\u2026"
                     }
                 }
 
@@ -421,7 +421,7 @@ Kirigami.ScrollablePage {
                         objectName: "updateNow"
                         visible: page.canUpdate
                         highlighted: true
-                        text: "Update"
+                        text: page.details.updateNeedsPassword ? "Update\u2026" : "Update"
                         icon.name: "system-software-update"
                         onClicked: backend.updateRepo(page.repoId)
                     }
@@ -442,6 +442,14 @@ Kirigami.ScrollablePage {
                         icon.name: "edit-clear"
                         onClicked: backend.setInstalled(page.repoId, "-")
                     }
+                }
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    visible: page.canUpdate && page.details.updateNeedsPassword === true
+                    text: "This clone belongs to the system, so Update asks for your password."
+                    font: Kirigami.Theme.smallFont
+                    wrapMode: Text.Wrap
                 }
 
                 QQC2.Label {
@@ -502,7 +510,7 @@ Kirigami.ScrollablePage {
             }
 
             QQC2.Label {
-                text: page.followsReleases ? "Build file" : "Branch"
+                text: !page.followsReleases ? "Branch" : page.details.isClone ? "Releases" : "Build file"
                 opacity: 0.7
             }
 
@@ -510,10 +518,12 @@ Kirigami.ScrollablePage {
                 objectName: "followedValue"
                 Layout.fillWidth: true
                 text: !page.followsReleases ? (page.currentBranch || "Loading…")
+                    : page.details.isClone ? "Each release\u2019s source code: Update moves the clone to its tag"
                     : page.repo.assetPattern ? page.repo.assetPattern
                     : page.details.versionOnly === true ? "None (versions only)"
                     : "Not chosen yet. Choose one below."
-                font.bold: page.followsReleases ? page.repo.assetPattern !== "" : page.currentBranch !== ""
+                font.bold: page.details.isClone ? false
+                         : page.followsReleases ? page.repo.assetPattern !== "" : page.currentBranch !== ""
                 elide: Text.ElideMiddle
             }
 
@@ -606,7 +616,7 @@ Kirigami.ScrollablePage {
             readonly property var choices: page.details.fileChoices || []
 
             Layout.fillWidth: true
-            visible: page.followsReleases && page.ready && choices.length > 0
+            visible: page.followsReleases && page.ready && choices.length > 0 && !page.details.isClone
             spacing: 0
 
             Kirigami.Heading {
@@ -671,7 +681,7 @@ Kirigami.ScrollablePage {
         // Nothing in the newest release runs on this computer: versions only, as with scanning off.
         ColumnLayout {
             Layout.fillWidth: true
-            visible: page.followsReleases && page.ready && page.details.versionOnly === true
+            visible: page.followsReleases && page.ready && page.details.versionOnly === true && !page.details.isClone
             spacing: Kirigami.Units.smallSpacing
 
             Kirigami.Heading {
@@ -766,9 +776,11 @@ Kirigami.ScrollablePage {
                     visible: release.open
                     spacing: 0
 
+                    // Files don't apply to a clone: it's moved to the release's tag.
                     QQC2.Label {
                         Layout.fillWidth: true
                         Layout.topMargin: Kirigami.Units.smallSpacing
+                        visible: !page.details.isClone
                         text: release.modelData.assets.length === 0 ? "No download files in this release (only the source code)."
                             : page.details.versionOnly === true ? `${release.modelData.assets.length} files, none for this computer.`
                             : page.repo.assetPattern === "" ? `${release.modelData.assets.length} files. Choose yours under \u201cYour Build File\u201d.`
@@ -779,7 +791,8 @@ Kirigami.ScrollablePage {
 
                     QQC2.Button {
                         objectName: "mine:" + release.modelData.tag
-                        visible: !release.modelData.isInstalled
+                        // A scanned repo's version is what's on disk, so it isn't set by hand.
+                        visible: !release.modelData.isInstalled && !page.details.versionFromDisk
                         text: "Set as My Version"
                         icon.name: "tag"
                         onClicked: backend.setInstalled(page.repoId, release.modelData.tag)
