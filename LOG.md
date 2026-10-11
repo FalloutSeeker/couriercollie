@@ -4,6 +4,17 @@ Newest first.
 
 ## 2026-10-11
 
+- Review before stage 5, for requests and weight:
+  - A branch is only compared after it stays chosen for 0.4 s, so clicking quickly through branches makes one
+    request, not one per click.
+  - After an update check, repo pages already loaded are kept unless the check found something newer than the page
+    has; before, every page was reloaded on next open (one more request each).
+  - The app's own saves to the results file no longer reload the list (its file watcher saw them as outside changes).
+  - A repo page loads once per app start; opening it again makes no requests. Refresh reloads it. The page's note and
+    DESIGN said a scanned repo's version was re-read each time the page opened, which it wasn't; corrected to say
+    so, as wanted.
+  - Measured: the hourly background check, when nothing's due, takes 0.05 s and 25 MB and doesn't load Qt. The list
+    keeps its scroll position when it refreshes.
 - Repo page redone for scanning (picked from three mockups: "status first, grouped"): a header with name, description
   and address; a coloured status box with your version → newest in large type; a Tracking group with lined-up labels.
   Checked in Aero and Breeze Dark, for releases and for a scanned branch.

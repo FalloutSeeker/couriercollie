@@ -292,6 +292,8 @@ Kirigami.ScrollablePage {
     ListView {
         id: list
 
+        objectName: "repoList"
+
         // While something is dragged: what it is ({ kind, id, category, label }), the pointer's height in the list,
         // and where it would go if let go here ({ category, before, lineY }), or null for nowhere new.
         property var dragged: null

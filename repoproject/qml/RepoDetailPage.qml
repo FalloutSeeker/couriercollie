@@ -338,7 +338,7 @@ Kirigami.ScrollablePage {
                 QQC2.Label {
                     Layout.fillWidth: true
                     visible: page.details.versionFromDisk === true && !page.details.localMissing
-                    text: "Your version is read from this computer each time this page opens, so it changes when the folder does."
+                    text: "Your version is read from this computer when the page first opens, and again on Refresh."
                     font: Kirigami.Theme.smallFont
                     wrapMode: Text.Wrap
                     opacity: 0.7

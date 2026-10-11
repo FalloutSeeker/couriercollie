@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from PySide6.QtCore import Property, QFileSystemWatcher, QObject, QProcess, Qt, Signal, Slot
+from PySide6.QtCore import Property, QFileSystemWatcher, QObject, QProcess, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QGuiApplication
 
 from . import assets, checker, config, icons, integration, scan, sources
@@ -207,6 +207,8 @@ class Backend(QObject):
         the app turns them on."""
         super().__init__(parent)
         self._find_icons = find_icons
+        # How long a branch must stay chosen before what's new on it is asked for (_refresh_whats_new).
+        self.compare_delay_ms = 400
         self._desktop = desktop
         self._icons_pending: set[str] = set()
         self._path = config_path
@@ -376,8 +378,11 @@ class Backend(QObject):
                     pass  # the results still show; they're just not kept for next time
                 self._announce(fresh)
                 self._update_badge()
-                for r in self._config.repos:  # what's new may have changed: reload repo pages when next shown
-                    if r.id in self._details and self._details[r.id].state == "ready":
+                # Repo pages loaded before the check are reloaded when next shown, but only where the check found a
+                # newer version than the page has; the rest are still current, so they cost no requests.
+                for r in self._config.repos:
+                    d, result = self._details.get(r.id), self._checks.results.get(r.id)
+                    if d and d.state == "ready" and (not result or result.newest != _newest_version(r, d)):
                         self._details.pop(r.id)
             self.checksChanged.emit()
             self.reposChanged.emit()
@@ -411,8 +416,9 @@ class Backend(QObject):
             self.checkNow()
 
     def _reload_checks(self, *_):
-        if not self._checking:
-            self._checks = checker.load_state(self._state_path)
+        """The results folder changed. Reloaded only if the results did: our own saves land here too."""
+        if not self._checking and (state := checker.load_state(self._state_path)) != self._checks:
+            self._checks = state
             self.checksChanged.emit()
             self.reposChanged.emit()
             self._update_badge()
@@ -899,6 +905,8 @@ class Backend(QObject):
         repo = self._config.find(repo_id)
         if not repo:
             return
+        # Loaded the first time the page opens after the app starts; again only on Refresh, or when a check found
+        # something newer than the page has.
         current = self._details.get(repo_id)
         if current and (current.state == "loading" or (current.state == "ready" and not force)):
             return
@@ -1168,7 +1176,16 @@ class Backend(QObject):
             else:
                 self.detailsChanged.emit(repo_id)
 
-        self._run(work, done)
+        def start():
+            d = self._details.get(repo_id)
+            if d and d.compare_request == request:  # not if another branch was clicked meanwhile
+                self._run(work, done)
+
+        # A short wait, so clicking quickly through branches asks the site about the last one only.
+        if self.compare_delay_ms:
+            QTimer.singleShot(self.compare_delay_ms, start)
+        else:
+            start()
 
     @Slot(str, str, str)
     def pickAsset(self, repo_id, tag, asset_name):

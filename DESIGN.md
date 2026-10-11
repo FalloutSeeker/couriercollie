@@ -71,9 +71,10 @@ Details:
   commit (when following a branch), or "Not installed". A repo added by hand starts as "Not installed" (adding it doesn't mean you have it). To
   change it, open a release in the list and click "This is my version", or use "Mark as up to date" / "Mark as not
   installed".
-  For repos found by a scan, your version is read from disk each time the page opens (a clone's commit, an
-  AppImage's version, an RPM's version), so it follows a `git pull` or reinstall done outside the app, and isn't set
-  by hand. When following a branch you're behind on, the new commits are listed (up to 5, newest first).
+  For repos found by a scan, your version is read from disk (a clone's commit, an AppImage's version, an RPM's
+  version), so it follows a `git pull` or reinstall done outside the app, and isn't set by hand. Like everything on
+  the page, it's read the first time the page opens after the app starts, then only on **Refresh** or when an update
+  check finds something newer: opening a page again makes no requests. When following a branch you're behind on, the new commits are listed (up to 5, newest first).
 - **Releases list**: every version, newest first, with its date and release notes. Pre-releases are hidden unless
   you turn them on for that repo.
 - **Your build file**: one project often publishes several files for the same version (an `.rpm`, an AppImage, ARM

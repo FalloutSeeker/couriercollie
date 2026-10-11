@@ -28,6 +28,7 @@ class BackendTest(unittest.TestCase):
         self.backend = Backend(self.path)
         # No threads or network: comparisons with a branch are faked (BEHIND for "dev" in tests that set it up).
         self.backend._run = lambda work, done: done(work(), None)
+        self.backend.compare_delay_ms = 0
         self.relations = {}
         saved = sources.compare
         sources.compare = lambda ref, host, yours, head: sources.Comparison(
@@ -173,6 +174,58 @@ class BackendTest(unittest.TestCase):
         self.assertEqual(self.backend.details(LOCALSEND)["status"], "Checking\u2026")
         done_dev(work_dev(), None)
         self.assertEqual(self.backend.details(LOCALSEND)["status"], "Newer commits on dev (you have commit aaaaaaa)")
+
+    def test_clicking_quickly_through_branches_asks_about_the_last_only(self):
+        from repoproject import backend as backend_module
+
+        waiting = []
+        saved = backend_module.QTimer.singleShot
+        backend_module.QTimer.singleShot = lambda ms, fn: waiting.append(fn)
+        self.addCleanup(setattr, backend_module.QTimer, "singleShot", saved)
+        asked = []
+        compare = sources.compare
+        sources.compare = lambda *a: (asked.append(a[3]), compare(*a))[1]
+        self.backend.compare_delay_ms = 400
+        d = self.backend._details[LOCALSEND]
+        d.branches.append(sources.Branch("old", "c" * 40))
+        repo = self.backend._config.find(LOCALSEND)
+        repo.follow, repo.installed = "branch", "a" * 40
+        for branch in ("old", "dev", "old", "dev"):
+            self.backend.setBranch(LOCALSEND, branch)
+        for fn in waiting:  # the waits run out
+            fn()
+        self.assertEqual(asked, ["b" * 40])  # dev's newest commit, once
+        self.assertEqual(self.backend.details(LOCALSEND)["status"], "Newer commits on dev (you have commit aaaaaaa)")
+
+    def test_own_saves_to_the_results_file_dont_reload_the_list(self):
+        from repoproject import checker
+
+        changed = []
+        self.backend.checksChanged.connect(lambda: changed.append(1))
+        checker.save_state(self.backend._checks, self.backend._state_path)
+        self.backend._reload_checks()
+        self.assertEqual(changed, [])
+        # Written by the background checker: reloaded.
+        state = checker.State(results={LOCALSEND: checker.Result(checker.UPDATE, "Update available: v9", "v9")})
+        checker.save_state(state, self.backend._state_path)
+        self.backend._reload_checks()
+        self.assertEqual((changed, self.backend._checks), ([1], state))
+
+    def test_a_check_keeps_repo_pages_that_are_still_current(self):
+        from repoproject import checker
+
+        repo = self.backend._config.find(LOCALSEND)
+        repo.installed = "v1.18.1"
+        found = {"newest": "v1.18.2"}
+        saved = checker.check_all
+        checker.check_all = lambda repos, previous: (checker.State(results={LOCALSEND: checker.Result(
+            checker.UPDATE, "Update available", found["newest"])}), [])
+        self.addCleanup(setattr, checker, "check_all", saved)
+        self.backend.checkNow()
+        self.assertIn(LOCALSEND, self.backend._details)  # same newest as the page: no need to ask again
+        found["newest"] = "v1.19.0"
+        self.backend.checkNow()
+        self.assertNotIn(LOCALSEND, self.backend._details)  # something newer: reloaded when next opened
 
     def test_branch_with_no_shared_history(self):
         # Added by hand on "main"; "dev" was started from scratch.
@@ -357,7 +410,8 @@ class ScannedClonePageTest(unittest.TestCase):
             kind="git", source="scanned", local_path=str(clone),
             installed=self.head)]), self.path)  # e.g. marked up to date earlier, while the clone stayed behind
         self.backend = Backend(self.path)
-        self.backend._run = lambda work, done: done(work(), None)  # no threads in tests
+        self.backend._run = lambda work, done: done(work(), None)
+        self.backend.compare_delay_ms = 0  # no threads in tests
         self.master = "c" * 40
         self.hidpi = "d" * 40
         branches = [sources.Branch("Plasma/6.7", None), sources.Branch("master", self.master),
@@ -391,6 +445,21 @@ class ScannedClonePageTest(unittest.TestCase):
         self.assertTrue(d["updateAvailable"])
         self.assertTrue(d["versionFromDisk"])
         self.assertEqual((d["newCommitsTotal"], d["newCommits"][0]["title"]), (1, "Button: fallback textures"))
+
+    def test_reopening_the_page_asks_nothing(self):
+        # Loaded the first time it's opened; after that only Refresh (or a check that found something newer) reloads.
+        smod = "gitgud.io/aeroshell/smod"
+        asked = []
+        for name in ("releases", "branches", "compare"):
+            fake = getattr(sources, name)
+            setattr(sources, name, lambda *a, _f=fake, _n=name: (asked.append(_n), _f(*a))[1])
+        self.backend.loadDetails(smod, False)
+        self.assertEqual(sorted(asked), ["branches", "compare", "releases"])
+        asked.clear()
+        self.backend.loadDetails(smod, False)
+        self.assertEqual(asked, [])
+        self.backend.loadDetails(smod, True)  # Refresh
+        self.assertEqual(sorted(asked), ["branches", "compare", "releases"])
 
     def test_up_to_date_clone(self):
         self.head = self.on_disk
