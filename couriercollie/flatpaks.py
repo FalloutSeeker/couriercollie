@@ -50,9 +50,9 @@ def installation(app_id: str) -> str:
     return ""
 
 
-def _metainfo(app_id: str) -> str:
+def _metainfo(app_id: str, where: str = "") -> str:
     """The app's AppStream file (its homepage, its versions), from where it's installed."""
-    where = installation(app_id)
+    where = where or installation(app_id)
     result = _flatpak("info", f"--{where}", "--show-location", app_id) if where else None
     if not result or result.returncode != 0:
         return ""
@@ -73,29 +73,59 @@ def installed_version(app_id: str) -> tuple[str, bool]:
     return (m.group(1) if m else ""), True
 
 
-def homepage(app_id: str) -> str:
-    m = _HOMEPAGE.search(_metainfo(app_id))
-    return m.group(1) if m else ""
+# Installed apps' homepages, read once per run (each takes two flatpak calls).
+_homepages: dict[tuple[str, str], str] = {}
 
 
-def from_bundles() -> list[tuple[str, str]]:
-    """(app ID, installation) of apps installed from a bundle file: their origin has no address to update from."""
+def homepage(app_id: str, where: str = "") -> str:
+    key = (app_id, where)
+    if key not in _homepages:
+        m = _HOMEPAGE.search(_metainfo(app_id, where))
+        _homepages[key] = m.group(1) if m else ""
+    return _homepages[key]
+
+
+def _installed_apps() -> list[tuple[str, str, bool]]:
+    """(app ID, installation, whether its origin has an address to update from) for every installed app. An app
+    installed from a bundle file has an origin without one."""
     apps = _flatpak("list", "--app", "--columns=application,origin,installation")
     if not apps or apps.returncode != 0:
         return []
-    no_address = set()
+    addresses = {}
     for where in ("user", "system"):
         remotes = _flatpak("remotes", f"--{where}", "--show-disabled", "--columns=name,url")
         for line in (remotes.stdout.splitlines() if remotes and remotes.returncode == 0 else []):
             name, _, url = line.partition("\t")
-            if name and not url.strip():
-                no_address.add((name.strip(), where))
+            if name.strip():
+                addresses[(name.strip(), where)] = bool(url.strip())
     found = []
     for line in apps.stdout.splitlines():
         parts = [p.strip() for p in line.split("\t")]
-        if len(parts) == 3 and (parts[1], parts[2]) in no_address:
-            found.append((parts[0], parts[2]))
+        if len(parts) == 3 and (parts[1], parts[2]) in addresses:
+            found.append((parts[0], parts[2], addresses[(parts[1], parts[2])]))
     return found
+
+
+def from_bundles() -> list[tuple[str, str]]:
+    """(app ID, installation) of apps installed from a bundle file: their origin has no address to update from."""
+    return [(app_id, where) for app_id, where, updatable in _installed_apps() if not updatable]
+
+
+def managed_by_flatpak(repo_ids: list[str]) -> str:
+    """The app ID if the project behind these addresses is installed as a Flatpak from a repository (Flathub, …),
+    which Flatpak keeps up to date. Matched by the app's homepage, never by a similar name."""
+    from . import sources
+
+    wanted = {i.lower() for i in repo_ids}
+    for app_id, where, updatable in _installed_apps():
+        if not updatable:
+            continue
+        try:
+            if sources.parse_url(homepage(app_id, where)).id.lower() in wanted:
+                return app_id
+        except ValueError:
+            continue
+    return ""
 
 
 def install(path: Path) -> subprocess.CompletedProcess | None:

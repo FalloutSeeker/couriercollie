@@ -56,6 +56,10 @@ Details:
   - A repo added by hand starts as "Not installed". Set it with Mark as Up to Date or Set as My Version.
   - For a repo found on this computer, it's read from disk.
 - **Loading:** a page loads once per app start. After that, only on Refresh, or when a check found something newer.
+  When a page learns something newer than the last check (a new commit, say), the list's result updates too.
+- **Also updated elsewhere:** if the project is installed from a repository your package manager uses, or as a
+  Flatpak from Flathub (matched by homepage), the page says so. Nothing is stopped; updating it here too is your
+  call, but the two copies can mix.
 - **Install script:** a clone's `install.sh` / `install` / `setup.sh` gets a button. The button reads "Show and Run"
   (never run from here), "Run Again" (run at this version) or "Install the Update" (run before the clone changed).
   The script is always shown first, then runs in a terminal.

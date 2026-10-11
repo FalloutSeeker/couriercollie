@@ -88,7 +88,7 @@ def now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _stamp() -> str:
+def stamp() -> str:
     return now().isoformat(timespec="seconds")
 
 
@@ -122,9 +122,8 @@ def _yours(repo: TrackedRepo) -> str:
 CHECK_RELEASES = 5
 
 
-def _check_releases(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
-    rels = sources.newest_releases(ref, repo.host, CHECK_RELEASES, repo.prereleases)
-    shown = [r for r in rels if repo.prereleases or not r.prerelease]
+def releases_result(shown: list[sources.Release], yours: str) -> Result:
+    """The result for a repo following releases, from the releases it shows (newest first) and your version."""
     if not shown:
         return Result(NO_RELEASES, "No releases yet")
     newest = shown[0].tag
@@ -135,33 +134,46 @@ def _check_releases(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
     return Result(UPDATE, f"Update available: {newest}", newest)
 
 
+def branch_result(branch: str, head: str, yours: str, c: sources.Comparison | None, disk: str = "") -> Result:
+    """The result for a repo following a branch, from its newest commit, your version, how they compare (None: they
+    couldn't be compared) and, for a clone, the branch it's on."""
+    if not yours or yours == NOT_INSTALLED:
+        return Result(NOT_INSTALLED_YET, f"Not installed · following {branch}", head)
+    if yours == head or (c and c.relation == sources.SAME):
+        return Result(UP_TO_DATE, "Up to date", head)
+    if c is None:
+        return Result(OTHER, f"Couldn’t compare your version with {branch}", head)
+    if c.relation == sources.BEHIND:
+        count = "1 new commit" if c.total == 1 else f"{c.total} new commits"
+        return Result(UPDATE, f"{count} on {branch}", head)
+    if c.relation == sources.AHEAD:
+        if disk and disk != branch:
+            return Result(OTHER, f"Nothing new on {branch} (your clone is on {disk})", head)
+        return Result(OTHER, f"Ahead of {branch}", head)
+    return Result(OTHER, f"Not comparable with {branch}", head)
+
+
+def _check_releases(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
+    rels = sources.newest_releases(ref, repo.host, CHECK_RELEASES, repo.prereleases)
+    return releases_result([r for r in rels if repo.prereleases or not r.prerelease], yours)
+
+
 def _check_branch(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
     default, branches = sources.branches(ref)  # git, not the API
     branch = repo.branch or default
     head = next((b.sha for b in branches if b.name == branch), "")
     if not head:
         return Result(FAILED, f"Couldn’t check: there’s no branch “{branch}” anymore")
-    if not yours or yours == NOT_INSTALLED:
-        return Result(NOT_INSTALLED_YET, f"Not installed · following {branch}", head)
-    if yours == head:
-        return Result(UP_TO_DATE, "Up to date", head)
-    try:
-        c = sources.compare(ref, repo.host, yours, head)
-    except sources.RateLimited:
-        raise  # not "couldn't compare": check_repo marks it, so the rest of GitHub's repos aren't asked
-    except SourceError:
-        return Result(OTHER, f"Couldn’t compare your version with {branch}", head)
-    if c.relation == sources.BEHIND:
-        count = "1 new commit" if c.total == 1 else f"{c.total} new commits"
-        return Result(UPDATE, f"{count} on {branch}", head)
-    if c.relation == sources.AHEAD:
-        disk = scan.branch_on_disk(repo.local_path) if repo.source == SOURCE_SCANNED and repo.local_path else ""
-        if disk and disk != branch:
-            return Result(OTHER, f"Nothing new on {branch} (your clone is on {disk})", head)
-        return Result(OTHER, f"Ahead of {branch}", head)
-    if c.relation == sources.SAME:
-        return Result(UP_TO_DATE, "Up to date", head)
-    return Result(OTHER, f"Not comparable with {branch}", head)
+    c = None
+    if yours and yours not in (NOT_INSTALLED, head):
+        try:
+            c = sources.compare(ref, repo.host, yours, head)
+        except sources.RateLimited:
+            raise  # not "couldn't compare": check_repo marks it, so the rest of GitHub's repos aren't asked
+        except SourceError:
+            pass  # "couldn't compare"
+    disk = scan.branch_on_disk(repo.local_path) if repo.source == SOURCE_SCANNED and repo.local_path else ""
+    return branch_result(branch, head, yours, c, disk)
 
 
 def check_repo(repo: TrackedRepo, github_limited: threading.Event | None = None) -> Result:
@@ -181,12 +193,12 @@ def check_repo(repo: TrackedRepo, github_limited: threading.Event | None = None)
             github_limited.set()
         until = f" (until {e.reset_at.astimezone():%H:%M})" if e.reset_at else ""
         return Result(RATE_LIMITED, f"Not checked: {ref.domain}’s hourly limit was reached{until}",
-                      retry_after=e.reset_at.isoformat() if e.reset_at else "", checked_at=_stamp())
+                      retry_after=e.reset_at.isoformat() if e.reset_at else "", checked_at=stamp())
     except sources.Unreachable as e:
-        return Result(UNREACHABLE, f"Couldn’t check: {e}", checked_at=_stamp())
+        return Result(UNREACHABLE, f"Couldn’t check: {e}", checked_at=stamp())
     except SourceError as e:
-        return Result(FAILED, f"Couldn’t check: {e}", checked_at=_stamp())
-    result.checked_at = _stamp()
+        return Result(FAILED, f"Couldn’t check: {e}", checked_at=stamp())
+    result.checked_at = stamp()
     return result
 
 
@@ -234,7 +246,7 @@ def check_all(repos: list[TrackedRepo], previous: State | None = None) -> tuple[
     # within the hour instead of waiting a whole interval.
     answered = not results or any(r.status not in (RATE_LIMITED, UNREACHABLE) and not r.not_rechecked
                                   for r in results.values())
-    state = State(last_run=_stamp() if answered else previous.last_run, results=results,
+    state = State(last_run=stamp() if answered else previous.last_run, results=results,
                   notified={k: v for k, v in previous.notified.items() if k in results})
     fresh = []
     for repo_id, r in results.items():

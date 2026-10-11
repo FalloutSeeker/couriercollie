@@ -114,3 +114,73 @@ def files_of(kind: str, name: str) -> list[str]:
     except (OSError, subprocess.TimeoutExpired):
         return []
     return out.stdout.splitlines() if out.returncode == 0 else []
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Software the package manager already keeps up to date
+
+# How each package manager is told to update everything, as said to you.
+UPGRADE = {"dnf": "dnf upgrade", "zypper": "zypper update", "apt": "apt upgrade", "pacman": "pacman -Syu"}
+
+
+def _out(*args: str) -> str:
+    try:
+        result = _run(*args)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return result.stdout if result.returncode == 0 else ""
+
+
+def installed_homepages(run=_out) -> list[tuple[str, str]]:
+    """(package name, homepage) of every installed package, from this computer's package manager."""
+    if has_rpm := assets.has("dnf") or assets.has("zypper"):
+        lines = run("rpm", "-qa", "--qf", "%{NAME}|%{URL}\\n")
+    elif assets.has("apt"):
+        lines = run("dpkg-query", "--show", "--showformat=${Package}|${Homepage}\\n")
+    elif assets.has("pacman"):
+        # "Name : x" … "URL : y" blocks, one per package.
+        pairs, name = [], ""
+        for line in run("pacman", "-Qi").splitlines():
+            key, _, value = line.partition(":")
+            if key.strip() == "Name":
+                name = value.strip()
+            elif key.strip() == "URL" and name:
+                pairs.append(f"{name}|{value.strip()}")
+        lines = "\n".join(pairs)
+    else:
+        return []
+    return [tuple(line.split("|", 1)) for line in lines.splitlines() if line.count("|") == 1]
+
+
+def offered_by_a_repository(name: str, run=_out) -> bool:
+    """Whether a repository you have enabled offers this package, so the package manager updates it."""
+    if assets.has("dnf"):
+        return bool(run("dnf", "repoquery", "--available", "--qf", "%{name}\\n", name).strip())
+    if assets.has("zypper"):
+        found = run("zypper", "--quiet", "--xmlout", "search", "--match-exact", "--details", "--type", "package", name)
+        return bool(re.search(r'repository="(?!\(System Packages\))[^"]+"', found))
+    if assets.has("apt"):
+        listed = run("apt", "list", "--installed", name)
+        return any(line.startswith(f"{name}/") and not line.rstrip().endswith(",local]") for line in listed.splitlines())
+    if assets.has("pacman"):
+        return bool(run("pacman", "-Si", name))
+    return False
+
+
+def managed_by_system(repo_ids: list[str], run=_out) -> tuple[str, str] | None:
+    """(package manager, package) if the project behind these addresses is installed as a package that a repository
+    you have enabled offers: the package manager keeps it up to date. Matched by the package's homepage, never by a
+    similar name."""
+    from . import sources
+
+    wanted = {i.lower() for i in repo_ids}
+    for name, homepage in installed_homepages(run):
+        try:
+            if sources.parse_url(homepage).id.lower() not in wanted:
+                continue
+        except ValueError:
+            continue
+        if offered_by_a_repository(name, run):
+            tool = next((t for t in ("dnf", "zypper", "apt", "pacman") if assets.has(t)), "")
+            return tool, name
+    return None

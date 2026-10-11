@@ -18,7 +18,7 @@ from PySide6.QtCore import Property, QFileSystemWatcher, QObject, QProcess, Qt, 
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
-from . import assets, checker, config, github_login, icons, integration, packages, scan, sources, updater
+from . import assets, checker, config, flatpaks, github_login, icons, integration, packages, scan, sources, updater
 from .account import Account
 from .updating import (Updating, _can_clone, _can_update, _head, _is_appimage, _is_clone, _is_flatpak, _is_package,
                        _is_program, _needs_password, _newest_version)
@@ -67,6 +67,8 @@ class Details:
     branch_on_disk: str = ""
     # A scanned clone's install scripts (updater.install_scripts), offered to run by hand.
     install_scripts: list[str] = field(default_factory=list)
+    # The project is also installed from a repository the package manager or Flatpak updates (_managed_elsewhere).
+    managed_elsewhere: str = ""
 
 
 def _monogram(name: str, repo_id: str) -> dict:
@@ -229,6 +231,21 @@ def _scan_note(f: scan.Found, problem: str, similar: TrackedRepo | None) -> str:
                      if f.kind == assets.KIND_GIT and updater.needs_password(f.path) else
                      "Its folder belongs to another user, so it can be tracked but not updated from here.")
     return " ".join(notes)
+
+
+def _managed_elsewhere(repo_ids: list[str]) -> str:
+    """A note if the project is also installed in a way something else keeps up to date: a package from a repository
+    you have enabled, or a Flatpak from a Flatpak repository. Nothing is stopped: updating it here as well is up to
+    you, but it's good to know."""
+    if found := packages.managed_by_system(repo_ids):
+        tool, name = found
+        return (f"Your package manager also keeps this up to date: it\u2019s installed as the package \u201c{name}\u201d "
+                f"from a repository you have enabled, so {packages.UPGRADE[tool]} updates it. Updating it here as well "
+                "can mix the two versions.")
+    if app_id := flatpaks.managed_by_flatpak(repo_ids):
+        return (f"Flatpak also keeps this up to date: it\u2019s installed as \u201c{app_id}\u201d from a Flatpak "
+                "repository. Updating it here as well adds a second copy.")
+    return ""
 
 
 def _fetch_branches(ref: RepoRef) -> tuple[str, list[sources.Branch], str]:
@@ -491,6 +508,33 @@ class Backend(QObject, Updating, Account):
             return
         self._checks.results[repo.id] = new
         self._save_checks()
+
+    def _check_from_page(self, repo: TrackedRepo):
+        """A repo's page has just asked the site. If it learned something the last check didn't (a newer release, new
+        commits), the list says so too, without another request; and since you've seen it, it isn't announced in a
+        notification later."""
+        d = self._details.get(repo.id)
+        if not d or d.state != "ready":
+            return
+        if repo.follow == FOLLOW_BRANCH:
+            head, c = _head(repo, d), self._current_comparison(repo, d)
+            if not head or (c is None and repo.installed not in ("", NOT_INSTALLED, head)):
+                return  # not compared (yet): nothing better to say than the last check
+            new = checker.branch_result(repo.branch or d.default_branch, head, repo.installed, c, d.branch_on_disk)
+        else:
+            shown = [r for r in d.releases if repo.prereleases or not r.prerelease]
+            if not shown:
+                return
+            new = checker.releases_result(shown, repo.installed)
+        old = self._checks.results.get(repo.id)
+        if old and (old.status, old.text, old.newest) == (new.status, new.text, new.newest) and not old.not_rechecked:
+            return
+        new.checked_at = checker.stamp()
+        self._checks.results[repo.id] = new
+        if new.status == checker.UPDATE:
+            self._checks.notified[repo.id] = new.newest
+        self._save_checks()
+        self.reposChanged.emit()
 
     def _save_checks(self):
         """The check results were changed here (not by a check): keep them, and show them."""
@@ -1010,6 +1054,7 @@ class Backend(QObject, Updating, Account):
         ref, host = RepoRef.from_id(repo_id), repo.host
         scanned, local_path = repo.source == config.SOURCE_SCANNED, repo.local_path
         follow, branch, installed, prereleases = repo.follow, repo.branch, repo.installed, repo.prereleases
+        addresses = [repo.id, *repo.aliases]
 
         # One API request for the releases, and one for what's new on a branch you're behind on. Branches and the
         # version on disk come from git, which doesn't count against API limits.
@@ -1021,7 +1066,8 @@ class Backend(QObject, Updating, Account):
             head = next((b.sha for b in branches if b.name == (branch or default)), "")
             comparison = _compare(ref, host, yours, head) if follow == FOLLOW_BRANCH else None
             scripts = updater.install_scripts(local_path) if scanned and (Path(local_path) / ".git").exists() else []
-            return on_disk, Details(
+            elsewhere = _managed_elsewhere(addresses)
+            return on_disk, Details(managed_elsewhere=elsewhere,
                 state="ready", releases=rels, more_releases=len(rels) == PAGE_RELEASES, default_branch=default,
                 branches=branches, branch_error=branch_error, comparison=comparison, commits_base=yours,
                 commits_head=head, local_missing=bool(on_disk) and not on_disk[1], branch_on_disk=branch_on_disk,
@@ -1044,6 +1090,7 @@ class Backend(QObject, Updating, Account):
                     tag_matched = _match_tag(repo, self._details[repo_id])
                     if _fit_files(repo, self._details[repo_id]) or baseline_set or tag_matched or from_disk:
                         self._changed()
+                    self._check_from_page(repo)
             self.detailsChanged.emit(repo_id)
 
         self._run(work, done)
@@ -1188,6 +1235,7 @@ class Backend(QObject, Updating, Account):
             "updateNoteKind": self._update_notes.get(repo_id, ("", ""))[0],
             "updateNote": self._update_notes.get(repo_id, ("", ""))[1],
             "installScripts": d.install_scripts,
+            "managedElsewhere": d.managed_elsewhere,
             # Whether you've started an install script from here: "" never, "current" at the version you have now,
             # "older" before the clone last changed (its update may need installing).
             "scriptRun": "" if not repo or not repo.script_run_at
@@ -1373,6 +1421,7 @@ class Backend(QObject, Updating, Account):
                 self._changed(repo_id)
             else:
                 self.detailsChanged.emit(repo_id)
+            self._check_from_page(repo)
 
         def start():
             d = self._details.get(repo_id)

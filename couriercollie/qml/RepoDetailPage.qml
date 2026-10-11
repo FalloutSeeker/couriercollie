@@ -259,6 +259,16 @@ Kirigami.ScrollablePage {
             }
         }
 
+        // Something else (the package manager, Flatpak) also updates this project. Only said, never stopped.
+        Kirigami.InlineMessage {
+            objectName: "managedElsewhere"
+            Layout.fillWidth: true
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 34
+            visible: page.ready && (page.details.managedElsewhere || "") !== ""
+            type: Kirigami.MessageType.Information
+            text: page.details.managedElsewhere || ""
+        }
+
         Kirigami.InlineMessage {
             Layout.fillWidth: true
             Layout.maximumWidth: Kirigami.Units.gridUnit * 34

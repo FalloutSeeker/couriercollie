@@ -458,6 +458,27 @@ class ScannedClonePageTest(unittest.TestCase):
         self.assertTrue(d["versionFromDisk"])
         self.assertEqual((d["newCommitsTotal"], d["newCommits"][0]["title"]), (1, "Button: fallback textures"))
 
+    def test_what_the_page_learned_shows_in_the_list(self):
+        # The last check found it up to date; since then, a commit was pushed. Opening the page sees it.
+        from couriercollie import checker
+
+        smod = "gitgud.io/aeroshell/smod"
+        self.backend._checks.results[smod] = checker.Result(checker.UP_TO_DATE, "Up to date", self.on_disk)
+        self.backend.loadDetails(smod, True)
+        row = self.backend.repo(smod)
+        self.assertEqual((row["checkText"], row["updateAvailable"]), ("1 new commit on Plasma/6.7", True))
+        self.assertEqual(self.backend._checks.notified[smod], self.head)  # seen: not announced again later
+
+    def test_the_page_says_when_something_else_updates_it(self):
+        import couriercollie.backend as backend_module
+
+        saved = backend_module._managed_elsewhere
+        backend_module._managed_elsewhere = lambda ids: "Your package manager also keeps this up to date."
+        self.addCleanup(setattr, backend_module, "_managed_elsewhere", saved)
+        self.backend.loadDetails("gitgud.io/aeroshell/smod", True)
+        self.assertEqual(self.backend.details("gitgud.io/aeroshell/smod")["managedElsewhere"],
+                         "Your package manager also keeps this up to date.")
+
     def test_reopening_the_page_asks_nothing(self):
         # Loaded the first time it's opened; after that only Refresh (or a check that found something newer) reloads.
         smod = "gitgud.io/aeroshell/smod"

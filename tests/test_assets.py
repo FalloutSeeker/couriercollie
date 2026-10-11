@@ -192,5 +192,58 @@ class FlatpaksTest(unittest.TestCase):
         self.assertEqual(flatpaks.from_bundles(), [("org.example.Tool", "user")])
 
 
+class ManagedElsewhereTest(unittest.TestCase):
+    """A project also installed from a repository that the package manager (or Flatpak) keeps up to date: matched by
+    homepage, never by a similar name. The package managers' answers are stand-ins."""
+
+    def setUp(self):
+        saved = assets.PACKAGE_TOOLS
+        self.addCleanup(setattr, assets, "PACKAGE_TOOLS", saved)
+
+    def test_each_package_manager(self):
+        from couriercollie import packages
+
+        cases = {
+            "dnf": {"rpm": "libzstd|https://github.com/facebook/zstd\nother|https://example.org\n",
+                    "dnf": "libzstd\n"},
+            "apt": {"dpkg-query": "zstd|https://github.com/facebook/zstd\n",
+                    "apt": "Listing...\nzstd/noble,now 1.5.5 amd64 [installed]\n"},
+            "pacman": {"pacman": "Name            : zstd\nURL             : https://github.com/facebook/zstd\n"},
+            "zypper": {"rpm": "zstd|https://github.com/facebook/zstd\n",
+                       "zypper": '<solvable name="zstd" repository="Main Repository (OSS)"/>'},
+        }
+        for tool, answers in cases.items():
+            assets.PACKAGE_TOOLS = {tool}
+            found = packages.managed_by_system(["github.com/Facebook/ZSTD"], run=lambda *a: answers.get(a[0], ""))
+            self.assertIsNotNone(found, tool)
+            self.assertEqual(found[0], tool)
+        # Installed from a downloaded file (apt says "local"): nothing else updates it.
+        assets.PACKAGE_TOOLS = {"apt"}
+        answers = {"dpkg-query": "tool|https://github.com/a/tool\n",
+                   "apt": "Listing...\ntool/now 1.0 all [installed,local]\n"}
+        self.assertIsNone(packages.managed_by_system(["github.com/a/tool"], run=lambda *a: answers.get(a[0], "")))
+
+    def test_flathub_but_not_a_bundle(self):
+        import subprocess
+
+        from couriercollie import flatpaks
+
+        answers = {"list": "org.example.App\tflathub\tsystem\norg.example.Bundle\tbundle-origin\tuser\n",
+                   "remotes --system": "flathub\thttps://dl.flathub.org/repo/\n",
+                   "remotes --user": "bundle-origin\t\n"}
+
+        def fake(*args, timeout=60):
+            key = args[0] if args[0] == "list" else f"{args[0]} {args[1]}"
+            return subprocess.CompletedProcess(args, 0, answers.get(key, ""), "")
+
+        saved = flatpaks._flatpak, flatpaks.homepage
+        flatpaks._flatpak = fake
+        flatpaks.homepage = lambda app_id, where="": {"org.example.App": "https://github.com/e/app",
+                                                       "org.example.Bundle": "https://github.com/e/bundle"}[app_id]
+        self.addCleanup(lambda: (setattr(flatpaks, "_flatpak", saved[0]), setattr(flatpaks, "homepage", saved[1])))
+        self.assertEqual(flatpaks.managed_by_flatpak(["github.com/e/app"]), "org.example.App")
+        self.assertEqual(flatpaks.managed_by_flatpak(["github.com/e/bundle"]), "")  # Flatpak never updates a bundle
+
+
 if __name__ == "__main__":
     unittest.main()
