@@ -11,6 +11,7 @@ AeroThemePlasma and ultrakanban repos), and nothing in a stage can change your s
 | 4     | Check for updates by hand or on a schedule; get toasts and the badge  | No                   |
 | 5     | Click ⬆ to update                                                     | Yes, on your click   |
 | 6     | Old-version cleanup, GitHub sign-in, app icon, installable package    | No                   |
+| 7     | The app tracks its own updates, added on first launch                 | No                   |
 
 **Progress:** stages 1–4 done (2026-10-10). The menu entry was pulled forward from stage 6 (notifications and the badge need it).
 
@@ -73,9 +74,18 @@ Plus **Undo last update** for AppImages and programs while the old version is st
     real GNOME session to confirm.
   - Known and fine: no taskbar badge on GNOME's dock (Dash to Dock shows it); it looks like a KDE app.
 
+## Stage 7: Release (once the app is complete)
+
+- **Before it:** a real name (D10), and the project published as a public repo with releases that carry the RPM
+  from stage 6.
+- **The app's own repo is added on first launch**, in Uncategorized, so you're told about new versions of the app
+  like anything else you track. Your version is the version that's running, so it starts as Up to date.
+- Added **once**: if you stop tracking it, it doesn't come back on a later start. If it's already tracked (added by
+  hand or found by a scan), it isn't added twice.
+- Added (2026-10-11) at your request.
+
 ## Later, not planned yet
 
 - Codeberg/Gitea sites.
 - Tracking private repos.
 - The "custom dnf" local package repo, so `dnf upgrade` and Discover see these updates.
-- A real name (D10).
