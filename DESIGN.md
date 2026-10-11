@@ -217,40 +217,27 @@ All global; there are no per-repo settings.
 - **Scanning**: on/off. On shows the Scan button in the main window.
 - **GitHub account** (optional): Sign in / Sign out, with the explanation below.
 
-### 8. Signing in to GitHub (optional)
+### 8. Signing in to GitHub (optional; built 2026-10-11)
 
-Signing in is never required. The Settings section explains why someone would do it:
+Never required. Offered on the welcome screen and in Settings, both titled "(optional)", with one line on why: only
+needed if you track a lot of GitHub projects, since GitHub answers 60 requests an hour without signing in, and 5,000
+with.
 
-```
-┌ GitHub account ───────────────────────────────────────────────┐
-│  Not signed in                               [Sign in…]       │
-│                                                               │
-│  GitHub limits how often apps can ask it about releases:      │
-│  60 requests an hour without signing in, 5,000 an hour with.  │
-│                                                               │
-│  Each check uses about one request per repo that publishes    │
-│  releases. Repos you cloned with git don't count.             │
-│                                                               │
-│  You're tracking 12 release repos, checked every 6 hours:     │
-│  about 12 requests per check. You don't need to sign in.      │
-│                                                               │
-│  Sign in if you track a lot of repos or check often.          │
-│  colliecourier only reads public release info with it. It       │
-│  doesn't change anything on GitHub. The login is kept in      │
-│  KDE Wallet, and you can sign out anytime.                    │
-└───────────────────────────────────────────────────────────────┘
-```
-
-- **The "you're tracking…" lines are worked out live** from the number of release repos and the check interval, so
-  the advice fits the user. When usage is close to the limit, they say "Signing in is recommended" instead.
-- **When the limit is actually hit**, the main window shows a bar: "GitHub's hourly limit was reached, so 8 repos
-  weren't checked. They'll be checked after 15:00. [Sign in to GitHub] [Dismiss]". Repos that weren't checked keep
-  their last known status. Nothing is shown as an error.
-- **Sign in…** offers to reuse the `gh` login if one exists ("Use your existing GitHub CLI login as FalloutSeeker?").
-  Otherwise it shows a short code and opens github.com/login/device to enter it.
-- **Signed in** shows the account name and how many requests are left this hour, with **Sign out**.
-- **Permissions:** the sign-in asks for no extra access beyond reading public data, since checking releases only
-  reads public information. (Tracking a *private* repo would need read access to it. That's a later decision.)
+- **Sign In…** asks GitHub for a code (the device flow, through colliecourier's OAuth App, whose Client ID is in
+  `github_login.py`; no client secret exists). The code is shown large, with **Copy Code and Open GitHub**; the app
+  waits for you to approve it at github.com/login/device, then shows "Signed in as <you>". Cancel stops waiting.
+- **Use the GitHub CLI's Login (<you>)** is offered when `gh` is signed in. That login is read from `gh` when it's
+  needed and never copied; signing out here leaves gh signed in.
+- **No access asked for:** the login can only read public information. A login made here is kept in the desktop's
+  password store (KDE Wallet, GNOME's keyring) through `secret-tool`, never in the settings file. Signing out removes
+  it; GitHub's Settings → Applications removes colliecourier's access there too.
+- **Sent only to api.github.com**, and never along a redirect. If GitHub turns it down (revoked, or gh signed out),
+  requests carry on without it and Settings says so.
+- **Signed in** shows the requests left this hour (asking costs nothing).
+- **Unchanged release lists:** each is kept with its ETag and asked for with it. An unchanged one comes back "304
+  Not Modified" with nothing to download; signed in, that doesn't count against the limit (tried: it doesn't), signed
+  out it still does.
+- **When the limit is hit**, the main window's bar offers **Sign In to GitHub…** (to Settings) if you aren't.
 
 ## Screens (rough sketches)
 

@@ -9,8 +9,11 @@ Kirigami.ScrollablePage {
     id: page
 
     readonly property var s: backend.settings
+    readonly property var gh: backend.github
 
     title: "Settings"
+    // GitHub's limit as it stands, and whether the GitHub CLI's login can be offered (costs no request against it).
+    Component.onCompleted: backend.refreshGitHub()
 
     Kirigami.FormLayout {
         // ---- Updates ----
@@ -50,6 +53,17 @@ Kirigami.ScrollablePage {
                 : "Nothing runs in the background. Use “Check now” in the main window."
             wrapMode: Text.Wrap
             opacity: 0.7
+        }
+
+        // ---- GitHub account (DESIGN.md §8) ----
+
+        Kirigami.Separator {
+            Kirigami.FormData.isSection: true
+            Kirigami.FormData.label: "GitHub Account (optional)"
+        }
+
+        GitHubSignIn {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
         }
 
         // ---- Scanning ----

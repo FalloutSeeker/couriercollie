@@ -18,6 +18,7 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
 from . import assets, checker, config, icons, integration, scan, sources, updater
+from .account import Account
 from .updating import (Updating, _can_clone, _can_update, _head, _is_appimage, _is_clone, _is_program, _is_rpm,
                        _needs_password, _newest_version)
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, Config, ConfigError, TrackedRepo
@@ -215,7 +216,7 @@ def _fetch_branches(ref: RepoRef) -> tuple[str, list[sources.Branch], str]:
         return "", [], str(e)
 
 
-class Backend(QObject, Updating):
+class Backend(QObject, Updating, Account):
     reposChanged = Signal()
     filterChanged = Signal()
     addingChanged = Signal()
@@ -228,6 +229,7 @@ class Backend(QObject, Updating):
     checksChanged = Signal()
     activateRequested = Signal()  # bring the window to the front (a second launch, or a notification was clicked)
     saveErrorChanged = Signal()
+    githubChanged = Signal()
     _deliver = Signal(object)
 
     def __init__(self, config_path: Path | None = None, parent=None, find_icons: bool = False,
@@ -265,6 +267,7 @@ class Backend(QObject, Updating):
         # Check results live in their own file (checker.py); next to the settings file when one is given (tests).
         self._state_path = config_path.parent / "checks.json" if config_path else checker.state_path()
         self._checks = checker.load_state(self._state_path)
+        self._init_account()
         self._checking = False
         self._check_error = ""
         self._notifications: list[QProcess] = []
@@ -278,6 +281,7 @@ class Backend(QObject, Updating):
             self._update_badge()
 
     def shutdown(self):
+        self._signin_cancel.set()  # a sign-in waiting for its code to be entered stops
         self._pool.shutdown(wait=False, cancel_futures=True)
 
     # -- helpers --------------------------------------------------------------------------------------------------
@@ -444,6 +448,7 @@ class Backend(QObject, Updating):
                         self._details.pop(r.id)
             self.checksChanged.emit()
             self.reposChanged.emit()
+            self.githubChanged.emit()  # GitHub may have turned the login down
 
         self._run(lambda: checker.check_all(repos, previous), done)
 
@@ -707,6 +712,11 @@ class Backend(QObject, Updating):
             "scanFoldersAreDefault": s.scan_folders == config.DEFAULT_SCAN_FOLDERS,
             "scanFoldersText": _join_folders(s.scan_folders),
         }
+
+    @Property("QVariantMap", notify=githubChanged)
+    def github(self):
+        """Signing in to GitHub, for Settings (account.py)."""
+        return self._github_dict()
 
     @Property(bool, constant=True)
     def styleDrawsProgress(self):

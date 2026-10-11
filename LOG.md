@@ -4,6 +4,10 @@ Newest first.
 
 ## 2026-10-11
 
+- Stage 6, GitHub sign-in (optional): on the welcome screen and in Settings, "GitHub Account (optional)", with one
+  line on why. Sign in with a code at github.com/login/device (kept in KDE Wallet), or use the GitHub CLI's login.
+  Read-only, sent only to api.github.com, never along a redirect. Release lists are asked for with their ETag:
+  tried with the gh login, an unchanged list cost nothing (4,966 requests left before and after).
 - Renamed the app **colliecourier** (D10), all lowercase, everywhere: code, command, package, menu entry, icon,
   timer, the app's folders in your home (moved, with your settings and check results), the GitHub repository and
   this folder.

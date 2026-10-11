@@ -4,17 +4,21 @@ Releases come from each site's API. Branches come from `git ls-remote`, which do
 (DECISIONS.md, D7).
 """
 
+import hashlib
 import json
 import os
 import re
 import subprocess
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 
-USER_AGENT = "colliecourier (https://github.com/FalloutSeeker)"
+USER_AGENT = "colliecourier (https://github.com/FalloutSeeker/colliecourier)"
 TIMEOUT = 20
 RELEASES_PER_PAGE = 30
 
@@ -169,14 +173,98 @@ def _reset_time(headers) -> datetime | None:
     return None
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# The GitHub login (github_login.py): sent with requests to GitHub's API, and nowhere else
+
+GITHUB_API = "api.github.com"
+_login: Callable[[], str] | None = None  # gives the login's token, or ""
+_token: str | None = None  # the token, once asked for this run
+_token_lock = threading.Lock()
+# GitHub turned the login down (revoked on GitHub, or signed out of gh): requests carry on without it.
+login_rejected = False
+
+
+def use_github_login(get_token: Callable[[], str] | None) -> None:
+    """Send requests to GitHub's API with this login (a function giving its token), or with none."""
+    global _login, _token, login_rejected
+    with _token_lock:
+        _login, _token, login_rejected = get_token, None, False
+
+
+def _github_token() -> str:
+    global _token
+    with _token_lock:
+        if _token is None:
+            try:
+                _token = (_login() if _login else "") or ""
+            except Exception:  # noqa: BLE001  (a password store that can't be reached: carry on without)
+                _token = ""
+        return _token
+
+
+def _drop_rejected_login() -> None:
+    global _token, login_rejected
+    with _token_lock:
+        _token, login_rejected = "", True
+
+
+# Release lists are kept with their ETag, and asked for with it: an unchanged list comes back as "304 Not Modified",
+# with nothing to download, and (signed in) without counting against the hourly limit.
+
+
+def _etag_dir() -> Path:
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "colliecourier" / "github"
+
+
+def _etag_file(url: str) -> Path:
+    return _etag_dir() / f"{hashlib.sha1(url.encode()).hexdigest()[:16]}.json"
+
+
+def _cached(url: str) -> dict | None:
+    try:
+        cached = json.loads(_etag_file(url).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return cached if isinstance(cached, dict) and cached.get("url") == url and cached.get("etag") else None
+
+
+def _keep(url: str, etag: str, body) -> None:
+    path = _etag_file(url)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
+        tmp.write_text(json.dumps({"url": url, "etag": etag, "body": body}), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError:
+        pass  # asked for in full next time
+
+
 def http_get_json(url: str, headers: dict | None = None):
     """GET a URL and parse the JSON answer. Follows redirects (sites redirect renamed projects)."""
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **(headers or {})})
-    domain = urllib.parse.urlparse(url).hostname
+    parsed = urllib.parse.urlparse(url)
+    domain = parsed.hostname
+    token = _github_token() if domain == GITHUB_API else ""
+    if token:
+        # Not carried over if the request is redirected, so it can't end up anywhere but GitHub's API.
+        req.add_unredirected_header("Authorization", f"Bearer {token}")
+    cached = _cached(url) if domain == GITHUB_API and parsed.path.endswith("/releases") else None
+    if cached:
+        req.add_unredirected_header("If-None-Match", cached["etag"])
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-            return json.load(resp)
+            data = json.load(resp)
+            etag = getattr(resp, "headers", None) and resp.headers.get("ETag")
+            if etag and domain == GITHUB_API and parsed.path.endswith("/releases"):
+                _keep(url, etag, data)
+            return data
     except urllib.error.HTTPError as e:
+        if e.code == 304 and cached:
+            return cached["body"]
+        if e.code == 401 and token:
+            # The login no longer works (revoked on GitHub, or gh signed out): carry on without it; Settings says so.
+            _drop_rejected_login()
+            return http_get_json(url, headers)
         if e.code == 404:
             # GitHub and GitLab say "not found" in JSON. Any other website's 404 page means it's not one of them.
             try:
@@ -197,6 +285,17 @@ def http_get_json(url: str, headers: dict | None = None):
         raise Unreachable(f"{domain} took too long to answer. Try again later.") from e
     except ValueError as e:  # not JSON, or not text at all
         raise BadAnswer(f"{domain} sent an answer that isn’t from a GitHub or GitLab site.") from e
+
+
+def github_rate() -> dict:
+    """GitHub's hourly limit for this login (or none) as it stands: {"limit", "remaining", "reset" (local "HH:MM")}.
+    Asking doesn't count against it. Empty if it couldn't be asked."""
+    try:
+        core = http_get_json(f"https://{GITHUB_API}/rate_limit", _GITHUB_HEADERS)["resources"]["core"]
+        reset = datetime.fromtimestamp(int(core["reset"]), tz=timezone.utc).astimezone()
+        return {"limit": int(core["limit"]), "remaining": int(core["remaining"]), "reset": f"{reset:%H:%M}"}
+    except (SourceError, KeyError, TypeError, ValueError):
+        return {}
 
 
 def _parse_date(text: str | None) -> datetime | None:

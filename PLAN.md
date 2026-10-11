@@ -64,9 +64,9 @@ Each update removes the version it replaced once the new one is in place (no Und
 
 ## Stage 6: Finishing
 
-- **Sign in to GitHub** (DESIGN.md §8). With it, checks send each repo's last ETag (`If-None-Match`), and an
-  unchanged answer (304) doesn't count against the limit when signed in (GitHub's docs). Signed out, a 304 still
-  counts (tried 2026-10-11) but has no body, so it's still worth sending.
+- Done (2026-10-11): **Sign in to GitHub** (DESIGN.md §8), optional, on the welcome screen and in Settings: with a
+  code (device flow, kept in KDE Wallet) or the GitHub CLI's login. Release lists are asked for with their ETag; an
+  unchanged one (304) costs nothing signed in (tried), and no download signed out.
 - Done (2026-10-11): an app icon (`data/colliecourier.svg`), the menu entry, and the app's own RPM
   (`packaging/colliecourier.spec`, built by `devtools/build_rpm.sh`; tested unpacked, not yet installed with dnf).
 - **GNOME support** (checked 2026-10-11 by running the window with GNOME settings; the list, dragging and menus work):

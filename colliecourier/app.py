@@ -30,6 +30,9 @@ def check(if_due: bool) -> int:
     if integration.tell_running_app("check"):
         print("colliecourier is open; it's checking.")
         return 0
+    from .account import use_login
+
+    use_login(cfg.settings.github_login)
     state, fresh = checker.check_all(cfg.repos, state)
     checker.save_state(state)
     names = {r.id: r.name for r in cfg.repos}

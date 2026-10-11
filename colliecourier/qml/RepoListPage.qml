@@ -225,6 +225,16 @@ Kirigami.ScrollablePage {
                 const when = c.rateLimitEnds ? ` It can be checked again after ${c.rateLimitEnds}.` : "";
                 return `The site\u2019s hourly limit for requests was reached, so ${which}; it keeps its last result.${when}`;
             }
+            // Signing in raises GitHub's limit from 60 requests an hour to 5,000.
+            actions: backend.github.way === "" ? [signInAction] : []
+
+            Kirigami.Action {
+                id: signInAction
+
+                text: "Sign In to GitHub\u2026"
+                icon.name: "internet-services"
+                onTriggered: applicationWindow().openSettings()
+            }
         }
     }
 

@@ -23,6 +23,8 @@ Kirigami.Dialog {
     }
 
     title: "Welcome to colliecourier"
+    // Offers the GitHub CLI's login, if there is one.
+    onOpened: backend.refreshGitHub()
     padding: Kirigami.Units.largeSpacing * 2
     preferredWidth: Kirigami.Units.gridUnit * 30
     closePolicy: QQC2.Popup.NoAutoClose
@@ -109,6 +111,22 @@ Kirigami.Dialog {
                 : "Off: tracking is manual. You add repos yourself, and for each one set which version you have, or mark it as up to date."
             wrapMode: Text.Wrap
             opacity: 0.7
+        }
+
+        Kirigami.Separator {
+            Layout.fillWidth: true
+        }
+
+        // ---- GitHub account ----
+
+        Kirigami.Heading {
+            level: 4
+            text: "Sign in to GitHub (optional)"
+        }
+
+        GitHubSignIn {
+            Layout.fillWidth: true
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 26
         }
 
         Kirigami.Separator {
