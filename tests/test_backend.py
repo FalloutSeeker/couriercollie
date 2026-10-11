@@ -370,8 +370,12 @@ class BackendTest(unittest.TestCase):
         self.assertEqual(self.rows(), [("repo", "AeroThemePlasma"), ("repo", "LocalSend")])
 
     def test_remove(self):
+        from repoproject import checker
+
+        self.backend._checks.results[AERO] = checker.Result(checker.UPDATE, "Update available", "x")
         self.backend.removeRepo(AERO)
         self.assertIsNone(self.saved(AERO))
+        self.assertNotIn(AERO, checker.load_state(self.backend._state_path).results)  # its last result goes too
         self.assertEqual(self.backend.counts["all"], 1)
 
     def test_bad_address_fails_without_network(self):

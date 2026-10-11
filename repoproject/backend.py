@@ -636,9 +636,9 @@ class Backend(QObject):
             return
         self._config.categories.remove(name)
         moved = [r for r in self._config.repos if r.category == name]
+        self._config.repos = [r for r in self._config.repos if r.category != name] + moved
         for r in moved:
             r.category = ""
-        self._config.repos = [r for r in self._config.repos if r.category or r not in moved] + moved
         self._changed()
 
     @Slot(str, str, str)
@@ -839,7 +839,15 @@ class Backend(QObject):
             if picture.parent == icons.cache_dir():
                 picture.unlink(missing_ok=True)
         self._config.repos = [r for r in self._config.repos if r.id != repo_id]
-        self._details.pop(repo_id, None)
+        for kept in (self._details, self._update_notes, self._progress, self._program_choices, self._phases):
+            kept.pop(repo_id, None)
+        if self._checks.results.pop(repo_id, None):
+            try:
+                checker.save_state(self._checks, self._state_path)
+            except OSError:
+                pass
+            self.checksChanged.emit()
+            self._update_badge()
         self._changed()
 
     # -- scanning ---------------------------------------------------------------------------------------------------
