@@ -10,6 +10,12 @@ Newest first.
   Konsole in the clone's folder. Tested against real git repos made for the tests; your own clones weren't touched.
   - Also: a branch whose newest commit is your version is no longer asked about (it's the same, no request).
   - The scanned-repo window check now waits for each comparison to come back, rather than a fixed time.
+- Stage 5, AppImages: Install / Update download the newest release's AppImage with progress, check it against
+  GitHub's published SHA-256 (or a checksum file in the release; a warning if there's none) and that it's really an
+  AppImage, then swap it in, keeping the old file to undo. Menu entries follow the new file; one is added if none
+  exists. Tested with a local fake server, and for real with LocalSend's 63 MB AppImage in temporary folders.
+  - Found while testing: the style's progress bar didn't draw (in Aero or Breeze); it's drawn by the app instead.
+    "Mark as Up to Date" is hidden while an update runs.
 - Clones following releases (version = the release tag the clone is at; Update moves it to the newest tag, leaving its
   branch alone) and clones that belong to the system (Update asks for the password once, through polkit). Git can now
   read clones owned by another user (the version of a clone in `/opt` couldn't be read before). Switching what a

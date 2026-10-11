@@ -180,10 +180,15 @@ def _is_clone(repo: TrackedRepo) -> bool:
     return repo.source == config.SOURCE_SCANNED and repo.kind == assets.KIND_GIT and bool(repo.local_path)
 
 
+def _is_appimage(repo: TrackedRepo) -> bool:
+    """Following an AppImage file in each release."""
+    return repo.follow == FOLLOW_RELEASES and repo.kind == assets.KIND_APPIMAGE and bool(repo.asset_pattern)
+
+
 def _can_update(repo: TrackedRepo) -> bool:
     """Whether Update can do anything for this repo yet. Stage 5 so far: git clones found by a scan, following a branch
-    (pulled) or releases (moved to the newest release's tag)."""
-    return _is_clone(repo)
+    (pulled) or releases (moved to the newest release's tag); and AppImages (downloaded and swapped in)."""
+    return _is_clone(repo) or _is_appimage(repo)
 
 
 def _on_disk(scanned: bool, local_path: str, releases: bool = False) -> tuple[tuple[str, bool] | None, str]:
@@ -229,6 +234,7 @@ class Backend(QObject):
         # Updates running now, and how the last one for each repo went: (kind, text), kind "done" or "error".
         self._updating: set[str] = set()
         self._update_notes: dict[str, tuple[str, str]] = {}
+        self._progress: dict[str, float] = {}  # a download's progress, 0 to 1, per repo
         self._desktop = desktop
         self._icons_pending: set[str] = set()
         self._path = config_path
@@ -1062,6 +1068,11 @@ class Backend(QObject):
             "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing,
             "isClone": bool(repo) and _is_clone(repo),
             "updateNeedsPassword": bool(repo) and _is_clone(repo) and updater.needs_password(repo.local_path),
+            "isAppImage": bool(repo) and _is_appimage(repo),
+            "progress": self._progress.get(repo_id, -1),
+            # Where Install puts an AppImage you don't have yet.
+            "installFolder": str(updater.apps_dir()),
+            "installedByApp": bool(repo) and bool(repo.local_path) and Path(repo.local_path).parent == updater.apps_dir(),
             "updating": repo_id in self._updating,
             "updateNoteKind": self._update_notes.get(repo_id, ("", ""))[0],
             "updateNote": self._update_notes.get(repo_id, ("", ""))[1],
@@ -1264,6 +1275,9 @@ class Backend(QObject):
         repo = self._config.find(repo_id)
         if not repo or repo_id in self._updating or not _can_update(repo):
             return
+        if not _is_clone(repo):
+            self._update_appimage(repo)
+            return
         d = self._details.get(repo_id)
         branch = repo.branch or (d.default_branch if d else "")
         path, ids, by_branch = repo.local_path, [repo.id, *repo.aliases], repo.follow == FOLLOW_BRANCH
@@ -1304,6 +1318,70 @@ class Backend(QObject):
 
         self._run(lambda: updater.pull(path, branch, ids) if by_branch else updater.checkout_release(path, tag, ids),
                   done)
+
+    def _update_appimage(self, repo: TrackedRepo):
+        """Download the newest release's AppImage, check it, and swap it in (updater.install_appimage). One you don't
+        have yet is installed into ~/Applications, with a menu entry."""
+        repo_id, d = repo.id, self._details.get(repo.id)
+        ref, host, pattern, name, icon = RepoRef.from_id(repo.id), repo.host, repo.asset_pattern, repo.name, repo.icon
+        known = d.releases if d and d.state == "ready" else None
+        here = Path(repo.local_path) if repo.source == config.SOURCE_SCANNED and repo.local_path else None
+        old = here if here and here.is_file() else None
+        folder = old.parent if old else updater.apps_dir()
+        self._updating.add(repo_id)
+        self._update_notes.pop(repo_id, None)
+        self._progress[repo_id] = 0
+        self.reposChanged.emit()
+        self.detailsChanged.emit(repo_id)
+        shown = {"step": -1}
+
+        def progress(done, total):
+            step = int(done * 100 / total) if total else -1
+            if step != shown["step"]:  # at most a hundred times a download
+                shown["step"] = step
+                self._deliver.emit(lambda: (self._progress.__setitem__(repo_id, step / 100 if step >= 0 else -1),
+                                            self.detailsChanged.emit(repo_id)))
+
+        def work():
+            rels = known if known is not None else sources.releases(ref, host)
+            release = next((r for r in rels if not r.prerelease), rels[0] if rels else None)
+            if not release:
+                raise updater.UpdateError("This project has no releases to install.")
+            asset = next((a for a in release.assets if assets.matches(pattern, a.name)), None)
+            if not asset:
+                raise updater.UpdateError(f"The newest release ({release.tag}) doesn\u2019t include your file "
+                                          f"({pattern}). Choose it again under Your Build File.")
+            new, verified, kept = updater.install_appimage(repo_id, asset, release.assets, folder, old, progress)
+            if old:
+                updater.repoint_menu_entries(old, new)
+            if not updater.menu_entry_for(new):
+                found = icons.from_appimage(repo_id, new)
+                updater.write_menu_entry(repo_id, name, new, found.removeprefix("file:") if found
+                                         else icon.removeprefix("theme:") if icon.startswith("theme:") else "")
+            return release.tag, new, verified, kept
+
+        def done(result, error):
+            self._updating.discard(repo_id)
+            self._progress.pop(repo_id, None)
+            repo = self._config.find(repo_id)
+            if repo and error:
+                self._update_notes[repo_id] = ("error", self._error_text(error))
+            elif repo:
+                tag, new, verified, kept = result
+                repo.source, repo.local_path, repo.installed = config.SOURCE_SCANNED, str(new), tag
+                self._version_changed(repo)
+                self._changed(repo_id)
+                what = f"Updated to {tag}." if old else f"Installed {tag} as {new}, with a menu entry."
+                check = " Checked against the project\u2019s published checksum." if verified else \
+                    " The project publishes no checksum for it, so the download couldn\u2019t be checked."
+                keep = " The previous version is kept, so the update can be undone." if kept else ""
+                self._update_notes[repo_id] = ("done" if verified else "warning", what + check + keep)
+            self.reposChanged.emit()
+            self.detailsChanged.emit(repo_id)
+            if repo and error:
+                self.updateFailed.emit(repo_id)
+
+        self._run(work, done)
 
     def _pulled(self, repo: TrackedRepo, branch: str, head: str):
         """After a pull, the clone is at the branch's newest commit (as just fetched): your version, the page and the

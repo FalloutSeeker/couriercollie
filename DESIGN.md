@@ -140,6 +140,22 @@ becomes a button.
   list opens the repo's page, where the reason is. Changing what a repo follows clears the old result until the next
   check.
 
+**AppImages (built 2026-10-11).** For repos that follow an AppImage file. **Update** downloads the newest
+release's file next to the one you have; **Install** (when you don't have it) puts it in `~/Applications` (D8).
+
+- The download goes to a hidden `.part` file, with its progress shown, then is **checked**: against the SHA-256
+  GitHub publishes for every release file (no extra request), or else a checksum file in the release
+  (`<file>.sha256`, `SHA256SUMS`, `checksums.txt`, …). A mismatch throws the download away. With no published
+  checksum it's still installed, and the page says so in a warning (D6). It must also really be an AppImage
+  (the "AI" mark in its header), or it's thrown away.
+- Then it's made runnable and swapped in under the release's own file name. The old file moves to
+  `~/.local/share/repoproject/kept/<repo>/`, so the update can be undone (D11 deletes kept versions later, if
+  turned on).
+- **Menu entries:** yours that started the old file (e.g. from AppImageLauncher or Gear Lever) are pointed at the
+  new one. If none starts it, the app adds one (`~/.local/share/applications/repoproject-<repo>.desktop`) with the
+  AppImage's own icon.
+- From then on the repo's version is read from the file, as for a scanned one ("Installed by RepoProject").
+
 **Install scripts.** A clone's `install.sh`, `install` or `setup.sh` (never `uninstall.sh`) gets a "Show and Run…"
 button under Tracking. The script is shown in full first; Run in Terminal opens Konsole in the clone's folder, as
 you, kept open afterwards so its output can be read. The script asks for a password itself if it needs one. Update

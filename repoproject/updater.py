@@ -1,14 +1,20 @@
 """Updating what's tracked (stage 5). Only ever runs because you clicked Update (DECISIONS.md, D4, D6).
 
+AppImages: the new file is downloaded next to yours, checked against the project's published checksum (and that it
+really is an AppImage), then swapped in; the old one is kept, to undo the update.
+
 Git clones: the new commits on the followed branch are pulled, fast-forward only, so nothing of yours is merged,
 rebased or thrown away. A project's install script is never run here; it's shown to you first, and runs in a terminal
 window you can watch (and type your password into, if it asks).
 """
 
+import hashlib
 import os
 import shlex
 import shutil
 import subprocess
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from . import sources
@@ -215,3 +221,194 @@ def terminal_command(path: str, name: str) -> tuple[str, list[str]]:
         line = shlex.join(run) + "; echo; read -r -p 'Finished. Press Enter to close.' _"
         return xdg, [f"--dir={path}", "sh", "-c", line]
     raise UpdateError("No terminal app was found to run it in (Konsole, or one that xdg-terminal-exec knows).")
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# AppImages: downloaded next to the one you have (or into ~/Applications, DECISIONS.md D8), checked, then swapped in.
+# The old file is kept (D6, D11) so the update can be undone.
+
+# Nothing this big is downloaded: a mistake, or not an app.
+DOWNLOAD_MAX_BYTES = 4 * 1024 ** 3
+CHUNK = 1024 * 1024
+# Checksum files in a release, by name (lower case).
+_CHECKSUM_NAMES = ("sha256sums", "sha256sum", "checksums", "checksum", "sha256")
+
+
+def _data_home() -> Path:
+    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+
+
+def apps_dir() -> Path:
+    """Where AppImages the app installs go (D8)."""
+    return Path(os.environ.get("REPOPROJECT_APPS") or Path.home() / "Applications")
+
+
+def kept_dir(repo_id: str) -> Path:
+    """Where the version before an update is kept, to undo it."""
+    return _data_home() / "repoproject" / "kept" / repo_id.replace("/", "_")
+
+
+def menu_dir() -> Path:
+    return _data_home() / "applications"
+
+
+def _checksum_files(asset_name: str, others: list) -> list:
+    """Checksum files in the same release that may list `asset_name`: "<file>.sha256" first, then shared ones."""
+    own = [a for a in others if a.name.lower() in (asset_name.lower() + ".sha256", asset_name.lower() + ".sha256sum")]
+    shared = [a for a in others if a not in own and a.name != asset_name and len(a.name) < 80
+              and any(n in a.name.lower() for n in _CHECKSUM_NAMES) and (a.size or 0) < 1024 * 1024]
+    return own + shared
+
+
+def _find_sha256(text: str, asset_name: str) -> str:
+    """The SHA-256 for `asset_name` in a checksum file: "<hex>  <name>" lines, or a file holding just the hex."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for line in lines:
+        parts = line.replace("*", " ").split()
+        if len(parts) >= 2 and parts[-1].lstrip("./") == asset_name and _is_sha256(parts[0]):
+            return parts[0].lower()
+    if len(lines) == 1 and _is_sha256(lines[0].split()[0]):
+        return lines[0].split()[0].lower()
+    return ""
+
+
+def _is_sha256(text: str) -> bool:
+    return len(text) == 64 and all(c in "0123456789abcdefABCDEF" for c in text)
+
+
+def expected_sha256(asset, others: list, get_text) -> str:
+    """The checksum the project published for `asset`: the site's own (GitHub gives one for each file, no request),
+    else from a checksum file in the release (one small download). "" if there's none."""
+    if asset.digest.startswith("sha256:") and _is_sha256(asset.digest[7:]):
+        return asset.digest[7:].lower()
+    for f in _checksum_files(asset.name, others):
+        try:
+            if found := _find_sha256(get_text(f.url), asset.name):
+                return found
+        except (OSError, ValueError, sources.SourceError):
+            continue
+    return ""
+
+
+def fetch_text(url: str, limit: int = 1024 * 1024) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": sources.USER_AGENT})
+    with urllib.request.urlopen(req, timeout=sources.TIMEOUT) as resp:
+        return resp.read(limit).decode("utf-8", "replace")
+
+
+def download(url: str, dest: Path, size: int | None, progress=None) -> str:
+    """Downloads `url` to `dest`, returning its SHA-256. `progress(done, total)` is called now and then."""
+    if size and size > DOWNLOAD_MAX_BYTES:
+        raise UpdateError("The file is too big to be an app; it wasn’t downloaded.")
+    if size and shutil.disk_usage(dest.parent).free < size + 64 * 1024 ** 2:
+        raise UpdateError(f"There isn’t enough free space in {dest.parent} for the download.")
+    digest, done = hashlib.sha256(), 0
+    req = urllib.request.Request(url, headers={"User-Agent": sources.USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=sources.TIMEOUT) as resp, dest.open("wb") as out:
+            total = int(resp.headers.get("Content-Length") or size or 0)
+            while chunk := resp.read(CHUNK):
+                done += len(chunk)
+                if done > DOWNLOAD_MAX_BYTES:
+                    raise UpdateError("The download is too big to be an app; it was stopped.")
+                digest.update(chunk)
+                out.write(chunk)
+                if progress:
+                    progress(done, total)
+    except (OSError, urllib.error.URLError) as e:
+        dest.unlink(missing_ok=True)
+        raise UpdateError(f"The download didn’t finish: {getattr(e, 'reason', None) or e}") from e
+    except UpdateError:
+        dest.unlink(missing_ok=True)
+        raise
+    return digest.hexdigest()
+
+
+def is_appimage(path: Path) -> bool:
+    """An AppImage is a program (ELF) with "AI" and its type (1 or 2) at byte 8."""
+    with path.open("rb") as f:
+        head = f.read(11)
+    return head[:4] == b"\x7fELF" and head[8:10] == b"AI" and head[10:11] in (b"\x01", b"\x02")
+
+
+def install_appimage(repo_id: str, asset, others: list, folder: Path, old: Path | None,
+                     progress=None, get_text=fetch_text) -> tuple[Path, bool, Path | None]:
+    """Downloads `asset` (a release's AppImage) into `folder`, checks it, and puts it in place of `old` (if any),
+    which is moved to kept_dir. Returns (the new file, whether it was checked against a published checksum, where
+    the old one is kept)."""
+    folder.mkdir(parents=True, exist_ok=True)
+    if not os.access(folder, os.W_OK):
+        raise UpdateError(f"{folder} belongs to another user (often the system), so the new version can’t be put "
+                          "there from here.")
+    name = Path(asset.name).name  # never a path from the site
+    part = folder / f".{name}.part"
+    got = download(asset.url, part, asset.size, progress)
+    expected = expected_sha256(asset, others, get_text)
+    if expected and got != expected:
+        part.unlink(missing_ok=True)
+        raise UpdateError("The download doesn’t match the checksum the project published, so it was thrown away. "
+                          "Try again later; if it keeps happening, the file on the site may have been tampered with.")
+    if not is_appimage(part):
+        part.unlink(missing_ok=True)
+        raise UpdateError(f"{name} isn’t an AppImage, so it wasn’t installed.")
+    part.chmod(0o755)
+    kept = None
+    if old and old.is_file():
+        keep = kept_dir(repo_id)
+        keep.mkdir(parents=True, exist_ok=True)
+        kept = keep / old.name
+        shutil.move(str(old), kept)
+    os.replace(part, folder / name)
+    return folder / name, bool(expected), kept
+
+
+def _desktop_quote(path: Path) -> str:
+    """A path as a desktop entry's Exec= argument. Two layers of escaping: the command line's (a backslash before
+    " ` $ and \\), then the file's own (each backslash doubled)."""
+    escaped = str(path).replace("\\", "\\\\\\\\")
+    for ch in '"`$':
+        escaped = escaped.replace(ch, "\\\\" + ch)
+    return f'"{escaped}"'
+
+
+def repoint_menu_entries(old: Path, new: Path) -> int:
+    """Menu entries of yours that start the old file (e.g. made by AppImageLauncher or Gear Lever) start the new one
+    instead. Returns how many were changed."""
+    changed = 0
+    for entry in menu_dir().glob("*.desktop") if menu_dir().is_dir() else []:
+        try:
+            text = entry.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if str(old) not in text:
+            continue
+        lines = [line.replace(str(old), str(new)) if line.startswith(("Exec=", "TryExec=")) else line
+                 for line in text.splitlines()]
+        entry.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        changed += 1
+    return changed
+
+
+def write_menu_entry(repo_id: str, name: str, app: Path, icon: str) -> Path:
+    """A menu entry (KDE launcher) for an AppImage the app installed. Marked as the app's, so it's kept up to date."""
+    entry = menu_dir() / f"repoproject-{repo_id.replace('/', '-').lower()}.desktop"
+    entry.parent.mkdir(parents=True, exist_ok=True)
+    entry.write_text("\n".join([
+        "[Desktop Entry]",
+        "Type=Application",
+        f"Name={name}",
+        f"Exec={_desktop_quote(app)} %U",
+        f"TryExec={app}",
+        f"Icon={icon or 'application-vnd.appimage'}",
+        "Terminal=false",
+        "Categories=Utility;",
+        "Comment=Installed by RepoProject",
+        f"X-RepoProject-Repo={repo_id}",
+    ]) + "\n", encoding="utf-8")
+    return entry
+
+
+def menu_entry_for(app: Path) -> bool:
+    """Whether any menu entry of yours starts this file."""
+    return menu_dir().is_dir() and any(str(app) in e.read_text(encoding="utf-8", errors="replace")
+                                       for e in menu_dir().glob("*.desktop"))

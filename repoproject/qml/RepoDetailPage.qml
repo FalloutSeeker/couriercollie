@@ -17,13 +17,15 @@ Kirigami.ScrollablePage {
     readonly property string currentBranch: ((details.branches || []).find(b => b.selected) || {}).name || ""
     readonly property bool ready: details.state === "ready"
     // A scanned repo's version is read from disk, so it isn't set by hand.
-    readonly property bool canMarkUpToDate: ready && !details.versionFromDisk && details.status !== ""
+    readonly property bool canMarkUpToDate: ready && !details.versionFromDisk && !details.updating && details.status !== ""
                                             && details.status !== "Up to date"
-    readonly property bool canMarkNotInstalled: ready && !details.versionFromDisk && details.versionText !== ""
+    readonly property bool canMarkNotInstalled: ready && !details.versionFromDisk && !details.updating && details.versionText !== ""
                                                 && details.installed !== "-"
-    // Update pulls a scanned clone's new commits (stage 5: clones only, so far).
-    readonly property bool canUpdate: ready && details.canUpdate === true && details.updateAvailable === true
-                                      && !details.updating
+    // Update pulls a clone's new commits or moves it to the newest release; for an AppImage it downloads the newest,
+    // or installs it if you don't have it yet.
+    readonly property bool installing: details.isAppImage === true && details.statusKind === "notInstalled"
+    readonly property bool canUpdate: ready && details.canUpdate === true && !details.updating
+                                      && (details.updateAvailable === true || installing)
 
     function reload() {
         repo = backend.repo(repoId);
@@ -386,8 +388,9 @@ Kirigami.ScrollablePage {
                     elide: Text.ElideRight
                 }
 
-                // Pulling, and how the last update went.
+                // Updating now, and how the last update went.
                 RowLayout {
+                    Layout.fillWidth: true
                     visible: page.details.updating === true
                     spacing: Kirigami.Units.smallSpacing
 
@@ -398,7 +401,26 @@ Kirigami.ScrollablePage {
                     }
 
                     QQC2.Label {
-                        text: page.followsReleases ? "Moving to the new release\u2026" : "Pulling the new commits\u2026"
+                        text: page.details.isAppImage ? (page.details.progress >= 0
+                                  ? `Downloading\u2026 ${Math.round(page.details.progress * 100)}%` : "Downloading\u2026")
+                            : page.followsReleases ? "Moving to the new release\u2026" : "Pulling the new commits\u2026"
+                    }
+
+                    // Drawn here rather than with the style's progress bar, which some styles leave blank.
+                    Rectangle {
+                        objectName: "downloadProgress"
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Kirigami.Units.smallSpacing * 2
+                        visible: page.details.isAppImage === true && page.details.progress >= 0
+                        radius: height / 2
+                        color: Kirigami.ColorUtils.tintWithAlpha(Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.15)
+
+                        Rectangle {
+                            width: parent.width * Math.max(page.details.progress, 0)
+                            height: parent.height
+                            radius: parent.radius
+                            color: Kirigami.Theme.highlightColor
+                        }
                     }
                 }
 
@@ -407,8 +429,9 @@ Kirigami.ScrollablePage {
                     Layout.fillWidth: true
                     visible: !page.details.updating && (page.details.updateNote || "") !== ""
                     type: page.details.updateNoteKind === "error" ? Kirigami.MessageType.Error
-                                                                   : Kirigami.MessageType.Positive
-                    text: page.details.updateNote + (page.details.updateNoteKind === "done"
+                        : page.details.updateNoteKind === "warning" ? Kirigami.MessageType.Warning
+                        : Kirigami.MessageType.Positive
+                    text: page.details.updateNote + (page.details.updateNoteKind !== "error"
                           && (page.details.installScripts || []).length > 0
                           ? " If the project needs installing again, run its install script (under Tracking)." : "")
                 }
@@ -421,8 +444,8 @@ Kirigami.ScrollablePage {
                         objectName: "updateNow"
                         visible: page.canUpdate
                         highlighted: true
-                        text: page.details.updateNeedsPassword ? "Update\u2026" : "Update"
-                        icon.name: "system-software-update"
+                        text: page.installing ? "Install" : page.details.updateNeedsPassword ? "Update\u2026" : "Update"
+                        icon.name: page.installing ? "download" : "system-software-update"
                         onClicked: backend.updateRepo(page.repoId)
                     }
 
@@ -442,6 +465,15 @@ Kirigami.ScrollablePage {
                         icon.name: "edit-clear"
                         onClicked: backend.setInstalled(page.repoId, "-")
                     }
+                }
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    visible: page.canUpdate && page.installing
+                    text: `Downloads the newest release\u2019s ${page.repo.assetPattern || "file"} into ${page.details.installFolder}, and adds it to the menu.`
+                    font: Kirigami.Theme.smallFont
+                    wrapMode: Text.Wrap
+                    opacity: 0.7
                 }
 
                 QQC2.Label {
@@ -552,7 +584,8 @@ Kirigami.ScrollablePage {
 
                 QQC2.Label {
                     Layout.fillWidth: true
-                    text: page.repo.scanned ? "Found on this computer" : "Added by hand"
+                    text: page.details.installedByApp ? "Installed by RepoProject"
+                        : page.repo.scanned ? "Found on this computer" : "Added by hand"
                 }
 
                 QQC2.Label {

@@ -13,7 +13,7 @@ AeroThemePlasma and ultrakanban repos), and nothing in a stage can change your s
 | 6     | Old-version cleanup, GitHub sign-in, app icon, installable package    | No                   |
 | 7     | The app tracks its own updates, added on first launch                 | No                   |
 
-**Progress:** stages 1–4 done (2026-10-10). Stage 5: git clones done (2026-10-11). The menu entry was pulled forward from stage 6 (notifications and the badge need it).
+**Progress:** stages 1–4 done (2026-10-10). Stage 5: git clones and AppImages done (2026-10-11). The menu entry was pulled forward from stage 6 (notifications and the badge need it).
 
 ## Stage 1: Skeleton (done)
 
@@ -54,7 +54,8 @@ Built kind by kind, simplest first:
 
 1. **Git clones** (done): pull the new commits. Separate "Run install script…" button that shows the script before
    running it.
-2. **AppImages**: download, verify the checksum if one is published, swap in, keep the old one, add a menu entry.
+2. **AppImages** (done): download, verify the checksum if one is published, swap in, keep the old one, add a menu
+   entry. Install, for one you don't have yet, into `~/Applications`.
 3. **Programs**: download, unpack, swap the program file in `~/.local/bin`, keep the old one.
 4. **RPMs**: download, verify, install through dnf, which asks for your password.
 

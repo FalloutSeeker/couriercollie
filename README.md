@@ -60,6 +60,7 @@ python3 -I devtools/check_icons.py           # looks up icons for your repos (te
 python3 -I devtools/check_updates.py         # Check Now, the status line, results, the rate-limit bar
 python3 -I devtools/check_categories.py      # new category, dragging, renaming, deleting one
 python3 -I devtools/check_update_clone.py    # Update on a temporary clone, refusals, showing and running a script
+python3 -I devtools/check_appimage.py        # installs then updates LocalSend's AppImage, in temporary folders
 ```
 
 ## Code layout
