@@ -7,6 +7,8 @@ Kirigami.ScrollablePage {
     id: page
 
     property string repoId
+
+    objectName: "repoDetailPage"
     property var repo: backend.repo(repoId)
     property var details: backend.details(repoId)
     // Which releases are opened up, by tag. Kept here so they stay open when the list is refreshed.

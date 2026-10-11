@@ -19,7 +19,7 @@ def main() -> int:
     # KDE's own look for buttons, lists, etc. Needs QApplication rather than QGuiApplication.
     os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "org.kde.desktop")
 
-    from PySide6.QtCore import QUrl
+    from PySide6.QtCore import QStandardPaths, QUrl
     from PySide6.QtGui import QIcon
     from PySide6.QtQml import QQmlApplicationEngine
     from PySide6.QtWidgets import QApplication
@@ -29,7 +29,10 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("RepoProject")
     app.setOrganizationName("RepoProject")
-    app.setDesktopFileName("repoproject")
+    # The desktop file name tells KDE which menu entry this window belongs to. Without an installed entry, KDE's
+    # portal logs "App info not found", so it's only set once the entry exists (added in a later stage).
+    if QStandardPaths.locate(QStandardPaths.StandardLocation.ApplicationsLocation, "repoproject.desktop"):
+        app.setDesktopFileName("repoproject")
     app.setWindowIcon(QIcon.fromTheme("system-software-update"))
     # Let Ctrl+C in the terminal close the app.
     signal.signal(signal.SIGINT, signal.SIG_DFL)

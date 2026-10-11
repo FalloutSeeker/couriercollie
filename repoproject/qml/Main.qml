@@ -5,17 +5,22 @@ Kirigami.ApplicationWindow {
     id: root
 
     property string currentRepoId: ""
+    property Item settingsPageItem: null
 
+    // Pages are created here, with a parent, rather than by Kirigami: Kirigami's way logs "Created graphical object
+    // was not placed in the graphics scene". So they're also deleted here when closed.
     function openRepo(repoId) {
-        while (pageStack.depth > 1)
-            pageStack.pop();
+        closeRepo();
         currentRepoId = repoId;
-        pageStack.push(detailPage, { repoId: repoId });
+        pageStack.push(detailPage.createObject(root, { repoId: repoId }));
     }
 
     function closeRepo() {
-        while (pageStack.depth > 1)
-            pageStack.pop();
+        while (pageStack.depth > 1) {
+            const page = pageStack.pop();
+            if (page)
+                page.destroy();
+        }
         currentRepoId = "";
     }
 
@@ -23,9 +28,19 @@ Kirigami.ApplicationWindow {
         addDialog.open();
     }
 
+    // A separate window, as in other KDE apps. It blocks the main window while open, so it can't be opened twice.
+    // The page belongs to this window rather than the Settings window: if it were deleted along with the Settings
+    // window, a calculation inside Kirigami would run on the half-deleted page and log a TypeError. A page can only be
+    // shown once, so each opening gets a new one and the previous is deleted.
     function openSettings() {
-        if (pageStack.layers.depth === 1)
-            pageStack.layers.push(settingsPage);
+        if (settingsPageItem)
+            settingsPageItem.destroy();
+        settingsPageItem = settingsPage.createObject(root);
+        pageStack.pushDialogLayer(settingsPageItem, {}, {
+            title: "Settings",
+            width: Kirigami.Units.gridUnit * 36,
+            height: Kirigami.Units.gridUnit * 30
+        });
     }
 
     title: "RepoProject"

@@ -4,6 +4,15 @@ Newest first.
 
 ## 2026-10-10
 
+- Cleaned up terminal warnings:
+  - "Could not register app ID: App info not found for 'repoproject'": the app told KDE its menu-entry name, but no
+    menu entry exists yet (stage 6). The name is now only sent once the entry is installed.
+  - "StackView has detected conflicting anchors": from Kirigami's layers, used to show Settings. Settings now opens in
+    its own window, as in other KDE apps.
+  - "Created graphical object was not placed in the graphics scene": from Kirigami creating pages. The app now
+    creates pages itself and deletes them when closed. Closed repo pages weren't being deleted before.
+  - Avoided two Kirigami errors this exposed: a TypeError if the Settings page is deleted along with its window, and
+    one if a page is shown in a window twice. Each opening of Settings gets a fresh page owned by the main window.
 - Check intervals narrowed to daily / every 7 days / every 14 days / monthly (4 weeks); daily is the default. Older
   saved values move to the next choice up (6 hours becomes daily).
 - The welcome screen didn't get a fair chance: the app started at 19:55 and the settings file was written with the
