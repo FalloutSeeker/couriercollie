@@ -109,7 +109,7 @@ def parse_url(text: str) -> RepoRef:
     /releases or /-/tags, a trailing .git) and git@host:owner/repo SSH addresses."""
     text = text.strip()
     if not text:
-        raise ValueError("Enter the project's web address, e.g. https://github.com/owner/project")
+        raise ValueError("Enter the project’s web address, e.g. https://github.com/owner/project")
     if m := _SSH_URL.match(text):
         domain, path = m.group(1), m.group(2)
     else:
@@ -117,7 +117,7 @@ def parse_url(text: str) -> RepoRef:
             text = "https://" + text
         parsed = urllib.parse.urlparse(text)
         if parsed.scheme not in ("http", "https") or not parsed.hostname:
-            raise ValueError("That doesn't look like a web address.")
+            raise ValueError("That doesn’t look like a web address.")
         domain, path = parsed.hostname.lower(), parsed.path
     domain = domain.lower().removeprefix("www.")
     path = path.strip("/")
@@ -161,7 +161,7 @@ def http_get_json(url: str, headers: dict | None = None):
             try:
                 json.loads(e.read() or b"null")
             except (json.JSONDecodeError, OSError):
-                raise BadAnswer(f"{domain} sent an answer that isn't from a GitHub or GitLab site.") from e
+                raise BadAnswer(f"{domain} sent an answer that isn’t from a GitHub or GitLab site.") from e
             raise NotFound("Project not found. Check the address, and that the project is public.") from e
         remaining = e.headers.get("x-ratelimit-remaining") or e.headers.get("ratelimit-remaining")
         if e.code == 429 or (e.code == 403 and remaining == "0"):
@@ -170,11 +170,11 @@ def http_get_json(url: str, headers: dict | None = None):
             raise RateLimited(f"{domain} says too many requests were made.{when}", reset) from e
         raise BadAnswer(f"{domain} answered with an error ({e.code}). Try again later.") from e
     except urllib.error.URLError as e:
-        raise SourceError(f"Couldn't reach {domain}. Check your internet connection.") from e
+        raise SourceError(f"Couldn’t reach {domain}. Check your internet connection.") from e
     except (TimeoutError, OSError) as e:
         raise SourceError(f"{domain} took too long to answer. Try again later.") from e
     except json.JSONDecodeError as e:
-        raise BadAnswer(f"{domain} sent an answer that isn't from a GitHub or GitLab site.") from e
+        raise BadAnswer(f"{domain} sent an answer that isn’t from a GitHub or GitLab site.") from e
 
 
 def _parse_date(text: str | None) -> datetime | None:
@@ -271,7 +271,7 @@ def project_info(ref: RepoRef, get=http_get_json) -> ProjectInfo:
     if ref.domain == "github.com":
         return parse_github_project(get(f"https://api.github.com/repos/{ref.path}", _GITHUB_HEADERS))
     # Anything else: see if it answers like a GitLab site.
-    unsupported = f"{ref.domain} doesn't look like a GitHub or GitLab site. Only those are supported."
+    unsupported = f"{ref.domain} doesn’t look like a GitHub or GitLab site. Only those are supported."
     try:
         data = get(_gitlab_api(ref.domain, ref.path))
     except BadAnswer as e:
@@ -312,9 +312,9 @@ def branches(ref: RepoRef) -> tuple[str, list[Branch]]:
             capture_output=True, text=True, timeout=TIMEOUT, env=env,
         )
     except FileNotFoundError as e:
-        raise SourceError("git isn't installed, so branches can't be listed.") from e
+        raise SourceError("git isn’t installed, so branches can’t be listed.") from e
     except subprocess.TimeoutExpired as e:
         raise SourceError(f"{ref.domain} took too long to list branches. Try again later.") from e
     if result.returncode != 0:
-        raise SourceError(f"Couldn't list branches from {ref.domain}: {result.stderr.strip() or 'unknown error'}")
+        raise SourceError(f"Couldn’t list branches from {ref.domain}: {result.stderr.strip() or 'unknown error'}")
     return parse_ls_remote(result.stdout)

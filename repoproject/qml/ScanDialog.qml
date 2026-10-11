@@ -32,7 +32,7 @@ Kirigami.Dialog {
     }
 
     objectName: "scanDialog"
-    title: "Scan this computer"
+    title: "Scan This Computer"
     padding: Kirigami.Units.largeSpacing
     preferredWidth: Kirigami.Units.gridUnit * 36
     // A fixed height: the list can be long, and scrolls inside the dialog.
@@ -41,7 +41,7 @@ Kirigami.Dialog {
 
     customFooterActions: [
         Kirigami.Action {
-            text: `Track selected (${dialog.pickedCount})`
+            text: `Track Selected (${dialog.pickedCount})`
             icon.name: "list-add"
             enabled: dialog.pickedCount > 0
             onTriggered: {
@@ -51,7 +51,7 @@ Kirigami.Dialog {
         },
         Kirigami.Action {
             text: "Close"
-            icon.name: "dialog-close"
+            icon.name: "window-close"
             onTriggered: dialog.close()
         }
     ]
@@ -75,9 +75,9 @@ Kirigami.Dialog {
                 objectName: "scanStatus"
                 Layout.fillWidth: true
                 text: backend.scanState === "scanning" ? "Looking for git clones, downloaded apps and RPMs, then checking each with its site…"
-                    : backend.scanError !== "" ? "The scan didn't finish."
+                    : backend.scanError !== "" ? "The scan didn’t finish."
                     : backend.scanItems.length === 0 ? "Nothing new found. Everything found is already tracked."
-                    : `Found ${backend.scanItems.length} new. Nothing is tracked until you tick it.`
+                    : `Found ${backend.scanItems.length} new. Only ticked ones are tracked.`
                 font.bold: backend.scanState === "done"
                 wrapMode: Text.Wrap
             }
@@ -94,7 +94,7 @@ Kirigami.Dialog {
             Layout.fillWidth: true
             visible: backend.scanState === "done" && backend.scanUpdated.length > 0
             type: Kirigami.MessageType.Positive
-            text: `Updated ${backend.scanUpdated.length} repo(s) you already track with what's on this computer: ${backend.scanUpdated.join(", ")}.`
+            text: `Updated ${backend.scanUpdated.length === 1 ? "1 tracked repo" : backend.scanUpdated.length + " tracked repos"} with what’s on this computer: ${backend.scanUpdated.join(", ")}.`
         }
 
         RowLayout {
@@ -107,13 +107,15 @@ Kirigami.Dialog {
 
             QQC2.Button {
                 objectName: "selectAll"
-                text: "Select all"
+                text: "Select All"
+                icon.name: "edit-select-all"
                 onClicked: dialog.setAll(true)
             }
 
             QQC2.Button {
                 objectName: "selectNone"
-                text: "Select none"
+                text: "Select None"
+                icon.name: "edit-select-none"
                 onClicked: dialog.setAll(false)
             }
         }

@@ -50,6 +50,8 @@ Later option: the "custom dnf" idea, a local package repo the app fills, so `dnf
 - **When updates are found:** a toast (on by default). Clicking it opens the main window, where each repo with an
   update has a ⬆ icon. The app's taskbar icon shows a badge with the number of updates.
 - **Toasts can be turned off**, leaving just the badge and the ⬆ icons.
+- **Only from the background** (KDE HIG, status changes): a toast is sent only when the main window isn't open or
+  in front. With the window in front, new updates show in the window itself.
 
 **Status:** decided 2026-10-10.
 

@@ -4,6 +4,19 @@ Newest first.
 
 ## 2026-10-10
 
+- KDE HIG pass (app design, layout and navigation, displaying content, status changes, text and labels, icons),
+  light compliance tweaks only:
+  - Title case for buttons, actions, dialog titles and headings; sentence case kept for checkbox, radio and form
+    labels. Ellipsis on actions that need more input ("Add…", "Scan…", "Stop Tracking…"). Dialog titles echo their
+    button ("Add Repo"); "This is my version" became the imperative "Set as My Version". Curly apostrophes.
+  - Every button has an icon; Close uses window-close instead of a red X (red is for destructive actions).
+  - Status uses an update icon rather than green text alone. Confirmation buttons say what they do ("Stop Tracking"
+    / "Cancel"), not OK.
+  - Shortcuts: Ctrl+N add, Ctrl+R refresh, the standard Settings shortcut. No bare function keys.
+  - Placeholder text only as an example (the Add dialog's Name hint moved under the fields); long explanations cut
+    to two sentences and kept to a readable line width.
+  - Stage 4 note: toasts only when the window isn't in front (D5).
+  - Rebuilt the click checks as `devtools/check_pages.py`.
 - Built stage 3, scanning. Finds git clones in the home folder (up to 6 folders deep, skipping hidden folders and
   dependency folders), RPMs installed from a downloaded file with a GitHub/GitLab homepage, and AppImages that carry
   their update source. Each project is listed once even if found in several places. Finds not already on the list

@@ -39,6 +39,7 @@ copy of your settings:
 
 ```sh
 python3 -I devtools/check_scan.py   # scans this computer and asks GitHub/GitLab about new finds
+python3 -I devtools/check_pages.py  # clicks through the welcome screen, list, repo page and Settings
 ```
 
 ## Code layout

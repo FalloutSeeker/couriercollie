@@ -114,7 +114,7 @@ def load(path: Path | None = None) -> Config:
         settings.check_interval_hours = _nearest_interval(settings.check_interval_hours)
         repos = [_from_dict(TrackedRepo, r) for r in data.get("repos", [])]
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, TypeError) as e:
-        raise ConfigError(f"Couldn't read {path}: {e}") from e
+        raise ConfigError(f"Couldn’t read {path}: {e}") from e
     return Config(settings=settings, repos=repos)
 
 

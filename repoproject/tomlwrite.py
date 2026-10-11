@@ -36,7 +36,7 @@ def _value(value) -> str:
         return _string(value)
     if isinstance(value, list):
         return "[" + ", ".join(_value(v) for v in value) + "]"
-    raise TypeError(f"can't write {type(value).__name__} to TOML")
+    raise TypeError(f"can’t write {type(value).__name__} to TOML")
 
 
 def _is_table_array(value) -> bool:

@@ -16,7 +16,7 @@ Kirigami.ScrollablePage {
 
         Kirigami.Separator {
             Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: "Checking for updates"
+            Kirigami.FormData.label: "Checking for Updates"
         }
 
         QQC2.Switch {
@@ -55,7 +55,7 @@ Kirigami.ScrollablePage {
 
         Kirigami.Separator {
             Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: "Finding installed repos"
+            Kirigami.FormData.label: "Finding Installed Repos"
         }
 
         QQC2.Switch {
@@ -78,7 +78,7 @@ Kirigami.ScrollablePage {
 
         Kirigami.Separator {
             Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: "Old versions"
+            Kirigami.FormData.label: "Old Versions"
         }
 
         QQC2.Switch {
@@ -98,7 +98,7 @@ Kirigami.ScrollablePage {
 
         QQC2.Label {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 24
-            text: "Kept versions let you undo an update. Once deleted, that update can't be undone. Files that would need your password to delete are always left alone."
+            text: "Kept versions let you undo an update. Once deleted, that update can’t be undone. Files that would need your password to delete are always left alone."
             wrapMode: Text.Wrap
             opacity: 0.7
         }

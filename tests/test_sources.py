@@ -112,9 +112,9 @@ class ProjectInfoTest(unittest.TestCase):
 
     def test_non_git_sites_are_reported_as_unsupported(self):
         def get(url, headers=None):
-            raise sources.BadAnswer("example.org sent an answer that isn't from a GitHub or GitLab site.")
+            raise sources.BadAnswer("example.org sent an answer that isn’t from a GitHub or GitLab site.")
 
-        with self.assertRaisesRegex(sources.SourceError, "doesn't look like a GitHub or GitLab site"):
+        with self.assertRaisesRegex(sources.SourceError, "doesn’t look like a GitHub or GitLab site"):
             sources.project_info(RepoRef("example.org", "a/b"), get)
 
     def test_not_found_passes_through(self):

@@ -13,7 +13,7 @@ Kirigami.Dialog {
         }
     }
 
-    title: "Add a repo"
+    title: "Add Repo"
     padding: Kirigami.Units.largeSpacing
     preferredWidth: Kirigami.Units.gridUnit * 28
     standardButtons: Kirigami.Dialog.NoButton
@@ -68,7 +68,6 @@ Kirigami.Dialog {
 
                 Layout.fillWidth: true
                 Kirigami.FormData.label: "Name:"
-                placeholderText: "Optional: uses the project's own name"
                 enabled: !backend.adding
                 onAccepted: dialog.add()
             }
@@ -90,7 +89,7 @@ Kirigami.Dialog {
 
         QQC2.Label {
             Layout.fillWidth: true
-            text: "Works with GitHub, and with GitLab sites including self-hosted ones like gitgud.io."
+            text: "Name is optional; the project’s own name is used if it’s left empty. Works with GitHub, and with GitLab sites including self-hosted ones like gitgud.io."
             wrapMode: Text.Wrap
             opacity: 0.7
         }

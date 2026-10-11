@@ -40,16 +40,17 @@ Kirigami.ScrollablePage {
         Kirigami.Action {
             text: "Refresh"
             icon.name: "view-refresh"
+            shortcut: "Ctrl+R"
             enabled: page.details.state !== "loading"
             onTriggered: backend.loadDetails(page.repoId, true)
         },
         Kirigami.Action {
-            text: "Open project page"
+            text: "Open Project Page"
             icon.name: "internet-services"
             onTriggered: Qt.openUrlExternally(page.repo.url)
         },
         Kirigami.Action {
-            text: "Stop tracking"
+            text: "Stop Tracking…"
             icon.name: "edit-delete-remove"
             onTriggered: removeDialog.open()
         }
@@ -71,9 +72,21 @@ Kirigami.ScrollablePage {
     Kirigami.PromptDialog {
         id: removeDialog
 
-        title: `Stop tracking ${page.repo.name}?`
-        subtitle: "It's only removed from this list. Nothing on your computer is changed or deleted."
-        standardButtons: Kirigami.Dialog.Ok | Kirigami.Dialog.Cancel
+        title: `Stop Tracking \u201c${page.repo.name}\u201d?`
+        subtitle: "It’s only removed from this list. Nothing on this computer is changed or deleted."
+        standardButtons: Kirigami.Dialog.NoButton
+        customFooterActions: [
+            Kirigami.Action {
+                text: "Stop Tracking"
+                icon.name: "edit-delete-remove"
+                onTriggered: removeDialog.accept()
+            },
+            Kirigami.Action {
+                text: "Cancel"
+                icon.name: "dialog-cancel"
+                onTriggered: removeDialog.reject()
+            }
+        ]
         onAccepted: {
             const id = page.repoId;
             applicationWindow().closeRepo();
@@ -91,7 +104,7 @@ Kirigami.ScrollablePage {
             text: page.details.error
             actions: [
                 Kirigami.Action {
-                    text: "Try again"
+                    text: "Try Again"
                     icon.name: "view-refresh"
                     onTriggered: backend.loadDetails(page.repoId, true)
                 }
@@ -150,7 +163,7 @@ Kirigami.ScrollablePage {
             QQC2.Label {
                 Layout.maximumWidth: Kirigami.Units.gridUnit * 26
                 visible: page.ready && !page.details.hasReleases
-                text: "This project doesn't publish releases, so new commits on a branch are followed instead."
+                text: "This project doesn’t publish releases, so new commits on a branch are followed instead."
                 wrapMode: Text.Wrap
                 opacity: 0.7
             }
@@ -163,14 +176,25 @@ Kirigami.ScrollablePage {
                 font.bold: true
             }
 
-            QQC2.Label {
+            RowLayout {
                 Kirigami.FormData.label: "Status:"
                 Layout.maximumWidth: Kirigami.Units.gridUnit * 26
                 visible: page.ready && page.details.status !== ""
-                text: page.details.status
-                font.bold: page.details.updateAvailable
-                color: page.details.updateAvailable ? Kirigami.Theme.positiveTextColor : Kirigami.Theme.textColor
-                wrapMode: Text.Wrap
+                spacing: Kirigami.Units.smallSpacing
+
+                Kirigami.Icon {
+                    visible: page.details.updateAvailable || page.details.status === "Up to date"
+                    source: page.details.updateAvailable ? "update-low" : "update-none"
+                    Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                    Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                }
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: page.details.status
+                    font.bold: page.details.updateAvailable
+                    wrapMode: Text.Wrap
+                }
             }
 
             RowLayout {
@@ -179,7 +203,7 @@ Kirigami.ScrollablePage {
                 QQC2.Button {
                     objectName: "markUpToDate"
                     visible: page.canMarkUpToDate
-                    text: "Mark as up to date"
+                    text: "Mark as Up to Date"
                     icon.name: "dialog-ok-apply"
                     onClicked: backend.markUpToDate(page.repoId)
                 }
@@ -188,7 +212,7 @@ Kirigami.ScrollablePage {
                     objectName: "markNotInstalled"
                     visible: page.canMarkNotInstalled
                     flat: true
-                    text: "Mark as not installed"
+                    text: "Mark as Not Installed"
                     icon.name: "edit-clear"
                     onClicked: backend.setInstalled(page.repoId, "-")
                 }
@@ -216,13 +240,14 @@ Kirigami.ScrollablePage {
 
             Kirigami.Heading {
                 level: 3
-                text: "Which file you use"
+                text: "Your Build File"
             }
 
             QQC2.Label {
                 Layout.fillWidth: true
                 Layout.bottomMargin: Kirigami.Units.smallSpacing
-                text: `A release can come in several files. Choose yours, and the same file is followed in every new release. These are the files in ${page.details.latestTag}, the newest release, that run on this computer.`
+                Layout.maximumWidth: Kirigami.Units.gridUnit * 30
+                text: `Choose the file you use; the same file is then followed in every new release. Listed from ${page.details.latestTag}, the newest release.`
                 wrapMode: Text.Wrap
                 opacity: 0.7
             }
@@ -231,7 +256,7 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 visible: page.details.yourFileMissing === true
                 type: Kirigami.MessageType.Warning
-                text: `The newest release doesn't include your file (${page.repo.assetPattern}). The project may have renamed it. Choose it again below.`
+                text: `The newest release doesn’t include your file (${page.repo.assetPattern}). The project may have renamed it. Choose it again below.`
             }
 
             Repeater {
@@ -280,12 +305,13 @@ Kirigami.ScrollablePage {
 
             Kirigami.Heading {
                 level: 3
-                text: "Tracking versions only"
+                text: "Tracking Versions Only"
             }
 
             QQC2.Label {
                 Layout.fillWidth: true
-                text: "None of this project's files run on this computer (they're for other systems, such as Android or Windows). So only its versions are tracked: you'll hear about new releases, and you set your version yourself or mark it as up to date. Nothing is downloaded or installed."
+                Layout.maximumWidth: Kirigami.Units.gridUnit * 30
+                text: "None of this project’s files run on this computer, so only its versions are tracked. Nothing is downloaded or installed."
                 wrapMode: Text.Wrap
                 opacity: 0.8
             }
@@ -342,18 +368,18 @@ Kirigami.ScrollablePage {
 
                         Tag {
                             visible: release.modelData.isInstalled
-                            text: "your version"
+                            text: "Your version"
                             highlighted: true
                         }
 
                         Tag {
                             visible: release.modelData.isLatest
-                            text: "newest"
+                            text: "Newest"
                         }
 
                         Tag {
                             visible: release.modelData.prerelease
-                            text: "pre-release"
+                            text: "Pre-release"
                         }
 
                         QQC2.Label {
@@ -376,14 +402,14 @@ Kirigami.ScrollablePage {
                             : page.details.versionOnly === true ? `${release.modelData.assets.length} files, none for this computer.`
                             : page.repo.assetPattern === "" ? `${release.modelData.assets.length} files. Choose yours under \u201cWhich file you use\u201d.`
                             : release.yourFile ? `Your file: ${release.yourFile.name}` + (release.yourFile.details ? ` (${release.yourFile.details})` : "")
-                            : "Your file isn't in this release."
+                            : "Your file isn’t in this release."
                         wrapMode: Text.Wrap
                     }
 
                     QQC2.Button {
                         objectName: "mine:" + release.modelData.tag
                         visible: !release.modelData.isInstalled
-                        text: "This is my version"
+                        text: "Set as My Version"
                         icon.name: "tag"
                         onClicked: backend.setInstalled(page.repoId, release.modelData.tag)
                     }
@@ -392,7 +418,7 @@ Kirigami.ScrollablePage {
                         visible: release.modelData.assets.length > 0
                         flat: true
                         icon.name: release.filesShown ? "go-up-symbolic" : "view-list-details"
-                        text: release.filesShown ? "Hide files" : `Show all ${release.modelData.assets.length} files`
+                        text: release.filesShown ? "Hide Files" : `Show All ${release.modelData.assets.length} Files`
                         onClicked: release.filesShown = !release.filesShown
                     }
 
@@ -415,7 +441,7 @@ Kirigami.ScrollablePage {
                         visible: release.modelData.notes !== ""
                         flat: true
                         icon.name: release.notesShown ? "go-up-symbolic" : "documentinfo"
-                        text: release.notesShown ? "Hide release notes" : "Show release notes"
+                        text: release.notesShown ? "Hide Release Notes" : "Show Release Notes"
                         onClicked: release.notesShown = !release.notesShown
                     }
 
@@ -449,7 +475,7 @@ Kirigami.ScrollablePage {
         QQC2.Label {
             Layout.fillWidth: true
             visible: !page.followsReleases && page.ready
-            text: page.details.branchError !== "" ? page.details.branchError : "Pick the branch whose new commits you want to hear about."
+            text: page.details.branchError !== "" ? page.details.branchError : "Choose the branch to follow for new commits."
             wrapMode: Text.Wrap
             opacity: 0.7
         }
@@ -478,7 +504,7 @@ Kirigami.ScrollablePage {
 
                     Tag {
                         visible: branch.modelData.isDefault
-                        text: "default"
+                        text: "Default"
                     }
 
                     QQC2.Label {

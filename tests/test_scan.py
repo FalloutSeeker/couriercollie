@@ -48,7 +48,7 @@ class MergeTest(unittest.TestCase):
     def test_clone_under_an_old_address_matches_a_remembered_alias(self):
         # Added by hand as the old address; the site redirected, so the old one was kept as an alias.
         cfg = Config(repos=[self.manual_aero(aliases=[AERO_OLD])])
-        scan.merge(cfg, [aero_clone(AERO_OLD)], resolve=lambda _id: self.fail("shouldn't need to ask the site"))
+        scan.merge(cfg, [aero_clone(AERO_OLD)], resolve=lambda _id: self.fail("shouldn’t need to ask the site"))
         self.assertEqual(len(cfg.repos), 1)
         self.assertEqual(cfg.repos[0].source, "scanned")
 
@@ -205,7 +205,7 @@ class IdentifyTest(unittest.TestCase):
         def lookup(ref):
             if ref.path == "me/private":
                 raise sources.NotFound("nope")
-            raise sources.SourceError("example.org doesn't look like a GitHub or GitLab site. Only those are supported.")
+            raise sources.SourceError("example.org doesn’t look like a GitHub or GitLab site. Only those are supported.")
 
         checked = scan.identify([aero_clone("github.com/me/private"), aero_clone("example.org/a/b")],
                                 known=lambda _id: False, lookup=lookup)

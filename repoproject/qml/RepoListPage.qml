@@ -6,7 +6,7 @@ import org.kde.kirigami as Kirigami
 Kirigami.ScrollablePage {
     id: page
 
-    title: "Tracked repos"
+    title: "Tracked Repos"
 
     // The Scan button is only in the list while scanning is allowed. Listing it hidden instead makes Kirigami log
     // "Could not create delegate for ToolBarLayout" at start-up.
@@ -16,7 +16,8 @@ Kirigami.ScrollablePage {
         id: addAction
 
         icon.name: "list-add"
-        text: "Add"
+        text: "Add…"
+        shortcut: StandardKey.New
         onTriggered: applicationWindow().showAddDialog()
     }
 
@@ -24,7 +25,7 @@ Kirigami.ScrollablePage {
         id: scanAction
 
         icon.name: "edit-find"
-        text: "Scan"
+        text: "Scan…"
         onTriggered: applicationWindow().showScanDialog()
     }
 
@@ -33,6 +34,7 @@ Kirigami.ScrollablePage {
 
         icon.name: "configure"
         text: "Settings"
+        shortcut: StandardKey.Preferences
         displayHint: Kirigami.DisplayHint.IconOnly
         onTriggered: applicationWindow().openSettings()
     }
@@ -45,7 +47,7 @@ Kirigami.ScrollablePage {
             visible: backend.configError !== ""
             type: Kirigami.MessageType.Error
             position: Kirigami.InlineMessage.Position.Header
-            text: backend.configError + "\nChanges won't be saved until that file is fixed or moved away."
+            text: backend.configError + "\nChanges won’t be saved until that file is fixed or moved away."
         }
 
         QQC2.ToolBar {

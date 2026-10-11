@@ -76,12 +76,12 @@ Kirigami.Dialog {
         QQC2.RadioButton {
             objectName: "autoNo"
             QQC2.ButtonGroup.group: autoGroup
-            text: "No, I'll click “Check now” myself"
+            text: "No, I’ll click “Check now” myself"
         }
 
         QQC2.Label {
             Layout.fillWidth: true
-            text: autoYes.checked ? "You'll get a notification when updates are found." : "Nothing will run in the background."
+            text: autoYes.checked ? "A notification appears when updates are found." : "Nothing runs in the background."
             wrapMode: Text.Wrap
             opacity: 0.7
         }
@@ -97,7 +97,7 @@ Kirigami.Dialog {
 
             objectName: "scanBox"
 
-            text: "Scan this computer for repos I've already installed"
+            text: "Scan this computer for repos I’ve already installed"
             checked: false
         }
 
@@ -105,7 +105,7 @@ Kirigami.Dialog {
             Layout.fillWidth: true
             Layout.leftMargin: Kirigami.Units.gridUnit * 1.5
             text: scanBox.checked
-                ? "Looks for git clones and downloaded apps, and reads which version you have. You'll choose which ones to track, and can still add others by hand."
+                ? "Looks for git clones and downloaded apps, and reads which version you have. You’ll choose which ones to track, and can still add others by hand."
                 : "Off: tracking is manual. You add repos yourself, and for each one set which version you have, or mark it as up to date."
             wrapMode: Text.Wrap
             opacity: 0.7
@@ -144,7 +144,7 @@ Kirigami.Dialog {
 
         QQC2.Label {
             Layout.fillWidth: true
-            text: "You can change all of this later in Settings."
+            text: "All of this can be changed later in Settings."
             wrapMode: Text.Wrap
         }
     }

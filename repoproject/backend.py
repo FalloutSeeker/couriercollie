@@ -409,7 +409,7 @@ class Backend(QObject):
             similar = None if c.problem else scan.looks_like(self._config, f)
             if similar:
                 note = (f"Looks like \u201c{similar.name}\u201d, which you track from {similar.url}. "
-                        "Tick it to link the two; it won't be added twice.")
+                        "Tick it to link the two; it won’t be added twice.")
             elif c.problem:
                 note = c.problem
             else:
