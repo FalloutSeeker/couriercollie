@@ -22,7 +22,7 @@ Kirigami.Dialog {
         dialog.finished(scanBox.checked);
     }
 
-    title: "Welcome to colliecourier"
+    title: "Welcome to couriercollie"
     // Finds the desktop's password store, which signing in needs.
     onOpened: backend.refreshGitHub()
     padding: Kirigami.Units.largeSpacing * 2

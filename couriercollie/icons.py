@@ -39,7 +39,7 @@ CLONE_ICON_FILES = ("icon.svg", "icon.png", "logo.svg", "logo.png", "{name}.svg"
 
 def cache_dir() -> Path:
     base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
-    return base / "colliecourier" / "icons"
+    return base / "couriercollie" / "icons"
 
 
 def _cache_name(repo_id: str, suffix: str) -> Path:

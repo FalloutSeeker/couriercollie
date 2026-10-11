@@ -1,11 +1,11 @@
-# colliecourier for Arch Linux (the AUR). Built and tested by devtools/build_arch.sh in an Arch container.
+# couriercollie for Arch Linux (the AUR). Built and tested by devtools/build_arch.sh in an Arch container.
 # Before publishing to the AUR (stage 7): a public release tag to download, its real sha256sum, and a license.
-pkgname=colliecourier
+pkgname=couriercollie
 pkgver=0.6.0
 pkgrel=1
 pkgdesc="Keep track of software from GitHub and GitLab, and update it"
 arch=('any')
-url="https://github.com/FalloutSeeker/colliecourier"
+url="https://github.com/FalloutSeeker/couriercollie"
 license=('LicenseRef-not-yet-chosen')
 depends=('python' 'pyside6' 'kirigami' 'breeze-icons' 'libnotify' 'git' 'polkit' 'libsecret')
 optdepends=('qqc2-desktop-style: KDE look for the window (without it, Qt Fusion)')
@@ -17,11 +17,11 @@ package() {
     local site
     site=$(python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')
     install -d "$pkgdir$site"
-    cp -a colliecourier "$pkgdir$site/"
-    find "$pkgdir$site/colliecourier" -name __pycache__ -prune -exec rm -rf {} +
-    python -m compileall -q -d "$site/colliecourier" "$pkgdir$site/colliecourier"
-    install -Dm755 data/colliecourier "$pkgdir/usr/bin/colliecourier"
-    install -Dm644 data/colliecourier.desktop "$pkgdir/usr/share/applications/colliecourier.desktop"
-    install -Dm644 data/colliecourier.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/colliecourier.svg"
+    cp -a couriercollie "$pkgdir$site/"
+    find "$pkgdir$site/couriercollie" -name __pycache__ -prune -exec rm -rf {} +
+    python -m compileall -q -d "$site/couriercollie" "$pkgdir$site/couriercollie"
+    install -Dm755 data/couriercollie "$pkgdir/usr/bin/couriercollie"
+    install -Dm644 data/couriercollie.desktop "$pkgdir/usr/share/applications/couriercollie.desktop"
+    install -Dm644 data/couriercollie.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/couriercollie.svg"
     install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
 }

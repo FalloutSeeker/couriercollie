@@ -1,11 +1,11 @@
-# colliecourier
+# couriercollie
 
 Something like Obtainium, but for Fedora KDE: a desktop app that keeps track of software you got
 straight from GitHub or GitLab (git clones, release downloads, AppImages, loose programs), checks for new versions on a
 schedule, and lets you update with a click.
 
 Tools already exist for pieces of this: Topgrade runs your updaters from a terminal, Gear Lever handles AppImages,
-eget fetches release programs, nvchecker reports new versions. colliecourier brings these jobs together in one simple
+eget fetches release programs, nvchecker reports new versions. couriercollie brings these jobs together in one simple
 window, so there's one app to install and learn instead of several tools and their commands.
 
 ## Status
@@ -24,8 +24,8 @@ If you try it elsewhere, please say how it went in a GitHub issue, whether it wo
 ## Installing it as a package
 
 ```sh
-devtools/build_rpm.sh                                # builds dist/colliecourier-<version>.noarch.rpm from the last commit
-sudo dnf install dist/colliecourier-*.noarch.rpm     # then it's in the menu, and `colliecourier` runs it
+devtools/build_rpm.sh                                # builds dist/couriercollie-<version>.noarch.rpm from the last commit
+sudo dnf install dist/couriercollie-*.noarch.rpm     # then it's in the menu, and `couriercollie` runs it
 devtools/build_arch.sh                               # Arch's package (packaging/arch/PKGBUILD), built and tried in a container
 ```
 
@@ -34,11 +34,11 @@ Installed, it uses the system's menu entry and icon. Running it from this folder
 ## Running it
 
 ```sh
-~/claudework/colliecourier/run.sh
+~/claudework/couriercollie/run.sh
 ```
 
 Needs only what Fedora KDE already has: Python 3, PySide6 (`python3-pyside6`) and Kirigami. Your tracked repos are
-saved in `~/.config/colliecourier/repos.toml`.
+saved in `~/.config/couriercollie/repos.toml`.
 
 On other distros, install these first (names checked 2026-10-11 on Ubuntu 26.04, Arch and openSUSE Tumbleweed;
 Python 3.13 or newer):
@@ -57,36 +57,36 @@ Python 3.13 or newer):
 Other ways to run it:
 
 ```sh
-~/claudework/colliecourier/run.sh --check   # check every repo for updates now, without the window
+~/claudework/couriercollie/run.sh --check   # check every repo for updates now, without the window
 ```
 
 **What it adds outside this folder** (all removable):
 
-- `~/.local/share/applications/colliecourier.desktop`: the menu entry (written when the app starts).
-- `~/.config/systemd/user/colliecourier-check.{timer,service}`: background checks, only while automatic checks are on
+- `~/.local/share/applications/couriercollie.desktop`: the menu entry (written when the app starts).
+- `~/.config/systemd/user/couriercollie-check.{timer,service}`: background checks, only while automatic checks are on
   (Settings). Turning them off removes the timer. To remove it by hand:
-  `systemctl --user disable --now colliecourier-check.timer`.
-- `~/.local/state/colliecourier/checks.json`: the last check's results. `~/.cache/colliecourier/icons/`: repo icons.
-  `~/.cache/colliecourier/github/`: GitHub release lists, to ask "has it changed?" instead of downloading them again.
+  `systemctl --user disable --now couriercollie-check.timer`.
+- `~/.local/state/couriercollie/checks.json`: the last check's results. `~/.cache/couriercollie/icons/`: repo icons.
+  `~/.cache/couriercollie/github/`: GitHub release lists, to ask "has it changed?" instead of downloading them again.
 - Only if you sign in to GitHub with a code: the login, in your desktop's password store (KDE Wallet on Plasma,
   GNOME Keyring on GNOME, …), as
-  "colliecourier: GitHub sign-in".
+  "couriercollie: GitHub sign-in".
 - Only when you install or update something: AppImages in `~/Applications` (or beside the one you had), with a menu
-  entry `~/.local/share/applications/colliecourier-<repo>.desktop`; programs unpacked in
-  `~/.local/share/colliecourier/programs/`, with a link in `~/.local/bin`; packages through the package manager (downloaded first to
-  `~/.cache/colliecourier/downloads/`, then deleted); projects you install by cloning, in `~/src`.
+  entry `~/.local/share/applications/couriercollie-<repo>.desktop`; programs unpacked in
+  `~/.local/share/couriercollie/programs/`, with a link in `~/.local/bin`; packages through the package manager (downloaded first to
+  `~/.cache/couriercollie/downloads/`, then deleted); projects you install by cloning, in `~/src`.
 
 To start over as if newly installed (the welcome screen shows again), run it with `--reset`. Your settings file is
 renamed to a dated backup next to it, not deleted:
 
 ```sh
-~/claudework/colliecourier/run.sh --reset
+~/claudework/couriercollie/run.sh --reset
 ```
 
 ## Tests
 
 ```sh
-cd ~/claudework/colliecourier && python3 -m unittest discover -s tests -t .
+cd ~/claudework/couriercollie && python3 -m unittest discover -s tests -t .
 ```
 
 They don't use the network: GitHub and GitLab answers are saved in `tests/fixtures/`, and downloads come from a
@@ -117,21 +117,21 @@ python3 -I devtools/check_flatpak.py         # a Flatpak bundle installed and up
 
 | File                       | What it does                                                                   |
 | -------------------------- | ------------------------------------------------------------------------------ |
-| `colliecourier/config.py`    | The settings file: global settings and tracked repos                           |
-| `colliecourier/sources.py`   | Talking to GitHub and GitLab: addresses, releases, branches                    |
-| `colliecourier/assets.py`    | Build files: which kind, whether it suits this PC, remembering your pick       |
-| `colliecourier/scan.py`      | Scanning: finding clones, RPMs and AppImages; matching them to tracked repos     |
-| `colliecourier/icons.py`     | Repo icons: from this computer, the project's site, or the default (D13)          |
-| `colliecourier/checker.py`   | Checking every repo for updates; results kept apart from settings                 |
-| `colliecourier/integration.py` | Menu entry, notifications, taskbar badge, background timer, one copy at a time |
-| `colliecourier/updater.py`   | Updating: pulling and cloning, downloads checked and put in place, packages     |
-| `colliecourier/packages.py`  | Packages per distro: which tool installs each kind, reading names and versions  |
-| `colliecourier/flatpaks.py`  | Flatpak bundles: which app a bundle holds, installing it for you, finding them  |
-| `colliecourier/backend.py`   | Connects the window to the above; runs network work in the background          |
-| `colliecourier/updating.py`  | The backend's Update and Install buttons and install scripts (part of it)      |
-| `colliecourier/github_login.py` | Signing in to GitHub: the code sign-in, and keeping it in the password store |
-| `colliecourier/account.py`   | The backend's sign-in buttons, for Settings and the welcome screen (part of it) |
-| `colliecourier/qml/`         | The window: list page, repo page, Add dialog                                   |
+| `couriercollie/config.py`    | The settings file: global settings and tracked repos                           |
+| `couriercollie/sources.py`   | Talking to GitHub and GitLab: addresses, releases, branches                    |
+| `couriercollie/assets.py`    | Build files: which kind, whether it suits this PC, remembering your pick       |
+| `couriercollie/scan.py`      | Scanning: finding clones, RPMs and AppImages; matching them to tracked repos     |
+| `couriercollie/icons.py`     | Repo icons: from this computer, the project's site, or the default (D13)          |
+| `couriercollie/checker.py`   | Checking every repo for updates; results kept apart from settings                 |
+| `couriercollie/integration.py` | Menu entry, notifications, taskbar badge, background timer, one copy at a time |
+| `couriercollie/updater.py`   | Updating: pulling and cloning, downloads checked and put in place, packages     |
+| `couriercollie/packages.py`  | Packages per distro: which tool installs each kind, reading names and versions  |
+| `couriercollie/flatpaks.py`  | Flatpak bundles: which app a bundle holds, installing it for you, finding them  |
+| `couriercollie/backend.py`   | Connects the window to the above; runs network work in the background          |
+| `couriercollie/updating.py`  | The backend's Update and Install buttons and install scripts (part of it)      |
+| `couriercollie/github_login.py` | Signing in to GitHub: the code sign-in, and keeping it in the password store |
+| `couriercollie/account.py`   | The backend's sign-in buttons, for Settings and the welcome screen (part of it) |
+| `couriercollie/qml/`         | The window: list page, repo page, Add dialog                                   |
 
 ## Files
 

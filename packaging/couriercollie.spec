@@ -1,10 +1,10 @@
-# colliecourier's own RPM. Built from a git snapshot by devtools/build_rpm.sh.
-Name:           colliecourier
+# couriercollie's own RPM. Built from a git snapshot by devtools/build_rpm.sh.
+Name:           couriercollie
 Version:        %{app_version}
 Release:        1%{?dist}
 Summary:        Keep track of software from GitHub and GitLab, and update it
 License:        LicenseRef-Not-Yet-Chosen
-URL:            https://github.com/FalloutSeeker/colliecourier
+URL:            https://github.com/FalloutSeeker/couriercollie
 Source0:        %{name}-%{version}.tar.gz
 BuildArch:      noarch
 
@@ -38,22 +38,22 @@ updates them with a click.
 
 %install
 install -d %{buildroot}%{python3_sitelib}
-cp -a colliecourier %{buildroot}%{python3_sitelib}/
-find %{buildroot}%{python3_sitelib}/colliecourier -name __pycache__ -prune -exec rm -rf {} +
-install -Dm755 data/colliecourier %{buildroot}%{_bindir}/colliecourier
-install -Dm644 data/colliecourier.desktop %{buildroot}%{_datadir}/applications/colliecourier.desktop
-install -Dm644 data/colliecourier.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/colliecourier.svg
+cp -a couriercollie %{buildroot}%{python3_sitelib}/
+find %{buildroot}%{python3_sitelib}/couriercollie -name __pycache__ -prune -exec rm -rf {} +
+install -Dm755 data/couriercollie %{buildroot}%{_bindir}/couriercollie
+install -Dm644 data/couriercollie.desktop %{buildroot}%{_datadir}/applications/couriercollie.desktop
+install -Dm644 data/couriercollie.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/couriercollie.svg
 
 %check
-desktop-file-validate %{buildroot}%{_datadir}/applications/colliecourier.desktop
+desktop-file-validate %{buildroot}%{_datadir}/applications/couriercollie.desktop
 
 %files
 %doc README.md
-%{_bindir}/colliecourier
-%{python3_sitelib}/colliecourier/
-%{_datadir}/applications/colliecourier.desktop
-%{_datadir}/icons/hicolor/scalable/apps/colliecourier.svg
+%{_bindir}/couriercollie
+%{python3_sitelib}/couriercollie/
+%{_datadir}/applications/couriercollie.desktop
+%{_datadir}/icons/hicolor/scalable/apps/couriercollie.svg
 
 %changelog
-* Sun Oct 11 2026 colliecourier - %{app_version}-1
+* Sun Oct 11 2026 couriercollie - %{app_version}-1
 - Snapshot build

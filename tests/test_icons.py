@@ -6,9 +6,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from colliecourier import config, icons, sources
-from colliecourier.backend import Backend
-from colliecourier.config import TrackedRepo
+from couriercollie import config, icons, sources
+from couriercollie.backend import Backend
+from couriercollie.config import TrackedRepo
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 32
 SAMPLE_APPIMAGE = Path(__file__).resolve().parent.parent / ".uicheck/appimage-sample/LocalSend.AppImage"

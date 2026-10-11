@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import harness  # noqa: E402
 
 work = Path(tempfile.mkdtemp())
-os.environ.update(XDG_DATA_HOME=str(work / "data"), COLLIECOURIER_APPS=str(work / "Applications"))
+os.environ.update(XDG_DATA_HOME=str(work / "data"), COURIERCOLLIE_APPS=str(work / "Applications"))
 ID = "github.com/localsend/localsend"
 settings = work / "repos.toml"
 settings.write_text(f'[[repos]]\nid = "{ID}"\nname = "LocalSend"\nurl = "https://{ID}"\nhost = "github"\n'
@@ -23,7 +23,7 @@ settings.write_text(f'[[repos]]\nid = "{ID}"\nname = "LocalSend"\nurl = "https:/
 
 h = harness.start(copy_settings_from=settings)
 b = h.backend
-from colliecourier import updater  # noqa: E402
+from couriercollie import updater  # noqa: E402
 
 state = {}
 

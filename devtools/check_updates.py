@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import harness  # noqa: E402
 
-h = harness.start(copy_settings_from=Path.home() / ".config/colliecourier/repos.toml")
+h = harness.start(copy_settings_from=Path.home() / ".config/couriercollie/repos.toml")
 b = h.backend
 
 
@@ -58,7 +58,7 @@ def choose_newest_steps():
 
 def rate_limited():
     """Pretend GitHub's hourly limit stopped one repo being checked."""
-    from colliecourier import checker
+    from couriercollie import checker
 
     repo_id = next(r.id for r in b._config.repos if r.host == "github")
     b._checks.results[repo_id] = checker.Result(checker.RATE_LIMITED, "Not checked: GitHub\u2019s hourly limit was "

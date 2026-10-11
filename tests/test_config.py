@@ -3,8 +3,8 @@ import tomllib
 import unittest
 from pathlib import Path
 
-from colliecourier import config, tomlwrite
-from colliecourier.config import Config, ConfigError, Settings, TrackedRepo
+from couriercollie import config, tomlwrite
+from couriercollie.config import Config, ConfigError, Settings, TrackedRepo
 
 
 class TomlWriteTest(unittest.TestCase):

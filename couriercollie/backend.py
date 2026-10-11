@@ -308,7 +308,7 @@ class Backend(QObject, Updating, Account):
             error = ""
         except OSError as e:
             path = self._path or config.default_path()
-            error = (f"Couldn\u2019t save to {path.parent} ({e.strerror or e}). Changes are kept while colliecourier "
+            error = (f"Couldn\u2019t save to {path.parent} ({e.strerror or e}). Changes are kept while couriercollie "
                      "is open, and saved once that folder can be written to.")
         if error != self._save_error:
             self._save_error = error

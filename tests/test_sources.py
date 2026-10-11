@@ -2,8 +2,8 @@ import json
 import unittest
 from pathlib import Path
 
-from colliecourier import sources
-from colliecourier.sources import RepoRef
+from couriercollie import sources
+from couriercollie.sources import RepoRef
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

@@ -22,7 +22,7 @@ work = Path(tempfile.mkdtemp())
 os.environ["FLATPAK_USER_DIR"] = str(work / "flatpak")
 os.environ["XDG_CACHE_HOME"] = str(work / "cache")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from colliecourier import assets, flatpaks, scan, sources, updater  # noqa: E402
+from couriercollie import assets, flatpaks, scan, sources, updater  # noqa: E402
 
 failures = []
 

@@ -9,7 +9,7 @@ import urllib.request
 from email.message import Message
 from pathlib import Path
 
-from colliecourier import github_login, sources
+from couriercollie import github_login, sources
 
 # Logins as GitHub makes them (the length matters: anything else isn't sent).
 APPROVED = "gho_x_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -95,7 +95,7 @@ esac
         github_login.keep(SECRET)
         self.assertEqual(github_login.kept(), SECRET)
         self.assertNotIn(SECRET, self.args.read_text())  # on stdin, not on a command line
-        self.assertIn("service colliecourier account github", self.args.read_text())
+        self.assertIn("service couriercollie account github", self.args.read_text())
         github_login.forget()
         self.assertEqual(github_login.kept(), "")
 
@@ -182,8 +182,8 @@ class SettingsSignInTest(unittest.TestCase):
     """Settings' sign-in, with GitHub, gh and the password store as stand-ins."""
 
     def setUp(self):
-        from colliecourier import account, config
-        from colliecourier.backend import Backend
+        from couriercollie import account, config
+        from couriercollie.backend import Backend
 
         self.dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.dir.cleanup)
@@ -229,8 +229,8 @@ class SettingsSignInTest(unittest.TestCase):
         self.assertEqual(sources._github_token(), "")
 
     def test_a_saved_github_cli_login_counts_as_signed_out(self):
-        from colliecourier import config
-        from colliecourier.backend import Backend
+        from couriercollie import config
+        from couriercollie.backend import Backend
 
         config.save(config.Config(settings=config.Settings(github_login="gh", github_user="someone")), self.path)
         backend = Backend(self.path)
@@ -250,7 +250,7 @@ class PasswordStoreTest(unittest.TestCase):
     """Which password store the desktop has, by name: shown to you, and none means a code sign-in can't be kept."""
 
     def test_none_without_secret_tool(self):
-        from colliecourier import account
+        from couriercollie import account
 
         saved = os.environ["PATH"]
         os.environ["PATH"] = "/nonexistent"
@@ -258,7 +258,7 @@ class PasswordStoreTest(unittest.TestCase):
         self.assertEqual(account.password_store(), "")
 
     def test_named_as_its_users_know_it(self):
-        from colliecourier import account
+        from couriercollie import account
 
         names = set(account._STORES.values()) | {"your desktop’s password store", ""}
         self.assertIn(account.password_store(), names)  # whatever this desktop has (KDE Wallet here)

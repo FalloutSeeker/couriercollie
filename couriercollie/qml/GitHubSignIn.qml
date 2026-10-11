@@ -54,7 +54,7 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: root.account.signIn !== ""
         text: root.account.signIn === "starting" ? "Asking GitHub for a code…"
-            : `Enter this code at ${root.account.verifyUrl}, then approve colliecourier there:`
+            : `Enter this code at ${root.account.verifyUrl}, then approve couriercollie there:`
         wrapMode: Text.Wrap
     }
 
@@ -146,7 +146,7 @@ ColumnLayout {
     QQC2.Label {
         Layout.fillWidth: true
         visible: root.account.way !== ""
-        text: `Signing out removes the login from ${root.account.store || "this computer"}. To remove colliecourier’s access on GitHub too: Settings → Applications on github.com.`
+        text: `Signing out removes the login from ${root.account.store || "this computer"}. To remove couriercollie’s access on GitHub too: Settings → Applications on github.com.`
         wrapMode: Text.Wrap
         font: Kirigami.Theme.smallFont
         opacity: 0.7

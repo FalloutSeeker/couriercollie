@@ -11,15 +11,15 @@ import socket
 import subprocess
 from pathlib import Path
 
-APP_ID = "colliecourier"
+APP_ID = "couriercollie"
 PROJECT = Path(__file__).resolve().parent.parent
-# Run from its project folder (run.sh), or installed (the RPM: a `colliecourier` command, and its own menu entry and
+# Run from its project folder (run.sh), or installed (the RPM: a `couriercollie` command, and its own menu entry and
 # icon in the system's folders).
 INSTALLED = not (PROJECT / "run.sh").is_file()
 LAUNCHER = Path(shutil.which(APP_ID) or f"/usr/bin/{APP_ID}") if INSTALLED else PROJECT / "run.sh"
 ICON = APP_ID
 ICON_FILE = PROJECT / "data" / f"{APP_ID}.svg"
-TIMER = "colliecourier-check"
+TIMER = "couriercollie-check"
 
 
 def _data_home() -> Path:
@@ -39,11 +39,11 @@ def menu_entry_path() -> Path:
 
 
 def menu_entry_text(launcher: str | Path = LAUNCHER) -> str:
-    """The menu entry. The RPM installs the same one (data/colliecourier.desktop), started as `colliecourier`."""
+    """The menu entry. The RPM installs the same one (data/couriercollie.desktop), started as `couriercollie`."""
     return (
         "[Desktop Entry]\n"
         "Type=Application\n"
-        "Name=colliecourier\n"
+        "Name=couriercollie\n"
         "GenericName=Update Tracker\n"
         "Comment=Keep track of software from GitHub and GitLab, and hear about updates\n"
         f"Exec={launcher}\n"
@@ -93,7 +93,7 @@ def notify_command(title: str, body: str) -> list[str] | None:
     tool = shutil.which("notify-send")
     if not tool:
         return None
-    return [tool, "--app-name=colliecourier", f"--icon={ICON}", f"--hint=string:desktop-entry:{APP_ID}",
+    return [tool, "--app-name=couriercollie", f"--icon={ICON}", f"--hint=string:desktop-entry:{APP_ID}",
             "--action=default=Open", title, body]
 
 
@@ -103,9 +103,9 @@ def notify_and_open_on_click(title: str, body: str) -> bool:
     command = notify_command(title, body)
     if not command:
         return False
-    script = 'out=$("$@"); [ "$out" = default ] && exec "$COLLIECOURIER_LAUNCHER"'
+    script = 'out=$("$@"); [ "$out" = default ] && exec "$COURIERCOLLIE_LAUNCHER"'
     subprocess.Popen(["sh", "-c", script, "sh", *command], start_new_session=True,
-                     env={**os.environ, "COLLIECOURIER_LAUNCHER": str(LAUNCHER)},
+                     env={**os.environ, "COURIERCOLLIE_LAUNCHER": str(LAUNCHER)},
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return True
 
@@ -158,7 +158,7 @@ def unit_texts() -> dict[str, str]:
     return {
         f"{TIMER}.service": (
             "[Unit]\n"
-            "Description=colliecourier: check tracked repos for updates\n\n"
+            "Description=couriercollie: check tracked repos for updates\n\n"
             "[Service]\n"
             "Type=oneshot\n"
             f"ExecStart={LAUNCHER} --check --if-due\n"
@@ -168,7 +168,7 @@ def unit_texts() -> dict[str, str]:
         ),
         f"{TIMER}.timer": (
             "[Unit]\n"
-            "Description=colliecourier: check for updates when due\n\n"
+            "Description=couriercollie: check for updates when due\n\n"
             "[Timer]\n"
             "OnStartupSec=3min\n"
             "OnCalendar=hourly\n"

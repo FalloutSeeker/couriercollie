@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=colliecourier
+Name=couriercollie
 GenericName=Update Tracker
 Comment=Keep track of software from GitHub and GitLab, and hear about updates
-Exec=colliecourier
-Icon=colliecourier
+Exec=couriercollie
+Icon=couriercollie
 Terminal=false
 Categories=System;Utility;

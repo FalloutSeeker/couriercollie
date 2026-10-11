@@ -190,7 +190,7 @@ CLONE_TIMEOUT = 1800
 
 def clones_dir() -> Path:
     """Where Install puts a clone of a project you don't have yet (D8)."""
-    return Path(os.environ.get("COLLIECOURIER_CLONES") or Path.home() / "src")
+    return Path(os.environ.get("COURIERCOLLIE_CLONES") or Path.home() / "src")
 
 
 def clone(url: str, ref: str, name: str) -> Path:
@@ -294,7 +294,7 @@ def _data_home() -> Path:
 
 def apps_dir() -> Path:
     """Where AppImages the app installs go (D8)."""
-    return Path(os.environ.get("COLLIECOURIER_APPS") or Path.home() / "Applications")
+    return Path(os.environ.get("COURIERCOLLIE_APPS") or Path.home() / "Applications")
 
 
 def menu_dir() -> Path:
@@ -451,7 +451,7 @@ def _one_line(text: str) -> str:
 
 def write_menu_entry(repo_id: str, name: str, app: Path, icon: str) -> Path:
     """A menu entry (KDE launcher) for an AppImage the app installed. Marked as the app's, so it's kept up to date."""
-    entry = menu_dir() / f"colliecourier-{_folder_name(repo_id.replace('/', '-').lower())}.desktop"
+    entry = menu_dir() / f"couriercollie-{_folder_name(repo_id.replace('/', '-').lower())}.desktop"
     entry.parent.mkdir(parents=True, exist_ok=True)
     entry.write_text("\n".join([
         "[Desktop Entry]",
@@ -462,8 +462,8 @@ def write_menu_entry(repo_id: str, name: str, app: Path, icon: str) -> Path:
         f"Icon={_one_line(icon) or 'application-vnd.appimage'}",
         "Terminal=false",
         "Categories=Utility;",
-        "Comment=Installed by colliecourier",
-        f"X-colliecourier-Repo={_one_line(repo_id)}",
+        "Comment=Installed by couriercollie",
+        f"X-couriercollie-Repo={_one_line(repo_id)}",
     ]) + "\n", encoding="utf-8")
     return entry
 
@@ -493,12 +493,12 @@ class SeveralPrograms(UpdateError):
 
 
 def programs_dir() -> Path:
-    return _data_home() / "colliecourier" / "programs"
+    return _data_home() / "couriercollie" / "programs"
 
 
 def bin_dir() -> Path:
     """Where the link to each program goes: on Fedora, already where the terminal looks for commands."""
-    return Path(os.environ.get("COLLIECOURIER_BIN") or Path.home() / ".local" / "bin")
+    return Path(os.environ.get("COURIERCOLLIE_BIN") or Path.home() / ".local" / "bin")
 
 
 def _folder_name(text: str) -> str:
@@ -586,7 +586,7 @@ def install_program(repo_id: str, tag: str, asset, others: list, wanted: str = "
         link = bin_dir() / program.name
         before = link.resolve() if link.is_symlink() else None
         if (link.exists() or link.is_symlink()) and not (before and before.is_relative_to(home.resolve())):
-            raise UpdateError(f"{link} already exists and wasn’t put there by colliecourier, so it wasn’t "
+            raise UpdateError(f"{link} already exists and wasn’t put there by couriercollie, so it wasn’t "
                               "replaced. Move it away (or uninstall what it belongs to), then try again.")
         version = home / _folder_name(tag)
         # The folder the link uses now. If it's this same version (a reinstall), it's moved aside first.
@@ -599,7 +599,7 @@ def install_program(repo_id: str, tag: str, asset, others: list, wanted: str = "
                 old = aside
         os.replace(unpacking, version)
         bin_dir().mkdir(parents=True, exist_ok=True)
-        new_link = bin_dir() / f".{program.name}.colliecourier"
+        new_link = bin_dir() / f".{program.name}.couriercollie"
         new_link.unlink(missing_ok=True)
         new_link.symlink_to(version / program.relative_to(unpacking))
         os.replace(new_link, link)  # in one step: the command always works, old or new
@@ -630,7 +630,7 @@ INSTALL_TIMEOUT = 1800
 
 
 def downloads_dir() -> Path:
-    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "colliecourier" / "downloads"
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "couriercollie" / "downloads"
 
 
 # Run as root: copy the package ($1, named $2) into a new folder only root can write to, check it's still the file

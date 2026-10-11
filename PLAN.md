@@ -18,7 +18,7 @@ AeroThemePlasma and ultrakanban repos), and nothing in a stage can change your s
 ## Stage 1: Skeleton (done)
 
 - Project layout, a Kirigami window that opens from a terminal command.
-- Reading and writing the settings file (`~/.config/colliecourier/repos.toml`).
+- Reading and writing the settings file (`~/.config/couriercollie/repos.toml`).
 - Automated tests set up, so later stages can be checked without clicking through everything.
 
 ## Stage 2: Tracking repos by hand (done)
@@ -70,8 +70,8 @@ the RPM on your own desktop once, to see it in the menu. Everything else is done
 - Done (2026-10-11): **Sign in to GitHub** (DESIGN.md §8), optional, on the welcome screen and in Settings: with a
   code (device flow, kept in the desktop's password store; not the GitHub CLI's login, D7). Release lists are asked for with their ETag; an
   unchanged one (304) costs nothing signed in (tried), and no download signed out.
-- Done (2026-10-11): an app icon (`data/colliecourier.svg`), the menu entry, and the app's own RPM
-  (`packaging/colliecourier.spec`, built by `devtools/build_rpm.sh`; tested unpacked, not yet installed with dnf).
+- Done (2026-10-11): an app icon (`data/couriercollie.svg`), the menu entry, and the app's own RPM
+  (`packaging/couriercollie.spec`, built by `devtools/build_rpm.sh`; tested unpacked, not yet installed with dnf).
 - **GNOME support** (checked 2026-10-11 by running the window with GNOME settings; the list, dragging and menus work):
   - Done: KDE's control style only if it's installed (`kf6-qqc2-desktop-style`), else Qt's Fusion (the window
     works in it, tested).
@@ -141,10 +141,10 @@ the RPM on your own desktop once, to see it in the menu. Everything else is done
   - *nvchecker* tells you a new version is out, from a terminal, but doesn't update anything.
   - *Discover* updates packages and Flatpaks, not what you downloaded or cloned yourself.
   - *Obtainium* is the same idea as this app, for Android.
-  colliecourier brings these together for software from GitHub and GitLab: clones, AppImages, programs from release
+  couriercollie brings these together for software from GitHub and GitLab: clones, AppImages, programs from release
   archives and RPMs, found by a scan or added by hand, checked on a schedule, and updated with a click. The pitch is
   one app to install and learn, not a handful of tools and their commands.
-  Explain signing in to GitHub with this line: "colliecourier uses its registered app identity to ask GitHub for a
+  Explain signing in to GitHub with this line: "couriercollie uses its registered app identity to ask GitHub for a
   read-only, public-data token on behalf of whoever signs in." (The token belongs to the person signing in, counts
   against their own 5,000-an-hour allowance, can't read anything private or change anything, and is revoked from
   GitHub's Settings → Applications. The app registration isn't tied to any repository.)

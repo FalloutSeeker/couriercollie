@@ -13,7 +13,7 @@ from functools import partial
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from colliecourier import assets, packages, scan, sources, updater  # noqa: E402
+from couriercollie import assets, packages, scan, sources, updater  # noqa: E402
 
 KIND = {"rpm": assets.KIND_RPM, "deb": assets.KIND_DEB, "arch": assets.KIND_ARCH}[sys.argv[1]]
 folder = Path(sys.argv[2])

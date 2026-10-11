@@ -1,7 +1,7 @@
 import unittest
 
-from colliecourier import assets
-from colliecourier.assets import KIND_APPIMAGE, KIND_ARCH, KIND_DEB, KIND_FILE, KIND_OTHER, KIND_PROGRAM, KIND_RPM
+from couriercollie import assets
+from couriercollie.assets import KIND_APPIMAGE, KIND_ARCH, KIND_DEB, KIND_FILE, KIND_OTHER, KIND_PROGRAM, KIND_RPM
 
 
 class ClassifyTest(unittest.TestCase):
@@ -146,7 +146,7 @@ class OtherProcessorsTest(unittest.TestCase):
 
 class PackagesTest(unittest.TestCase):
     def test_versions_and_places(self):
-        from colliecourier import packages
+        from couriercollie import packages
 
         self.assertEqual(packages.upstream_version("1:2.3.4-1ubuntu2"), "2.3.4")  # epoch and Debian revision off
         self.assertEqual(packages.upstream_version("2.3.4-1"), "2.3.4")  # Arch's pkgrel off
@@ -163,7 +163,7 @@ class FlatpaksTest(unittest.TestCase):
         import tempfile
         from pathlib import Path
 
-        from colliecourier import flatpaks
+        from couriercollie import flatpaks
 
         with tempfile.TemporaryDirectory() as d:
             bundle = Path(d) / "tool.flatpak"

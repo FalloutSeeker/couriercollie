@@ -166,7 +166,7 @@ release's file next to the one you have; **Install** (when you don't have it) pu
 - Then it's made runnable and swapped in under the release's own file name. The old file is removed only once the
   new one is in place (D6), so nothing piles up.
 - **Menu entries:** yours that started the old file (e.g. from AppImageLauncher or Gear Lever) are pointed at the
-  new one. If none starts it, the app adds one (`~/.local/share/applications/colliecourier-<repo>.desktop`) with the
+  new one. If none starts it, the app adds one (`~/.local/share/applications/couriercollie-<repo>.desktop`) with the
   AppImage's own icon.
 - From then on the repo's version is read from the file, as for a scanned one ("Found on this computer").
 
@@ -174,7 +174,7 @@ release's file next to the one you have; **Install** (when you don't have it) pu
 package for this distro: an `.rpm` (dnf on Fedora, zypper on openSUSE), a `.deb` (apt) or an Arch package (pacman).
 **Install…** / **Update…** (the dots: it asks for your password, which the page says beforehand):
 
-- Downloaded (with progress) into `~/.cache/colliecourier/downloads`, checked against the published checksum (else a
+- Downloaded (with progress) into `~/.cache/couriercollie/downloads`, checked against the published checksum (else a
   warning), and must really be that kind of package. Its name, version and processor are read from the file (`rpm`,
   `dpkg-deb`, `pacman`, as you, nothing installed): if you have the package already, the file must be that same
   package (a renamed one stops, saying so), and it must be for this computer's processor or for any.
@@ -198,13 +198,13 @@ way to check it again there. Tested for real with `devtools/check_flatpak.py`, i
 `.tar.zst`, `.zip`) with a ready-made program inside, e.g. ripgrep or LocalSend's tarball.
 
 - Downloaded and checked like an AppImage (published checksum, else a warning), then **unpacked whole** into its own
-  folder, `~/.local/share/colliecourier/programs/<repo>/<version>/`, since some programs need the files next to them.
+  folder, `~/.local/share/couriercollie/programs/<repo>/<version>/`, since some programs need the files next to them.
   Unpacking is safe: nothing may land outside that folder, no device files or setuid, at most 4 GB unpacked.
 - **The program** is the archive's Linux executable (not libraries); if there are several, the one named like the
   project; otherwise the page lists them to choose from, and the choice is kept for later updates.
 - A **link** in `~/.local/bin` (where Fedora's terminal looks for commands) starts it, e.g. `rg`. Updating unpacks
   the new version beside the old, switches the link in one step, then removes the old version's folder.
-- A command in `~/.local/bin` that colliecourier didn't put there is **never replaced**: the update stops and says so.
+- A command in `~/.local/bin` that couriercollie didn't put there is **never replaced**: the update stops and says so.
 - No menu entry: these are mostly command-line tools. The page shows the command under Tracking.
 
 **Install scripts.** A clone's `install.sh`, `install` or `setup.sh` (never `uninstall.sh`) gets a "Show and Run…"
@@ -239,14 +239,14 @@ Never required. Offered on the welcome screen and in Settings, both titled "(opt
 needed if you track a lot of GitHub projects, since GitHub answers 60 requests an hour without signing in, and 5,000
 with.
 
-- **Sign In…** asks GitHub for a code (the device flow, through colliecourier's OAuth App, whose Client ID is in
+- **Sign In…** asks GitHub for a code (the device flow, through couriercollie's OAuth App, whose Client ID is in
   `github_login.py`; no client secret exists). The code is shown large, with **Copy Code and Open GitHub**; the app
   waits for you to approve it at github.com/login/device, then shows "Signed in as <you>" (and no request count: not needed). Cancel stops
   waiting.
 - **No access asked for:** the login can only read public information. A login made here is kept in the desktop's
   password store (the Secret Service) through `secret-tool`, never in the settings file. The page names the store the
   desktop actually has (KDE Wallet on Plasma, GNOME Keyring on GNOME, KeePassXC, or "your desktop's password store").
-  With none running (e.g. a bare window manager), Sign In is unavailable and says why. Signing out removes it; GitHub's Settings → Applications removes colliecourier's access there too.
+  With none running (e.g. a bare window manager), Sign In is unavailable and says why. Signing out removes it; GitHub's Settings → Applications removes couriercollie's access there too.
 - **Sent only to api.github.com**, over https, and never along a redirect. If GitHub turns it down (revoked),
   requests carry on without it and Settings says so.
 - **The GitHub CLI's login is not used** (D7): it can usually change your repositories.
@@ -260,7 +260,7 @@ with.
 **First launch**
 
 ```
-┌ Welcome to colliecourier ───────────────────────────────────────┐
+┌ Welcome to couriercollie ───────────────────────────────────────┐
 │  Check for updates automatically?                             │
 │    ◉ Yes, every [ 6 hours ▾ ]                                 │
 │    ○ No, I'll click "Check now" myself                        │
@@ -278,7 +278,7 @@ with.
 **Main list** (the Scan button only shows when scanning is on)
 
 ```
-┌ colliecourier ────────────────────────────────────── [Scan] [+ Add] [⚙] ┐
+┌ couriercollie ────────────────────────────────────── [Scan] [+ Add] [⚙] ┐
 │  Show: (All) (GitHub) (GitLab)                       2 updates        │
 │  Name                 Installed      Latest        Kind               │
 │  AeroThemePlasma      a1b2c3d        f9e8d7c       git          [⬆]   │
@@ -331,9 +331,9 @@ with.
 - **No connection** (or a site that doesn't answer): those repos also keep their last result, marked "(not
   rechecked)", rather than an error replacing it. The line under the filters says how many couldn't be checked. A
   repo that fails for a reason of its own (e.g. its branch is gone) says "Couldn't check", with why on hover.
-- **Results** are kept in `~/.local/state/colliecourier/checks.json`, apart from the settings file, so the background
+- **Results** are kept in `~/.local/state/couriercollie/checks.json`, apart from the settings file, so the background
   checker and the open window never overwrite each other's changes.
-- **Background:** a systemd user timer (`colliecourier-check.timer`) wakes hourly, after a missed hour, and 3 minutes
+- **Background:** a systemd user timer (`couriercollie-check.timer`) wakes hourly, after a missed hour, and 3 minutes
   after login, and runs `run.sh --check --if-due`. That only checks if automatic checks are on and the interval has
   passed since the last check. If the app is open, it hands the check to the app. Opening the app never checks on its
   own, and a computer that was off past the interval checks once, shortly after login. A check where no site answered
@@ -345,7 +345,7 @@ with.
 
 ## How it works underneath (plain version)
 
-- **One settings file** (`~/.config/colliecourier/repos.toml`) lists what's tracked, which build file or branch to
+- **One settings file** (`~/.config/couriercollie/repos.toml`) lists what's tracked, which build file or branch to
   follow, and the global settings. It's plain text, so you can read or back it up.
 - **A background checker** runs on a systemd user timer, only if automatic checks are on. It runs, checks every repo
   in one pass, records what's new for the window to show, sets the taskbar badge, sends a toast if those are on, and
@@ -354,7 +354,7 @@ with.
   when the app is open or pinned to the taskbar. To check when building: whether the badge stays visible after the
   checker exits while the window is closed.
 - **The window** is a separate program that reads the same settings file. Closing it doesn't stop checks.
-- **Downloads** go to a hidden `.part` file beside where they'll end up (RPMs: `~/.cache/colliecourier/downloads`),
+- **Downloads** go to a hidden `.part` file beside where they'll end up (RPMs: `~/.cache/couriercollie/downloads`),
   and are removed once installed or if anything goes wrong.
 
 Tools (DECISIONS.md, D1): Python, with Qt and KDE's Kirigami for the window so it looks native on KDE. Both are

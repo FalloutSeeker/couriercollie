@@ -6,9 +6,9 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from colliecourier import app, checker, config, integration, sources
-from colliecourier.backend import Backend
-from colliecourier.config import TrackedRepo
+from couriercollie import app, checker, config, integration, sources
+from couriercollie.backend import Backend
+from couriercollie.config import TrackedRepo
 
 
 class TempHome(unittest.TestCase):
@@ -22,8 +22,8 @@ class TempHome(unittest.TestCase):
                           XDG_STATE_HOME=str(self.root / "state"), XDG_RUNTIME_DIR=str(self.root / "run"),
                           XDG_CACHE_HOME=str(self.root / "cache"))
         (self.root / "run").mkdir()
-        os.environ.pop("COLLIECOURIER_CONFIG", None)
-        os.environ.pop("COLLIECOURIER_STATE", None)
+        os.environ.pop("COURIERCOLLIE_CONFIG", None)
+        os.environ.pop("COURIERCOLLIE_STATE", None)
 
     def tearDown(self):
         os.environ.clear()
@@ -35,10 +35,10 @@ class MenuEntryTest(TempHome):
     def test_written_once_and_kept_current(self):
         self.assertTrue(integration.install_menu_entry())
         path = integration.menu_entry_path()
-        self.assertEqual(path, self.root / "data/applications/colliecourier.desktop")
+        self.assertEqual(path, self.root / "data/applications/couriercollie.desktop")
         text = path.read_text()
         self.assertIn(f"Exec={integration.LAUNCHER}\n", text)
-        self.assertIn("Icon=colliecourier\n", text)
+        self.assertIn("Icon=couriercollie\n", text)
         # Its icon too, as installed copies have it in the system's icon folder.
         self.assertEqual(integration.icon_path().read_bytes(), integration.ICON_FILE.read_bytes())
         self.assertFalse(integration.install_menu_entry())  # already right
@@ -58,8 +58,8 @@ class MenuEntryTest(TempHome):
         self.assertTrue(other.exists())  # not one the app wrote: left alone
 
     def test_the_rpms_entry_matches(self):
-        self.assertEqual((integration.PROJECT / "data/colliecourier.desktop").read_text(),
-                         integration.menu_entry_text("colliecourier"))
+        self.assertEqual((integration.PROJECT / "data/couriercollie.desktop").read_text(),
+                         integration.menu_entry_text("couriercollie"))
 
 
 class TimerTest(TempHome):
@@ -68,17 +68,17 @@ class TimerTest(TempHome):
         ok = lambda *args: calls.append(args) or True  # noqa: E731
         self.assertTrue(integration.set_background_checks(True, systemctl=ok))
         folder = self.root / "config/systemd/user"
-        timer = (folder / "colliecourier-check.timer").read_text()
-        service = (folder / "colliecourier-check.service").read_text()
+        timer = (folder / "couriercollie-check.timer").read_text()
+        service = (folder / "couriercollie-check.service").read_text()
         self.assertIn("Persistent=true", timer)
         self.assertIn("OnCalendar=hourly", timer)
         self.assertIn(f"ExecStart={integration.LAUNCHER} --check --if-due", service)
         self.assertIn("KillMode=process", service)  # the notification's click helper outlives the check
-        self.assertIn(("enable", "--now", "colliecourier-check.timer"), calls)
+        self.assertIn(("enable", "--now", "couriercollie-check.timer"), calls)
         calls.clear()
         integration.set_background_checks(False, systemctl=ok)
-        self.assertFalse((folder / "colliecourier-check.timer").exists())
-        self.assertIn(("disable", "--now", "colliecourier-check.timer"), calls)
+        self.assertFalse((folder / "couriercollie-check.timer").exists())
+        self.assertIn(("disable", "--now", "couriercollie-check.timer"), calls)
 
 
 class MessageTest(unittest.TestCase):

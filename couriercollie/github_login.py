@@ -1,7 +1,7 @@
 """Signing in to GitHub (DESIGN.md §8): optional, and read-only. It raises GitHub's limit from 60 requests an hour to
 5,000, and makes "nothing changed" answers free.
 
-Signing in is with a code entered at github.com/login/device (GitHub's device flow, through colliecourier's OAuth
+Signing in is with a code entered at github.com/login/device (GitHub's device flow, through couriercollie's OAuth
 App). The login asks for no access to your account, so it can only read public information. It's kept in the
 desktop's password store (the Secret Service: KDE Wallet on Plasma, GNOME Keyring on GNOME, …) through secret-tool,
 never in the settings file. (Reusing the GitHub CLI's login was left out on purpose: it can usually change your
@@ -20,14 +20,14 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 
-# colliecourier's OAuth App on GitHub. Not a secret: the device flow needs no client secret, so none is kept anywhere.
-CLIENT_ID = "Ov23liPCNM8DJb8qmhuS"
+# couriercollie's OAuth App on GitHub. Not a secret: the device flow needs no client secret, so none is kept anywhere.
+CLIENT_ID = "Ov23liqaEeYC1knX2lX1"
 DEVICE_CODE_URL = "https://github.com/login/device/code"
 TOKEN_URL = "https://github.com/login/oauth/access_token"
 # Where the code is entered. Always this address, whatever GitHub's answer says, so the button can only open GitHub.
 VERIFY_URL = "https://github.com/login/device"
 # Where the login is kept in the password store.
-SECRET = ["service", "colliecourier", "account", "github"]
+SECRET = ["service", "couriercollie", "account", "github"]
 TIMEOUT = 20
 
 # Signed in (Settings.github_login): with a code, the only way.
@@ -50,7 +50,7 @@ class DeviceCode:
 def _post(url: str, fields: dict) -> dict:
     data = urllib.parse.urlencode(fields).encode()
     req = urllib.request.Request(url, data=data, headers={"Accept": "application/json",
-                                                          "User-Agent": "colliecourier"})
+                                                          "User-Agent": "couriercollie"})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
             return json.load(resp)
@@ -113,7 +113,7 @@ def _secret_tool(*args: str, text: str | None = None) -> subprocess.CompletedPro
 
 def keep(token: str) -> None:
     """Put the login in the password store (the token goes in on stdin, not on a command line)."""
-    if _secret_tool("store", "--label=colliecourier: GitHub sign-in", text=token).returncode != 0:
+    if _secret_tool("store", "--label=couriercollie: GitHub sign-in", text=token).returncode != 0:
         raise LoginError("The password store didn’t take the login. It may be locked or closed; open it and "
                          "try again.")
 

@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-USER_AGENT = "colliecourier (https://github.com/FalloutSeeker/colliecourier)"
+USER_AGENT = "couriercollie (https://github.com/FalloutSeeker/couriercollie)"
 TIMEOUT = 20
 RELEASES_PER_PAGE = 30
 
@@ -220,7 +220,7 @@ def _drop_rejected_login() -> None:
 
 
 def _etag_dir() -> Path:
-    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "colliecourier" / "github"
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "couriercollie" / "github"
 
 
 def _etag_file(url: str) -> Path:

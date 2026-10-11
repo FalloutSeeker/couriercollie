@@ -75,7 +75,7 @@ h = harness.start(copy_settings_from=settings, settings={"firstLaunchDone": Fals
                                                          "autoCheck": True})
 b = h.backend
 
-from colliecourier import account, checker, github_login, sources  # noqa: E402
+from couriercollie import account, checker, github_login, sources  # noqa: E402
 
 DATE = datetime(2026, 9, 30, tzinfo=timezone.utc)
 

@@ -119,9 +119,9 @@ folders.
 
 ## D10. Name
 
-**colliecourier**, written all lowercase everywhere: the window, the menu, the command, the package, the repository
-and the app's folders (`~/.config/colliecourier`, …). Environment variables are the exception, upper case as usual
-(`COLLIECOURIER_CONFIG`, …).
+**couriercollie**, written all lowercase everywhere: the window, the menu, the command, the package, the repository
+and the app's folders (`~/.config/couriercollie`, …). Environment variables are the exception, upper case as usual
+(`COURIERCOLLIE_CONFIG`, …).
 
 **Status:** decided 2026-10-11, replacing the working name the project started with.
 
@@ -166,7 +166,7 @@ couldn't be reached is retried, on the next load. In order, the first that turns
 2. **The project's picture on its site:** a GitLab project's icon, else its group's picture; on GitHub, the owner's
    picture only if the owner is an organization. A person's profile picture wouldn't represent the project. Taken
    from the project info already fetched when adding (no extra request), downloaded once (max 1 MB, must be a
-   picture) into `~/.cache/colliecourier/icons`, and deleted when the repo is removed.
+   picture) into `~/.cache/couriercollie/icons`, and deleted when the repo is removed.
 3. **The default icon** for the kind of repo.
 
 Scanned repos also get a corner mark (`emblem-mounted`: found on this computer).

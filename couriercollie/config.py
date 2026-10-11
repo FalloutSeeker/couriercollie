@@ -1,6 +1,6 @@
 """The settings file: global settings and the list of tracked repos.
 
-Lives at ~/.config/colliecourier/repos.toml (or $COLLIECOURIER_CONFIG). Plain text, so it can be read, edited or
+Lives at ~/.config/couriercollie/repos.toml (or $COURIERCOLLIE_CONFIG). Plain text, so it can be read, edited or
 backed up.
 """
 
@@ -100,10 +100,10 @@ class ConfigError(Exception):
 
 
 def default_path() -> Path:
-    if env := os.environ.get("COLLIECOURIER_CONFIG"):
+    if env := os.environ.get("COURIERCOLLIE_CONFIG"):
         return Path(env)
     base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
-    return base / "colliecourier" / "repos.toml"
+    return base / "couriercollie" / "repos.toml"
 
 
 def _fits(value, like) -> bool:

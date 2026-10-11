@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import harness  # noqa: E402
 
-h = harness.start(copy_settings_from=Path.home() / ".config/colliecourier/repos.toml", find_icons=True)
+h = harness.start(copy_settings_from=Path.home() / ".config/couriercollie/repos.toml", find_icons=True)
 b = h.backend
 for r in b._config.repos:
     r.icon = ""  # look everything up afresh in this copy
@@ -25,7 +25,7 @@ def report():
         h.check(f"{r.name}: corner mark only if scanned",
                 (h.find("scannedMark:" + r.id) is not None) == (r.source == "scanned"))
     h.shot("icons")
-    import colliecourier.icons as icons
+    import couriercollie.icons as icons
     real = icons.resolve
     icons.resolve = lambda *a, **k: calls.append(a) or real(*a, **k)
     b.loadIcons()  # e.g. the window shown again: nothing to look up

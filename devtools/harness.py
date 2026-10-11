@@ -1,7 +1,7 @@
 """Drive the real window off-screen for checks: run steps on a timer, click things by objectName, save screenshots.
 
 Used by the scripts next to this file. Nothing here touches your real settings: each run uses a fresh settings file
-(optionally a copy of yours). Screenshots go to colliecourier/.uicheck/ (ignored by git).
+(optionally a copy of yours). Screenshots go to couriercollie/.uicheck/ (ignored by git).
 
 Screenshots differ from the desktop in one known way: off-screen windows don't get the desktop's font fallback, so
 wrapped text in the small font looks double-spaced. On the desktop it isn't (checked 2026-10-11).
@@ -24,7 +24,7 @@ def start(copy_settings_from: Path | None = None, settings: dict | None = None, 
     real start would have them; the welcome screen is marked done unless they say otherwise."""
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
     sys.path.insert(0, str(PROJECT))
-    from colliecourier.app import choose_style
+    from couriercollie.app import choose_style
 
     choose_style()  # as the app does
     # Drawn with OpenGL, as on the desktop. Off-screen windows otherwise use Qt's software renderer, which draws some
@@ -34,9 +34,9 @@ def start(copy_settings_from: Path | None = None, settings: dict | None = None, 
     config_path = Path(tempfile.mkdtemp()) / "repos.toml"
     if copy_settings_from and copy_settings_from.exists():
         shutil.copy(copy_settings_from, config_path)
-    os.environ["COLLIECOURIER_CONFIG"] = str(config_path)
+    os.environ["COURIERCOLLIE_CONFIG"] = str(config_path)
     os.environ["XDG_CACHE_HOME"] = str(config_path.parent / "cache")  # icons found during a check stay out of yours
-    os.environ["COLLIECOURIER_STATE"] = str(config_path.parent / "checks.json")  # and so do update-check results
+    os.environ["COURIERCOLLIE_STATE"] = str(config_path.parent / "checks.json")  # and so do update-check results
     OUT.mkdir(exist_ok=True)
     return Harness({"firstLaunchDone": True, **(settings or {})}, find_icons)
 
@@ -49,19 +49,19 @@ class Harness:
         from PySide6.QtWidgets import QApplication
         from PySide6.QtCore import QUrl
 
-        from colliecourier.backend import Backend
+        from couriercollie.backend import Backend
 
         self.messages = []
         qInstallMessageHandler(lambda _m, _c, text: self.messages.append(text))
         self.app = QApplication(sys.argv)
-        from colliecourier.app import fill_in_icons
+        from couriercollie.app import fill_in_icons
 
         fill_in_icons()
         self.backend = Backend(find_icons=find_icons)
         self.backend.updateSettings(settings)
         self.engine = QQmlApplicationEngine()
         self.engine.rootContext().setContextProperty("backend", self.backend)
-        self.engine.load(QUrl.fromLocalFile(str(PROJECT / "colliecourier/qml/Main.qml")))
+        self.engine.load(QUrl.fromLocalFile(str(PROJECT / "couriercollie/qml/Main.qml")))
         self.win = self.engine.rootObjects()[0]
         self.win.setProperty("width", 1150)
         self.win.setProperty("height", 800)
