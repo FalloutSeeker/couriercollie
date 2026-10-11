@@ -294,17 +294,6 @@ def http_get_json(url: str, headers: dict | None = None, _without_login: bool = 
         raise BadAnswer(f"{domain} sent an answer that isn’t from a GitHub or GitLab site.") from e
 
 
-def github_rate() -> dict:
-    """GitHub's hourly limit for this login (or none) as it stands: {"limit", "remaining", "reset" (local "HH:MM")}.
-    Asking doesn't count against it. Empty if it couldn't be asked."""
-    try:
-        core = http_get_json(f"https://{GITHUB_API}/rate_limit", _GITHUB_HEADERS)["resources"]["core"]
-        reset = datetime.fromtimestamp(int(core["reset"]), tz=timezone.utc).astimezone()
-        return {"limit": int(core["limit"]), "remaining": int(core["remaining"]), "reset": f"{reset:%H:%M}"}
-    except (SourceError, KeyError, TypeError, ValueError):
-        return {}
-
-
 def _parse_date(text: str | None) -> datetime | None:
     if not text:
         return None

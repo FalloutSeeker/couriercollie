@@ -4,7 +4,8 @@
 Two ways to sign in:
 - With a code entered at github.com/login/device (GitHub's device flow, through colliecourier's OAuth App). The login
   asks for no access to your account, so it can only read public information. It's kept in the desktop's password
-  store (KDE Wallet, or GNOME's keyring) through secret-tool, never in the settings file.
+  store (the Secret Service: KDE Wallet on Plasma, GNOME Keyring on GNOME, …) through secret-tool, never in the
+  settings file.
 - With the GitHub CLI's login, read from `gh` when it's needed and never copied anywhere.
 
 The login is only ever sent to api.github.com (sources.py).
@@ -115,7 +116,8 @@ def _secret_tool(*args: str, text: str | None = None) -> subprocess.CompletedPro
 def keep(token: str) -> None:
     """Put the login in the password store (the token goes in on stdin, not on a command line)."""
     if _secret_tool("store", "--label=colliecourier: GitHub sign-in", text=token).returncode != 0:
-        raise LoginError("The password store didn’t take the login (is KDE Wallet or GNOME’s keyring open?).")
+        raise LoginError("The password store didn’t take the login. It may be locked or closed; open it and "
+                         "try again.")
 
 
 def kept() -> str:

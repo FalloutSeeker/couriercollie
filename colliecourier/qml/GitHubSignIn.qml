@@ -29,6 +29,8 @@ ColumnLayout {
 
         QQC2.Button {
             objectName: "githubSignIn"
+            // The login is kept in the desktop's password store; without one it couldn't be kept safely.
+            enabled: root.gh.store !== ""
             text: "Sign In…"
             icon.name: "internet-services"
             onClicked: backend.startSignIn()
@@ -46,7 +48,9 @@ ColumnLayout {
     QQC2.Label {
         Layout.fillWidth: true
         visible: root.gh.way === "" && root.gh.signIn === ""
-        text: "Read-only: it can see public information only. Kept in your desktop’s password store (KDE Wallet)."
+        text: root.gh.store !== ""
+              ? `Read-only: it can see public information only. Kept in ${root.gh.store}.`
+              : "Signing in needs a password store to keep the login safely, and this desktop has none running." + (root.gh.ghUser !== "" ? " The GitHub CLI’s login works without one." : "")
         wrapMode: Text.Wrap
         font: Kirigami.Theme.smallFont
         opacity: 0.7
@@ -133,14 +137,6 @@ ColumnLayout {
         wrapMode: Text.Wrap
     }
 
-    QQC2.Label {
-        Layout.fillWidth: true
-        visible: root.gh.way !== "" && root.gh.remaining >= 0
-        text: `${root.gh.remaining.toLocaleString(Qt.locale(), "f", 0)} of ${root.gh.limit.toLocaleString(Qt.locale(), "f", 0)} requests left this hour (renews at ${root.gh.resetAt}).`
-        wrapMode: Text.Wrap
-        opacity: 0.7
-    }
-
     Kirigami.InlineMessage {
         Layout.fillWidth: true
         visible: root.gh.rejected === true
@@ -161,7 +157,7 @@ ColumnLayout {
         visible: root.gh.way !== ""
         text: root.gh.way === "gh"
               ? "Signing out here only stops colliecourier using it; the GitHub CLI stays signed in."
-              : "Signing out removes the login from this computer. To remove colliecourier’s access on GitHub too: Settings → Applications on github.com."
+              : `Signing out removes the login from ${root.gh.store || "this computer"}. To remove colliecourier’s access on GitHub too: Settings → Applications on github.com.`
         wrapMode: Text.Wrap
         font: Kirigami.Theme.smallFont
         opacity: 0.7

@@ -225,15 +225,17 @@ with.
 
 - **Sign In…** asks GitHub for a code (the device flow, through colliecourier's OAuth App, whose Client ID is in
   `github_login.py`; no client secret exists). The code is shown large, with **Copy Code and Open GitHub**; the app
-  waits for you to approve it at github.com/login/device, then shows "Signed in as <you>". Cancel stops waiting.
+  waits for you to approve it at github.com/login/device, then shows "Signed in as <you>" (and no request count: not needed). Cancel stops
+  waiting.
 - **Use the GitHub CLI's Login (<you>)** is offered when `gh` is signed in. That login is read from `gh` when it's
   needed and never copied; signing out here leaves gh signed in.
 - **No access asked for:** the login can only read public information. A login made here is kept in the desktop's
-  password store (KDE Wallet, GNOME's keyring) through `secret-tool`, never in the settings file. Signing out removes
-  it; GitHub's Settings → Applications removes colliecourier's access there too.
+  password store (the Secret Service) through `secret-tool`, never in the settings file. The page names the store the
+  desktop actually has (KDE Wallet on Plasma, GNOME Keyring on GNOME, KeePassXC, or "your desktop's password store").
+  With none running (e.g. a bare window manager), Sign In is unavailable and says why; the GitHub CLI's login still
+  works. Signing out removes it; GitHub's Settings → Applications removes colliecourier's access there too.
 - **Sent only to api.github.com**, and never along a redirect. If GitHub turns it down (revoked, or gh signed out),
   requests carry on without it and Settings says so.
-- **Signed in** shows the requests left this hour (asking costs nothing).
 - **Unchanged release lists:** each is kept with its ETag and asked for with it. An unchanged one comes back "304
   Not Modified" with nothing to download; signed in, that doesn't count against the limit (tried: it doesn't), signed
   out it still does.

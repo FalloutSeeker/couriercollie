@@ -3,14 +3,51 @@ the signing in itself is in github_login.py.
 """
 
 import json
+import shutil
 import threading
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 from PySide6.QtCore import Slot
+from PySide6.QtDBus import QDBusConnection, QDBusMessage
 from PySide6.QtGui import QGuiApplication
 
 from . import github_login, sources
+
+# Password stores (programs providing the desktop's Secret Service), by process name, as they're called to users.
+_STORES = {"ksecretd": "KDE Wallet", "kwalletd6": "KDE Wallet", "kwalletd5": "KDE Wallet",
+           "gnome-keyring-d": "GNOME Keyring", "keepassxc": "KeePassXC"}
+_SECRET_SERVICE = "org.freedesktop.secrets"
+
+
+def password_store() -> str:
+    """The desktop's password store, by the name its users know (KDE Wallet on Plasma, GNOME Keyring on GNOME, …), or
+    "your desktop's password store" for another. "" if there's none (e.g. a window manager without one), or no
+    secret-tool to reach it: then a login made here can't be kept safely."""
+    if not shutil.which("secret-tool"):
+        return ""
+    bus = QDBusConnection.sessionBus()
+    if not bus.isConnected():
+        return ""
+
+    def ask(method: str, *args):
+        message = QDBusMessage.createMethodCall("org.freedesktop.DBus", "/org/freedesktop/DBus",
+                                                "org.freedesktop.DBus", method)
+        message.setArguments(list(args))
+        reply = bus.call(message)
+        return reply.arguments()[0] if reply.type() == QDBusMessage.MessageType.ReplyMessage else None
+
+    pid = ask("GetConnectionUnixProcessID", _SECRET_SERVICE)
+    if pid is None:
+        # Not running, but started when first asked (as GNOME Keyring can be)?
+        return "your desktop\u2019s password store" if _SECRET_SERVICE in (ask("ListActivatableNames") or []) else ""
+    try:
+        name = Path(f"/proc/{pid}/comm").read_text().strip()
+    except OSError:
+        name = ""
+    return _STORES.get(name, "your desktop\u2019s password store")
+
 
 def use_login(way: str) -> None:
     """Send GitHub requests with the login chosen in Settings (or none). Read lazily, when the first is made."""
@@ -43,7 +80,7 @@ class Account:
         self._signin_error = ""
         self._signin_cancel = threading.Event()
         self._gh_user = ""  # the GitHub CLI's account, when it's signed in (looked up when Settings opens)
-        self._rate: dict = {}  # GitHub's hourly limit as it stands: limit, remaining, reset (local time)
+        self._store = ""  # the desktop's password store, by name ("" if none); looked up when Settings opens
         use_login(self._config.settings.github_login)
 
     def _github_dict(self) -> dict:
@@ -58,9 +95,7 @@ class Account:
             "verifyUrl": code.verification_uri if code else "",
             "error": self._signin_error,
             "rejected": bool(s.github_login) and sources.login_rejected,
-            "limit": self._rate.get("limit", 0),
-            "remaining": self._rate.get("remaining", -1),
-            "resetAt": self._rate.get("reset", ""),
+            "store": self._store,
         }
 
     def _signed_in(self, way: str, user: str, token: str = ""):
@@ -150,23 +185,22 @@ class Account:
 
     @Slot()
     def refreshGitHub(self):
-        """When Settings opens: GitHub's limit as it stands (asking costs nothing), and whether the GitHub CLI is
-        signed in, to offer its login."""
-        signed_in = bool(self._config.settings.github_login)
+        """When Settings or the welcome screen opens: which password store the desktop has, and whether the GitHub
+        CLI is signed in, to offer its login."""
+        self._store = password_store()
+        self.githubChanged.emit()
+        if self._config.settings.github_login:
+            return
 
         def work():
-            rate = sources.github_rate()
-            gh_user = ""
-            if not signed_in and (token := github_login.gh_token()):
-                try:
-                    gh_user = user_name(token)
-                except github_login.LoginError:
-                    pass
-            return rate, gh_user
+            token = github_login.gh_token()
+            try:
+                return user_name(token) if token else ""
+            except github_login.LoginError:
+                return ""
 
-        def done(result, error):
-            if not error:
-                self._rate, self._gh_user = result
+        def done(gh_user, error):
+            self._gh_user = "" if error else gh_user
             self.githubChanged.emit()
 
         self._run(work, done)

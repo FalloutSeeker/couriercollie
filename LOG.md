@@ -4,6 +4,9 @@ Newest first.
 
 ## 2026-10-11
 
+- Sign-in: no "requests left" line when signed in. The password store is named as the desktop actually has it (KDE
+  Wallet, GNOME Keyring, KeePassXC, or "your desktop's password store"), found through D-Bus; with none running, Sign
+  In is unavailable and says why, and the GitHub CLI's login is still offered.
 - Safety pass, asked for after the sign-in:
   - RPM installs: root now installs a copy in a folder only root can write to, checked again against the verified
     file. Before, something running as you could swap the file between the checks and the password prompt.

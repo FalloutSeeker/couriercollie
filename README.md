@@ -52,7 +52,8 @@ Other ways to run it:
   `systemctl --user disable --now colliecourier-check.timer`.
 - `~/.local/state/colliecourier/checks.json`: the last check's results. `~/.cache/colliecourier/icons/`: repo icons.
   `~/.cache/colliecourier/github/`: GitHub release lists, to ask "has it changed?" instead of downloading them again.
-- Only if you sign in to GitHub with a code: the login, in your desktop's password store (KDE Wallet), as
+- Only if you sign in to GitHub with a code: the login, in your desktop's password store (KDE Wallet on Plasma,
+  GNOME Keyring on GNOME, …), as
   "colliecourier: GitHub sign-in".
 - Only when you install or update something: AppImages in `~/Applications` (or beside the one you had), with a menu
   entry `~/.local/share/applications/colliecourier-<repo>.desktop`; programs unpacked in

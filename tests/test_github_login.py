@@ -200,7 +200,7 @@ class SettingsSignInTest(unittest.TestCase):
             (github_login, "forget"): lambda: self.forgotten.append(True),
             (github_login, "gh_token"): lambda: CLI,
             (account, "user_name"): lambda token: {NEW: "octocat", CLI: "FalloutSeeker"}[token],
-            (sources, "github_rate"): lambda: {"limit": 5000, "remaining": 4990, "reset": "13:00"},
+            (account, "password_store"): lambda: "KDE Wallet",
         }
         for (module, name), fake in fakes.items():
             self.addCleanup(setattr, module, name, getattr(module, name))
@@ -221,7 +221,7 @@ class SettingsSignInTest(unittest.TestCase):
     def test_sign_in_with_a_code_then_out(self):
         self.backend.startSignIn()
         gh = self.backend.github
-        self.assertEqual((gh["way"], gh["user"], gh["remaining"]), ("app", "octocat", 4990))
+        self.assertEqual((gh["way"], gh["user"]), ("app", "octocat"))
         self.assertEqual(self.kept, [NEW])  # kept in the password store
         saved = self.config.load(self.path).settings
         self.assertEqual((saved.github_login, saved.github_user), ("app", "octocat"))
@@ -247,3 +247,21 @@ class SettingsSignInTest(unittest.TestCase):
         self.assertEqual((self.backend.github["signIn"], self.backend.github["code"]), ("waiting", "ABCD-1234"))
         self.backend.cancelSignIn()
         self.assertEqual((self.backend.github["signIn"], self.backend.github["way"]), ("", ""))
+
+
+class PasswordStoreTest(unittest.TestCase):
+    """Which password store the desktop has, by name: shown to you, and none means a code sign-in can't be kept."""
+
+    def test_none_without_secret_tool(self):
+        from colliecourier import account
+
+        saved = os.environ["PATH"]
+        os.environ["PATH"] = "/nonexistent"
+        self.addCleanup(os.environ.__setitem__, "PATH", saved)
+        self.assertEqual(account.password_store(), "")
+
+    def test_named_as_its_users_know_it(self):
+        from colliecourier import account
+
+        names = set(account._STORES.values()) | {"your desktop’s password store", ""}
+        self.assertIn(account.password_store(), names)  # whatever this desktop has (KDE Wallet here)
