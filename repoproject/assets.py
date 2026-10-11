@@ -23,8 +23,7 @@ _ARCHIVES = (".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.bz2", ".tbz2", ".tar.zs
 # Files for other systems, or that aren't software at all.
 _FOREIGN_EXT = {
     ".deb": "Debian/Ubuntu", ".exe": "Windows", ".msi": "Windows", ".msix": "Windows", ".dmg": "macOS",
-    ".pkg": "macOS", ".apk": "Android", ".aab": "Android", ".ipa": "iOS", ".snap": "Ubuntu (Snap)",
-    ".flatpakref": "Flatpak (install it from Discover instead)",
+    ".pkg": "macOS", ".apk": "Android", ".aab": "Android", ".ipa": "iOS",
 }
 _NOT_SOFTWARE = (".sha256", ".sha512", ".sha256sum", ".sha512sum", ".sig", ".asc", ".minisig", ".pem", ".sbom",
                  ".json", ".txt", ".md5", ".spdx", ".intoto.jsonl", ".idsig", ".cert", ".crt", ".pub")
@@ -74,10 +73,24 @@ def classify(name: str, url: str = "", machine: str | None = None) -> AssetInfo:
     return info
 
 
+def _package_note(name: str, tool: str) -> AssetInfo:
+    """A package the app can't install: one for this distro's package manager (not supported yet), or another's."""
+    return AssetInfo(KIND_OTHER, False, f"{name}: not supported yet" if _has(tool) else
+                     f"{name}: not supported on your distro")
+
+
 def _classify_name(lower: str, machine: str) -> AssetInfo:
-    # An Arch package, before macOS's ".pkg" below.
+    # Packages the app can't install. Arch's before macOS's ".pkg" below.
     if lower.endswith((".pkg.tar.zst", ".pkg.tar.xz")):
-        return AssetInfo(KIND_OTHER, False, "Arch package: not supported yet" if _has("pacman") else "for Arch Linux")
+        return _package_note("Arch package", "pacman")
+    if lower.endswith(".deb"):
+        return _package_note("Debian package", "apt")
+    if lower.endswith(".rpm") and not lower.endswith(".src.rpm") and not _has("dnf"):
+        return _package_note("RPM", "zypper")
+    if lower.endswith((".flatpak", ".flatpakref")):
+        return AssetInfo(KIND_OTHER, False, "Flatpak: install it with your software center instead")
+    if lower.endswith(".snap"):
+        return AssetInfo(KIND_OTHER, False, "Snap: not supported")
     # A file belonging to another system's package, e.g. "app-x86_64.apk.idsig": check before the processor type,
     # or "x86_64" would make it look like it fits this PC.
     for ext, system in _FOREIGN_EXT.items():
@@ -89,12 +102,6 @@ def _classify_name(lower: str, machine: str) -> AssetInfo:
         return AssetInfo(KIND_OTHER, False, "checksum or signature")
     if lower.endswith(".src.rpm"):
         return AssetInfo(KIND_OTHER, False, "source package")
-    # Packages for another distro's package manager, or for this one's that the app can't install yet.
-    if lower.endswith(".deb"):
-        return AssetInfo(KIND_OTHER, False, "Debian package: not supported yet" if _has("apt") else
-                         "for Debian/Ubuntu")
-    if lower.endswith(".rpm") and not _has("dnf"):
-        return AssetInfo(KIND_OTHER, False, "RPM: needs dnf")
     if lower.endswith(".rpm"):
         kind = KIND_RPM
     elif lower.endswith(".appimage"):
