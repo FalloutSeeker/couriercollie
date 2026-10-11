@@ -256,6 +256,23 @@ class UpdateClickedTest(UpstreamCase):
         self.assertEqual(self.backend._checks.results[self.id].status, self.checker.UP_TO_DATE)
         self.assertFalse(self.backend.repo(self.id)["updateAvailable"])
 
+    def test_refresh_or_a_check_clears_the_note(self):
+        from repoproject import sources
+
+        self.backend.updateRepo(self.id)
+        self.assertEqual(self.backend.details(self.id)["updateNote"], "Pulled 1 new commit.")
+        saved = sources.releases, sources.branches
+        sources.releases, sources.branches = (lambda ref, host: []), (lambda ref: ("main", []))
+        self.addCleanup(lambda: (setattr(sources, "releases", saved[0]), setattr(sources, "branches", saved[1])))
+        self.backend.loadDetails(self.id, True)  # Refresh on the repo page
+        self.assertEqual(self.backend.details(self.id)["updateNote"], "")
+        self.backend._update_notes[self.id] = ("done", "Pulled 1 new commit.")
+        saved_check = self.checker.check_all
+        self.checker.check_all = lambda repos, previous: (self.checker.State(), [])
+        self.addCleanup(setattr, self.checker, "check_all", saved_check)
+        self.backend.checkNow()  # Check Now, in the list
+        self.assertEqual(self.backend.details(self.id)["updateNote"], "")
+
     def test_a_refused_update_says_why_and_changes_nothing(self):
         (self.clone / "a.txt").write_text("edited by you\n")
         self.backend.updateRepo(self.id)

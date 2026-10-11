@@ -409,6 +409,10 @@ class Backend(QObject):
                     pass  # the results still show; they're just not kept for next time
                 self._announce(fresh)
                 self._update_badge()
+                # A check is a fresh look at everything: the last updates' notes ("Pulled 1 new commit.") go.
+                for repo_id in [i for i in self._update_notes if i not in self._updating]:
+                    self._update_notes.pop(repo_id)
+                    self.detailsChanged.emit(repo_id)
                 # Repo pages loaded before the check are reloaded when next shown, but only where the check found a
                 # newer version than the page has; the rest are still current, so they cost no requests.
                 for r in self._config.repos:
@@ -941,6 +945,7 @@ class Backend(QObject):
         current = self._details.get(repo_id)
         if current and (current.state == "loading" or (current.state == "ready" and not force)):
             return
+        self._update_notes.pop(repo_id, None)  # Refresh: back to the page as it is now, without the last update's note
         self._details[repo_id] = Details(state="loading")
         self.detailsChanged.emit(repo_id)
         ref, host = RepoRef.from_id(repo_id), repo.host

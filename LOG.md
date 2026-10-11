@@ -10,6 +10,8 @@ Newest first.
   Konsole in the clone's folder. Tested against real git repos made for the tests; your own clones weren't touched.
   - Also: a branch whose newest commit is your version is no longer asked about (it's the same, no request).
   - The scanned-repo window check now waits for each comparison to come back, rather than a fixed time.
+- After an update, its note ("Pulled 1 new commit.") goes on Refresh or Check Now, so the page is back to its usual
+  view with the new version.
 - Stage 5, AppImages: Install / Update download the newest release's AppImage with progress, check it against
   GitHub's published SHA-256 (or a checksum file in the release; a warning if there's none) and that it's really an
   AppImage, then swap it in, keeping the old file to undo. Menu entries follow the new file; one is added if none

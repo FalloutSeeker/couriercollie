@@ -98,6 +98,12 @@ h.run([
     (0, lambda: h.check("Update gone from page and list", h.find("updateNow") is None
                         and h.find("updateButton:" + ID) is None)),
     (0, lambda: h.shot("update-clone-1-pulled")),
+    # Refresh: back to the page as it is now, with the new version and no note.
+    (0, lambda: h.click("text:Refresh")),
+    h.until(lambda: details()["state"] == "ready"),
+    (500, lambda: h.check("Refresh clears the note", h.find("updateNote") is None and details()["updateNote"] == "")),
+    (0, lambda: h.check("…showing the new version, up to date", details()["versionText"] == f"commit {newest[:7]}"
+                        and details()["statusKind"] == "current", details()["versionText"])),
     (0, lambda: h.click("showScript:install.sh")),
     (500, lambda: h.check("the script is shown before running", h.visible("scriptDialog"))),
     (0, lambda: h.check("…all of it", "echo installed" in (h.win.findChild(QObject, "scriptText").property("text")
