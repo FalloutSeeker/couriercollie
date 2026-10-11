@@ -929,7 +929,11 @@ class Backend(QObject):
                     notes.append("Also in 1 other place." if len(f.other_paths) == 1
                                  else f"Also in {len(f.other_paths)} other places.")
                 if f.needs_password:
-                    notes.append("Its folder belongs to the system, so updating it will ask for your password.")
+                    # Only a clone that belongs to the system can be updated as root (updater._as_root).
+                    notes.append("Its folder belongs to the system, so updating it will ask for your password."
+                                 if f.kind == assets.KIND_GIT and updater.needs_password(f.path)
+                                 else "Its folder belongs to another user, so it can be tracked but not updated from "
+                                      "here.")
                 note = " ".join(notes)
             self._scan_finds[key] = f
             self._scan_items.append({
