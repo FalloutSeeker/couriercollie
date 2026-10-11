@@ -150,20 +150,25 @@ def _set_baseline(repo: TrackedRepo, d: Details) -> bool:
 def _fit_files(repo: TrackedRepo, d: Details) -> bool:
     """Only files that run on this computer can be followed. A pick of any other file is dropped, and a project with
     nothing for this computer is tracked by version only. Returns True if the repo changed."""
-    if repo.follow != FOLLOW_RELEASES or d.state != "ready" or not d.releases or _is_clone(repo):
-        return False  # a clone following releases follows the source at each release's tag, not a file
+    if d.state != "ready" or not d.releases:
+        return False
+    newest = next((r for r in d.releases if not r.prerelease), d.releases[0])
+    builds = [info for a in newest.assets if (info := assets.classify(a.name, a.url)).build]
+    other_systems = bool(builds) and not any(info.suits for info in builds)
+    changed, repo.other_systems = repo.other_systems != other_systems, other_systems
+    if repo.follow != FOLLOW_RELEASES or _is_clone(repo):
+        return changed  # a clone following releases follows the source at each release's tag, not a file
     before = (repo.asset_pattern, repo.kind)
     if repo.asset_pattern:
         picked = [a for r in d.releases for a in r.assets if assets.matches(repo.asset_pattern, a.name)]
         if picked and not any(assets.classify(a.name, a.url).suits for a in picked):
             repo.asset_pattern, repo.kind = "", ""
-    newest = next((r for r in d.releases if not r.prerelease), d.releases[0])
     nothing_fits = not any(assets.classify(a.name, a.url).suits for a in newest.assets)
     if nothing_fits and not repo.asset_pattern:
         repo.kind = assets.KIND_VERSIONS
     elif repo.kind == assets.KIND_VERSIONS:
         repo.kind = ""  # a later release added something for this computer
-    return (repo.asset_pattern, repo.kind) != before
+    return changed or (repo.asset_pattern, repo.kind) != before
 
 
 def _match_tag(repo: TrackedRepo, d: Details) -> bool:

@@ -63,6 +63,7 @@ class AssetInfo:
     kind: str
     suits: bool  # likely to run on this computer
     note: str  # short reason when it doesn't suit, e.g. "for Windows"
+    build: bool = True  # a build of the software, for some system; not a checksum, signature or source package
 
 
 def classify(name: str, url: str = "", machine: str | None = None) -> AssetInfo:
@@ -98,9 +99,9 @@ def _kind_of(lower: str) -> "str | AssetInfo":
     if _WINDOWS_HINT.search(lower) and not lower.endswith((".rpm", ".appimage")):
         return AssetInfo(KIND_OTHER, False, "for Windows")
     if lower.endswith(_NOT_SOFTWARE):
-        return AssetInfo(KIND_OTHER, False, "checksum or signature")
+        return AssetInfo(KIND_OTHER, False, "checksum or signature", build=False)
     if lower.endswith(".src.rpm"):
-        return AssetInfo(KIND_OTHER, False, "source package")
+        return AssetInfo(KIND_OTHER, False, "source package", build=False)
     if lower.endswith(".appimage"):
         return KIND_APPIMAGE
     if lower.endswith(_ARCHIVES):

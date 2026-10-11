@@ -76,9 +76,12 @@ def _package_name(repo: TrackedRepo) -> str:
 
 
 def _can_clone(repo: TrackedRepo) -> bool:
-    """A project added by hand that you don't have yet, following a branch, or releases with nothing to download for
-    this computer: Install clones it (updater.clone), at the branch or the newest release's tag."""
-    return (repo.source != config.SOURCE_SCANNED and repo.installed == NOT_INSTALLED
+    """A project added by hand that you don't have yet, following a branch, or with releases of source code only:
+    Install clones it (updater.clone), at the branch or the newest release's tag. Never a project built only for
+    other systems (repo.other_systems), whatever is followed: an Android app's source is no use here. Nor what the
+    package manager or Flatpak installed (repo.managed_by): that's already here."""
+    return (repo.source != config.SOURCE_SCANNED and repo.installed == NOT_INSTALLED and not repo.other_systems
+            and not repo.managed_by
             and (repo.follow == FOLLOW_BRANCH or repo.kind == assets.KIND_VERSIONS))
 
 

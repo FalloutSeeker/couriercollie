@@ -273,6 +273,103 @@ class BackendTest(unittest.TestCase):
         self.assertEqual(self.backend._config.settings.scan_folders, folders)
         self.backend.trackFound(["nope", ""])  # nothing to track, and no error
 
+    def releases_with(self, files):
+        rel = self.backend._details[LOCALSEND].releases[0]
+        rel.assets = [sources.Asset(n, "u") for n in files]
+        self.backend._details[LOCALSEND].releases = [rel]
+        _fit_files(self.backend._config.find(LOCALSEND), self.backend._details[LOCALSEND])
+
+    # Projects whose builds are all for something else: these are tracked by version only, and never installed.
+    OTHER_SYSTEMS = {
+        "android": ["app-x86_64-release.apk", "app-arm64-v8a-release.apk", "app-x86_64-release.apk.idsig"],
+        "windows": ["App-Setup-1.2.exe", "App-1.2-win64.zip", "App-1.2.msi"],
+        "macos": ["App-1.2.dmg", "App-1.2-darwin-arm64.tar.gz", "App-1.2.pkg"],
+        "ios": ["App-1.2.ipa"],
+        "another processor": ["app-1.2-linux-riscv64.AppImage", "app-1.2-linux-s390x.tar.gz"],
+        "snap": ["app_1.2_amd64.snap"],
+        "mixed": ["App-1.2.apk", "App-1.2.exe", "App-1.2.dmg", "SHA256SUMS.txt", "app-1.2.src.rpm"],
+    }
+
+    def test_projects_for_other_systems_are_versions_only(self):
+        import platform
+
+        for case, files in self.OTHER_SYSTEMS.items():
+            if case == "another processor" and platform.machine() in ("riscv64", "s390x"):
+                continue
+            self.releases_with(files)
+            repo = self.backend._config.find(LOCALSEND)
+            self.assertTrue(repo.other_systems, case)
+            self.assertEqual(repo.kind, "versions", case)
+
+    def test_packages_for_another_distro_only(self):
+        # On Fedora, a project that ships only .deb and Arch packages: versions only, never installed.
+        from couriercollie import assets
+
+        self.addCleanup(setattr, assets, "PACKAGE_TOOLS", assets.PACKAGE_TOOLS)
+        assets.PACKAGE_TOOLS = {"dnf"}
+        self.releases_with(["app_1.2-1_amd64.deb", "app-1.2-1-x86_64.pkg.tar.zst"])
+        self.assertTrue(self.backend._config.find(LOCALSEND).other_systems)
+        self.backend.setInstalled(LOCALSEND, "-")
+        self.assertFalse(self.backend.details(LOCALSEND)["canUpdate"])
+
+    def test_a_project_built_for_other_systems_is_never_installed(self):
+        # Like Obtainium (Android only): Mark as Not Installed, or following a branch, used to offer Install, which
+        # cloned the phone app's source into ~/src.
+        self.releases_with(["app-x86_64-release.apk", "app-arm64-v8a-release.apk", "app-x86_64-release.apk.sha256"])
+        repo = self.backend._config.find(LOCALSEND)
+        self.assertTrue(repo.other_systems)
+        for step in (lambda: self.backend.setInstalled(LOCALSEND, "-"), lambda: self.backend.markUpToDate(LOCALSEND),
+                     lambda: self.backend.setInstalled(LOCALSEND, "-"),
+                     lambda: self.backend.setFollow(LOCALSEND, "branch"),
+                     lambda: self.backend.setFollow(LOCALSEND, "releases")):
+            step()
+            d = self.backend.details(LOCALSEND)
+            self.assertEqual((d["canUpdate"], d["installClones"], self.backend.repo(LOCALSEND)["canUpdate"]),
+                             (False, False, False))
+        self.assertTrue(self.saved(LOCALSEND).other_systems)  # kept, so it holds before the page loads
+
+    def test_every_order_of_clicks(self):
+        # Whatever is clicked, in whatever order: nothing for another system, or that the package manager
+        # installed, is ever offered to update or install.
+        import itertools
+
+        import couriercollie.backend as backend_module
+
+        b = self.backend
+        actions = {
+            "not installed": lambda: b.setInstalled(LOCALSEND, "-"),
+            "up to date": lambda: b.markUpToDate(LOCALSEND),
+            "older": lambda: b.setInstalled(LOCALSEND, b._details[LOCALSEND].releases[-1].tag),
+            "branch": lambda: b.setFollow(LOCALSEND, "branch"),
+            "releases": lambda: b.setFollow(LOCALSEND, "releases"),
+            "pre-releases": lambda: b.setPrereleases(LOCALSEND, not b._config.find(LOCALSEND).prereleases),
+        }
+        linux = ["LocalSend-1.18.2-linux-x86-64.AppImage", "LocalSend-1.18.2-windows-x86-64.exe"]
+        saved = backend_module._managed_elsewhere
+        self.addCleanup(setattr, backend_module, "_managed_elsewhere", saved)
+        cases = [(name, files, "") for name, files in self.OTHER_SYSTEMS.items()] + [("installed with dnf", linux, "dnf")]
+        for case, files, managed in cases:
+            for order in itertools.product(actions, repeat=3):
+                repo = b._config.find(LOCALSEND)
+                repo.installed, repo.follow, repo.kind, repo.asset_pattern, repo.prereleases = "v1.0", "releases", "", "", False
+                repo.managed_by = managed
+                self.releases_with(files)
+                if files is linux:
+                    b.pickAsset(LOCALSEND, b._details[LOCALSEND].releases[0].tag, linux[0])
+                for name in order:
+                    actions[name]()
+                    d = b.details(LOCALSEND)
+                    offered = (d["canUpdate"], d["installClones"], b.repo(LOCALSEND)["canUpdate"])
+                    self.assertEqual(offered, (False, False, False), f"{case}: {' > '.join(order)}")
+
+    def test_releases_of_source_code_only_can_still_be_cloned(self):
+        # Nothing built at all (a theme, a script): Install clones it at the newest release, as before.
+        for files in ([], ["SHA256SUMS.txt"]):
+            self.releases_with(files)
+            self.assertFalse(self.backend._config.find(LOCALSEND).other_systems)
+            self.backend.setInstalled(LOCALSEND, "-")
+            self.assertTrue(self.backend.details(LOCALSEND)["installClones"], files)
+
     def test_branch_with_no_shared_history(self):
         # Added by hand on "main"; "dev" was started from scratch.
         self.relations["b" * 40] = sources.DIVERGED

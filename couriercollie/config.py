@@ -82,6 +82,9 @@ class TrackedRepo:
     # What installed it, when that's something that keeps it up to date ("dnf", "Flatpak"): found when its page
     # loads and on every check, so nothing here updates it (checker.installed_with).
     managed_by: str = ""
+    # The newest release has builds, but only for other systems (Android, Windows, macOS): only its versions are
+    # tracked, and Install never clones it (a phone app's source is no use here). Found when its page loads.
+    other_systems: bool = False
 
 
 @dataclass

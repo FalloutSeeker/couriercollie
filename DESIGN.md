@@ -46,6 +46,8 @@ Top to bottom:
 - **Your build file:** choose from the newest release's files that run here. The choice is kept as a pattern
   (`app-1.2-x86_64.AppImage` → `app-*-x86_64.AppImage`), so the same file is followed in later releases. If nothing
   runs here, it's tracked by version only.
+- **Built only for other systems** (Android, Windows, macOS, another distro's packages, other processors): tracked by
+  version only, and never installed, whatever is clicked or followed. Install never clones such a project's source.
 - **Releases:** the newest 10, with notes. **Show Older Releases** loads up to 30. Pictures in notes become links, so
   opening notes downloads nothing.
 - **Branches:** for following new commits.
@@ -104,7 +106,7 @@ Only when you click Update, or Install for something you don't have yet (D4).
 | Package (`.rpm`, `.deb`, Arch) | Installs with dnf, zypper, apt or pacman | Yes |
 | Flatpak bundle | Installs it for you with flatpak | No |
 | Git clone | Pulls the followed branch (fast-forward only), or moves to the newest release's tag | Only if the system owns it |
-| Not installed, branch only | Install clones it into `~/src` | No |
+| Not installed: a branch, or releases of source code only | Install clones it into `~/src` | No |
 
 **An AppImage or program added by hand** that you have: where your copy is isn't known, so the button reads
 **Install**, and it puts a new copy in place (updated from then on). A scan finds your copy, so Update replaces that
