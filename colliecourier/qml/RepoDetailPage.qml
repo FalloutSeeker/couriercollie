@@ -410,7 +410,7 @@ Kirigami.ScrollablePage {
                     }
 
                     QQC2.Label {
-                        text: page.details.updatePhase === "installing" ? "Installing with dnf\u2026"
+                        text: page.details.updatePhase === "installing" ? `Installing with ${page.details.packageTool}\u2026`
                             : page.details.isDownload ? (page.details.progress >= 0
                                   ? `Downloading\u2026 ${Math.round(page.details.progress * 100)}%` : "Downloading\u2026")
                             : page.details.installClones ? "Cloning\u2026"
@@ -520,8 +520,8 @@ Kirigami.ScrollablePage {
                     text: page.details.installClones
                           ? (page.followsReleases ? `Clones the project at ${page.details.newestText} into a folder in ${page.details.clonesFolder}.`
                                                   : `Clones the project\u2019s ${page.currentBranch} branch into a folder in ${page.details.clonesFolder}.`)
-                          : page.details.isRpm
-                          ? `Downloads the newest release\u2019s ${page.repo.assetPattern} and installs it with dnf.`
+                          : page.details.isPackage
+                          ? `Downloads the newest release\u2019s ${page.repo.assetPattern} and installs it with ${page.details.packageTool}.`
                           : page.details.isProgram
                           ? `Downloads the newest release\u2019s ${page.repo.assetPattern}, unpacks it into ${page.details.programsFolder}, and puts a link to its program in ${page.details.binFolder}, so it runs as a command.`
                           : `Downloads the newest release\u2019s ${page.repo.assetPattern || "file"} into ${page.details.installFolder}, and adds it to the menu.`
@@ -533,8 +533,8 @@ Kirigami.ScrollablePage {
                 QQC2.Label {
                     Layout.fillWidth: true
                     visible: page.canUpdate && page.details.updateNeedsPassword === true
-                    text: page.details.isRpm
-                          ? "dnf installs it for the whole system, so it asks for your password."
+                    text: page.details.isPackage
+                          ? `${page.details.packageTool} installs it for the whole system, so it asks for your password.`
                           : "This clone belongs to the system, so Update asks for your password."
                     font: Kirigami.Theme.smallFont
                     wrapMode: Text.Wrap

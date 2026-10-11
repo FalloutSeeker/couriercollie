@@ -4,6 +4,11 @@ Newest first.
 
 ## 2026-10-11
 
+- Stage 6, other distros: release packages install and update with each distro's package manager (dnf, zypper, apt,
+  pacman; `packages.py`), with the same safety as RPMs had (checked download, a copy only root can change, full
+  paths). The scan finds packages installed from downloaded files with zypper and apt too. Tested for real in Fedora,
+  openSUSE, Ubuntu and Arch containers (`devtools/check_distros.sh`), where an Arch package (PKGBUILD) for the app
+  itself is also built and tried (`devtools/build_arch.sh`). README lists the libraries' package names per distro.
 - UI and readability pass, with a new tour of every screen and state (`devtools/check_look.py`, light and Breeze
   Dark). List rows: the address without the repeated "GitHub ·", the update icon beside its result, and results that
   wrap when the list is narrow so names stay whole. Paths in your home folder show as `~/…`. "Mark as Not Installed"

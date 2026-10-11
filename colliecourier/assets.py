@@ -10,6 +10,8 @@ import shutil
 from dataclasses import dataclass
 
 KIND_RPM = "RPM"
+KIND_DEB = "Debian package"
+KIND_ARCH = "Arch package"
 KIND_APPIMAGE = "AppImage"
 KIND_PROGRAM = "Program"
 KIND_GIT = "git"
@@ -43,11 +45,11 @@ _ANY_ARCH = re.compile(r"(x86_64|x86-64|amd64|x64|aarch64|arm64|arm-64|armv7|arm
                        r"loong64|mips64el|mips64|mipsel|mips|sparc64)", re.I)
 
 
-# Package tools on this computer, found once: which package files can be installed here (only RPMs, with dnf, so far).
+# Package managers on this computer, found once: which package files can be installed here (packages.py).
 PACKAGE_TOOLS: set[str] | None = None
 
 
-def _has(tool: str) -> bool:
+def has(tool: str) -> bool:
     global PACKAGE_TOOLS
     if PACKAGE_TOOLS is None:
         PACKAGE_TOOLS = {t for t in ("dnf", "apt", "pacman", "zypper") if shutil.which(t)}
@@ -73,20 +75,13 @@ def classify(name: str, url: str = "", machine: str | None = None) -> AssetInfo:
     return info
 
 
-def _package_note(name: str, tool: str) -> AssetInfo:
-    """A package the app can't install: one for this distro's package manager (not supported yet), or another's."""
-    return AssetInfo(KIND_OTHER, False, f"{name}: not supported yet" if _has(tool) else
-                     f"{name}: not supported on your distro")
+def _foreign_package(name: str) -> AssetInfo:
+    """A package for another distro's package manager."""
+    return AssetInfo(KIND_OTHER, False, f"{name}: not supported on your distro")
 
 
-def _classify_name(lower: str, machine: str) -> AssetInfo:
-    # Packages the app can't install. Arch's before macOS's ".pkg" below.
-    if lower.endswith((".pkg.tar.zst", ".pkg.tar.xz")):
-        return _package_note("Arch package", "pacman")
-    if lower.endswith(".deb"):
-        return _package_note("Debian package", "apt")
-    if lower.endswith(".rpm") and not lower.endswith(".src.rpm") and not _has("dnf"):
-        return _package_note("RPM", "zypper")
+def _kind_of(lower: str) -> "str | AssetInfo":
+    """What kind of file a name is, other than a package: or why it doesn't suit, as an AssetInfo."""
     if lower.endswith((".flatpak", ".flatpakref")):
         return AssetInfo(KIND_OTHER, False, "Flatpak: install it with your software center instead")
     if lower.endswith(".snap"):
@@ -102,16 +97,30 @@ def _classify_name(lower: str, machine: str) -> AssetInfo:
         return AssetInfo(KIND_OTHER, False, "checksum or signature")
     if lower.endswith(".src.rpm"):
         return AssetInfo(KIND_OTHER, False, "source package")
-    if lower.endswith(".rpm"):
-        kind = KIND_RPM
-    elif lower.endswith(".appimage"):
-        kind = KIND_APPIMAGE
-    elif lower.endswith(_ARCHIVES):
-        kind = KIND_PROGRAM
-    elif lower.endswith(tuple(_FOREIGN_EXT)):
+    if lower.endswith(".appimage"):
+        return KIND_APPIMAGE
+    if lower.endswith(_ARCHIVES):
+        return KIND_PROGRAM
+    if lower.endswith(tuple(_FOREIGN_EXT)):
         return AssetInfo(KIND_OTHER, False, f"for {_FOREIGN_EXT['.' + lower.rsplit('.', 1)[-1]]}")
-    else:
-        kind = KIND_FILE
+    return KIND_FILE
+
+
+def _classify_name(lower: str, machine: str) -> AssetInfo:
+    # Packages: for this distro's package manager (installed with it, packages.py), or for another's. Arch's before
+    # macOS's ".pkg" below.
+    package = None
+    if lower.endswith((".pkg.tar.zst", ".pkg.tar.xz")):
+        package = KIND_ARCH if has("pacman") else _foreign_package("Arch package")
+    elif lower.endswith(".deb"):
+        package = KIND_DEB if has("apt") else _foreign_package("Debian package")
+    elif lower.endswith(".rpm") and not lower.endswith(".src.rpm"):
+        package = KIND_RPM if has("dnf") or has("zypper") else _foreign_package("RPM")
+    if isinstance(package, AssetInfo):
+        return package
+    kind = package or _kind_of(lower)
+    if isinstance(kind, AssetInfo):
+        return kind
 
     if m := _FOREIGN_OS.search(lower):
         return AssetInfo(kind, False, f"for {_os_label(m.group(1))}")

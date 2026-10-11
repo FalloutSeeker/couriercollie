@@ -30,7 +30,7 @@ folders it didn't look in.
 | ---------------------------- | ------------------------------------------------------- | -------------------------------------------- |
 | Git clones                   | The folders to scan                                     | The clone's own remote URL (`git remote`)    |
 | AppImages                    | The folders to scan, plus `~/.local/bin` (hidden)       | Update info embedded in the AppImage         |
-| RPMs installed from a file   | The whole system, through dnf's list of installed RPMs  | The package's homepage, if it's a Git host   |
+| Packages installed from a file | The package manager's list (dnf, zypper or apt)      | The package's homepage, if it's a Git host   |
 | Loose programs               | Not scanned                                             | Can't be detected reliably; add them by hand |
 
 Finds in folders that belong to the system (common in `/opt`) are tracked like any other. Updating them will ask
@@ -41,6 +41,8 @@ For RPMs that takes two checks, both asked of dnf: the package was installed fro
 as `@commandline`, where Fedora's would say `fedora` or `updates`); and no repository you have enabled offers a
 package of that name. The second catches RPMs that add their own repository when installed (like
 `rpmfusion-free-release`): installed from a file, but dnf updates them. If dnf can't answer, no RPMs are listed.
+On openSUSE, zypper lists such packages under "(System Packages)"; on Debian and Ubuntu, apt marks them "local". Arch's
+are never listed: pacman can't tell a downloaded package from one built from the AUR, which AUR helpers update.
 
 > On this machine today, a scan would find 11 git clones (10 AeroThemePlasma repos and `ultrakanban`) and no
 > AppImages or GitHub RPMs.
@@ -126,7 +128,7 @@ What "Update" does depends on the kind:
 
 | Kind        | Update does                                                                     |
 | ----------- | ------------------------------------------------------------------------------- |
-| RPM         | Downloads the new `.rpm` and installs it through dnf (asks for your password)   |
+| Package     | Downloads the new `.rpm`/`.deb`/Arch package; the package manager installs it  |
 | AppImage    | Downloads the new file and swaps it in, keeping the old one until it works      |
 | Program     | Downloads, unpacks, and swaps in the new program file                           |
 | Git clone   | Pulls the new commits. Re-running the project's install script is a separate, deliberate step |
@@ -167,16 +169,21 @@ release's file next to the one you have; **Install** (when you don't have it) pu
   AppImage's own icon.
 - From then on the repo's version is read from the file, as for a scanned one ("Found on this computer").
 
-**RPMs (built 2026-10-11).** For repos that follow an `.rpm` file. **Install…** / **Update…** (the dots: it asks for
-your password, which the page says beforehand):
+**Packages (RPMs built 2026-10-11; Debian and Arch packages, and zypper, too).** For repos that follow a release's
+package for this distro: an `.rpm` (dnf on Fedora, zypper on openSUSE), a `.deb` (apt) or an Arch package (pacman).
+**Install…** / **Update…** (the dots: it asks for your password, which the page says beforehand):
 
 - Downloaded (with progress) into `~/.cache/colliecourier/downloads`, checked against the published checksum (else a
-  warning), and must really be an RPM. Its header is read with `rpm` (as you, nothing installed): if you have the
-  package already, the file must be that same package (a renamed one stops, saying so), and it must be for this
-  computer's processor or `noarch`.
-- Then `dnf install -y <file>` runs as root through polkit: one password prompt per update. Cancelling it changes
-  nothing. dnf's own error is shown if it fails (e.g. a missing dependency). The download is deleted either way.
-- From then on the version is read from the installed package (`rpm -q`), like an RPM a scan found.
+  warning), and must really be that kind of package. Its name, version and processor are read from the file (`rpm`,
+  `dpkg-deb`, `pacman`, as you, nothing installed): if you have the package already, the file must be that same
+  package (a renamed one stops, saying so), and it must be for this computer's processor or for any.
+- Then, as root through polkit, one password prompt per update: the file is copied where only root can write,
+  checked again against the verified download, and installed by the package manager (`dnf install -y`, `zypper
+  install --allow-unsigned-rpm`, `apt-get install -y`, `pacman -U`), each by its full path. Cancelling changes
+  nothing; the package manager's own error is shown if it fails. The download is deleted either way.
+- From then on the version is read from the installed package, like one a scan found.
+- **Tested for real** in Fedora, openSUSE, Ubuntu and Arch containers (`devtools/check_distros.sh`): install, version
+  read back, found by a scan (not on Arch, below), update, and a renamed package refused.
 
 **Programs (built 2026-10-11).** For repos that follow a release archive (`.tar.gz`, `.tgz`, `.tar.xz`, `.tar.bz2`,
 `.tar.zst`, `.zip`) with a ready-made program inside, e.g. ripgrep or LocalSend's tarball.

@@ -74,7 +74,7 @@ Kirigami.Dialog {
             QQC2.Label {
                 objectName: "scanStatus"
                 Layout.fillWidth: true
-                text: backend.scanState === "scanning" ? `Looking in ${backend.settings.scanFoldersText} for git clones and downloaded apps, and for RPMs installed from downloaded files, then checking each with its site…`
+                text: backend.scanState === "scanning" ? `Looking in ${backend.settings.scanFoldersText} for git clones and downloaded apps, and for packages installed from downloaded files, then checking each with its site…`
                     : backend.scanError !== "" ? "The scan didn’t finish."
                     : backend.scanItems.length === 0 ? "Nothing new found. Everything found is already tracked."
                     : `Found ${backend.scanItems.length} new. Only ticked ones are tracked.`
@@ -88,7 +88,7 @@ Kirigami.Dialog {
             Layout.fillWidth: true
             // Long text would otherwise widen the dialog to its full, unwrapped length.
             Layout.maximumWidth: Kirigami.Units.gridUnit * 36
-            text: "Only what your package manager can\u2019t update is listed. Anything dnf or Flatpak updates is left out: an RPM is only included if it was installed from a downloaded file and no repository you have enabled (Fedora, RPM Fusion, COPR\u2026) offers it."
+            text: "Only what your package manager can\u2019t update is listed. Anything it or Flatpak updates is left out: a package is only included if it was installed from a downloaded file and no repository you have enabled offers it."
             font: Kirigami.Theme.smallFont
             wrapMode: Text.Wrap
             opacity: 0.7

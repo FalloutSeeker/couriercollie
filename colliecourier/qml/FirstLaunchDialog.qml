@@ -107,7 +107,7 @@ Kirigami.Dialog {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 26
             Layout.leftMargin: Kirigami.Units.gridUnit * 1.5
             text: scanBox.checked
-                ? `Looks in ${backend.settings.scanFoldersText} for git clones, downloaded apps and RPMs installed from downloaded files. Only what your package manager can\u2019t update is listed; anything dnf or Flatpak updates is left out. You choose which to track; others can still be added by hand.`
+                ? `Looks in ${backend.settings.scanFoldersText} for git clones, downloaded apps and packages installed from downloaded files. Only what your package manager can\u2019t update is listed; anything it or Flatpak updates is left out. You choose which to track; others can still be added by hand.`
                 : "Off: tracking is manual. You add repos yourself, and for each one set which version you have, or mark it as up to date."
             wrapMode: Text.Wrap
             opacity: 0.7

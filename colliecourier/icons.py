@@ -1,7 +1,7 @@
 """An icon for each tracked repo, found once when the repo first appears and then saved (DECISIONS.md, D13).
 
 In order, the first that turns something up:
-1. On this computer: a scanned RPM's menu entry, a scanned AppImage's own icon (read with 7z, never run), an icon
+1. On this computer: an installed package's menu entry, a scanned AppImage's own icon (read with 7z, never run), an icon
    file in a scanned clone, or an installed app whose menu entry matches the repo's name.
 2. The project's picture on its site (sources.ProjectInfo.icon_url), downloaded once.
 3. Nothing: NONE is saved, and the window shows the default icon for the kind of repo.
@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from . import sources
+from . import packages, sources
 
 NONE = "-"
 MAX_BYTES = 1024 * 1024
@@ -106,12 +106,9 @@ def _desktop_entry(path: Path) -> dict[str, str]:
     return entry
 
 
-def from_rpm(package: str) -> str:
-    try:
-        result = subprocess.run(["rpm", "-ql", package], capture_output=True, text=True, timeout=20)
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
-    for line in result.stdout.splitlines():
+def from_package(kind: str, package: str) -> str:
+    """The icon of an installed package's menu entry."""
+    for line in packages.files_of(kind, package):
         if line.endswith(".desktop") and "/applications/" in line:
             if icon := _from_icon_key(_desktop_entry(Path(line)).get("Icon", "")):
                 return icon
@@ -176,8 +173,8 @@ def from_installed_app(names: list[str]) -> str:
 
 
 def on_this_computer(repo_id: str, name: str, project: str, local_path: str) -> str:
-    if m := re.fullmatch(r"RPM package “(.+)”", local_path):
-        if icon := from_rpm(m.group(1)):
+    if package := packages.from_place(local_path):
+        if icon := from_package(*package):
             return icon
     elif local_path.lower().endswith(".appimage"):
         if icon := from_appimage(repo_id, Path(local_path)):

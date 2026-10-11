@@ -166,6 +166,27 @@ class FindOnDiskTest(unittest.TestCase):
         self.assertEqual([f.name for f in scan.find_rpms(dnf)], ["tool"])
         self.assertEqual(asked[1][-2:], ("tool", "self-repo"))  # one question about just the candidates
 
+    def test_debian_packages_from_a_downloaded_file(self):
+        # apt marks a package no repository offers as "local"; its homepage says which project it's from.
+        outputs = {
+            "apt": "Listing...\ncc-tool/now 2.0-1 all [installed,local]\ncurl/noble 8.5.0-2 amd64 [installed]\n",
+            "dpkg-query": "cc-tool|1:2.0-1ubuntu1|https://github.com/example/tool\n",
+        }
+        found = scan.find_debs(lambda *args: outputs[args[0]])
+        self.assertEqual([(f.id, f.version, f.path) for f in found],
+                         [("github.com/example/tool", "2.0", "Debian package \u201ccc-tool\u201d")])
+
+    def test_opensuse_rpms_from_a_downloaded_file(self):
+        # zypper lists a package no repository offers under "(System Packages)".
+        outputs = {
+            "zypper": '<solvable status="installed" name="cc-tool" kind="package" edition="2.0-1" arch="noarch" '
+                      'repository="(System Packages)"/>\n<solvable status="installed" name="curl" kind="package" '
+                      'edition="8.5-1" arch="x86_64" repository="Main Repository (OSS)"/>',
+            "rpm": "cc-tool|2.0|https://gitlab.com/example/tool\n",
+        }
+        found = scan.find_zypper_rpms(lambda *args: outputs[args[0]])
+        self.assertEqual([(f.id, f.path) for f in found], [("gitlab.com/example/tool", "RPM package \u201ccc-tool\u201d")])
+
     def test_if_dnf_cant_say_which_are_offered_none_are_listed(self):
         def dnf(*args):
             return "tool|1.0|@commandline|https://github.com/a/tool\n" if "--installed" in args else None

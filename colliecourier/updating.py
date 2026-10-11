@@ -9,13 +9,12 @@ from __future__ import annotations
 
 import dataclasses
 import os
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QProcess, Slot
 
-from . import assets, checker, config, icons, sources, updater
+from . import assets, checker, config, icons, packages, sources, updater
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, TrackedRepo
 from .sources import RepoRef
 
@@ -51,15 +50,15 @@ def _is_program(repo: TrackedRepo) -> bool:
     return repo.follow == FOLLOW_RELEASES and repo.kind == assets.KIND_PROGRAM and bool(repo.asset_pattern)
 
 
-def _is_rpm(repo: TrackedRepo) -> bool:
-    """Following an .rpm file in each release (installed with dnf)."""
-    return repo.follow == FOLLOW_RELEASES and repo.kind == assets.KIND_RPM and bool(repo.asset_pattern)
+def _is_package(repo: TrackedRepo) -> bool:
+    """Following a package in each release (an .rpm, .deb or Arch package), installed with the package manager."""
+    return repo.follow == FOLLOW_RELEASES and repo.kind in packages.LABELS and bool(repo.asset_pattern)
 
 
-def _rpm_package(repo: TrackedRepo) -> str:
-    """The name of the RPM you have, for a scanned one: its place reads 'RPM package “name”'."""
-    m = re.fullmatch(r"RPM package \u201c(.+)\u201d", repo.local_path) if repo.source == config.SOURCE_SCANNED else None
-    return m.group(1) if m else ""
+def _package_name(repo: TrackedRepo) -> str:
+    """The name of the package you have, once it's on this computer: its place reads 'RPM package “name”'."""
+    found = packages.from_place(repo.local_path) if repo.source == config.SOURCE_SCANNED else None
+    return found[1] if found else ""
 
 
 def _can_clone(repo: TrackedRepo) -> bool:
@@ -71,14 +70,15 @@ def _can_clone(repo: TrackedRepo) -> bool:
 
 def _can_update(repo: TrackedRepo) -> bool:
     """Whether Update (or Install) can do anything for this repo: a git clone found by a scan (pulled, or moved to
-    the newest release's tag), a release's AppImage, program archive or RPM (downloaded, checked and put in place), or
-    a project to clone."""
-    return _is_clone(repo) or _is_appimage(repo) or _is_program(repo) or _is_rpm(repo) or _can_clone(repo)
+    the newest release's tag), a release's AppImage, program archive or package (downloaded, checked and put in
+    place), or a project to clone."""
+    return _is_clone(repo) or _is_appimage(repo) or _is_program(repo) or _is_package(repo) or _can_clone(repo)
 
 
 def _needs_password(repo: TrackedRepo) -> bool:
-    """Whether Update asks for your password: dnf installs an RPM for the whole system; a clone may belong to it."""
-    return _is_rpm(repo) or (_is_clone(repo) and updater.needs_password(repo.local_path))
+    """Whether Update asks for your password: the package manager installs a package for the whole system; a clone
+    may belong to it."""
+    return _is_package(repo) or (_is_clone(repo) and updater.needs_password(repo.local_path))
 
 
 class Updating:
@@ -205,14 +205,14 @@ class Updating:
         (updater.install_appimage, install_program). An AppImage you don't have yet goes into ~/Applications, with a
         menu entry; a program is unpacked into its own folder, with a link in ~/.local/bin."""
         repo_id, d = repo.id, self._details.get(repo.id)
-        is_program, is_rpm, package = _is_program(repo), _is_rpm(repo), _rpm_package(repo)
+        is_program, is_package, package, kind = _is_program(repo), _is_package(repo), _package_name(repo), repo.kind
         here_link = Path(repo.local_path) if is_program and repo.local_path else None
         wanted = repo.program or (here_link.name if here_link and here_link.is_symlink() else "")
         hints = [RepoRef.from_id(repo.id).name, repo.name, repo.asset_pattern.split("-")[0].split("*")[0]]
         ref, host, pattern, name, icon = RepoRef.from_id(repo.id), repo.host, repo.asset_pattern, repo.name, repo.icon
         known = d.releases if d and d.state == "ready" else None
         here = Path(repo.local_path) if repo.source == config.SOURCE_SCANNED and repo.local_path else None
-        old = here if here and here.is_file() and not is_program and not is_rpm else None
+        old = here if here and here.is_file() and not is_program and not is_package else None
         folder = old.parent if old else updater.apps_dir()
         self._updating.add(repo_id)
         self._update_notes.pop(repo_id, None)
@@ -238,13 +238,14 @@ class Updating:
             if not asset:
                 raise updater.UpdateError(f"The newest release ({release.tag}) doesn\u2019t include your file "
                                           f"({pattern}). Choose it again under Your Build File.")
-            if is_rpm:
+            if is_package:
                 def installing():
                     self._deliver.emit(lambda: (self._phases.__setitem__(repo_id, "installing"),
                                                 self.detailsChanged.emit(repo_id)))
 
-                rpm_name, _version, verified = updater.install_rpm(asset, release.assets, package, progress, installing)
-                return release.tag, rpm_name, verified, bool(package)
+                found, _version, verified, tool = updater.install_package(asset, release.assets, kind, package,
+                                                                          progress, installing)
+                return release.tag, found, verified, bool(package), tool
             if is_program:
                 link, verified, replaced = updater.install_program(repo_id, release.tag, asset, release.assets, wanted,
                                                                     hints, progress)
@@ -267,15 +268,16 @@ class Updating:
                 self._update_notes[repo_id] = ("error", self._error_text(error))
                 if isinstance(error, updater.SeveralPrograms):
                     self._program_choices[repo_id] = error.choices
-            elif repo and is_rpm:
-                tag, rpm_name, verified, had_it = result
+            elif repo and is_package:
+                tag, found, verified, had_it, tool = result
                 # From now on its version is read from the installed package, like one a scan found.
-                repo.source, repo.local_path, repo.installed = config.SOURCE_SCANNED, f"RPM package \u201c{rpm_name}\u201d", tag
+                repo.source, repo.local_path, repo.installed = config.SOURCE_SCANNED, packages.place(kind, found), tag
                 self._version_changed(repo)
                 self._changed(repo_id)
                 check = " Checked against the project\u2019s published checksum." if verified else \
                     " The project publishes no checksum for it, so the download couldn\u2019t be checked."
-                what = f"Updated to {tag} with dnf." if had_it else f"Installed {tag} with dnf (package \u201c{rpm_name}\u201d)."
+                what = f"Updated to {tag} with {tool}." if had_it else \
+                    f"Installed {tag} with {tool} (package \u201c{found}\u201d)."
                 self._update_notes[repo_id] = ("done" if verified else "warning", what + check)
             elif repo:
                 tag, new, verified, replaced = result

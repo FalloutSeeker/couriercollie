@@ -1,6 +1,7 @@
 """Updating what's tracked (stage 5). Only ever runs because you clicked Update (DECISIONS.md, D4, D6).
 
-RPMs: the new .rpm is downloaded, checked, and installed by dnf, which asks for your password.
+Packages (an .rpm, .deb or Arch package): the new one is downloaded, checked, and installed by the package manager
+(dnf, zypper, apt or pacman), which asks for your password.
 
 Programs (an archive with a ready-made program inside): each version is unpacked into its own folder, and a link in
 ~/.local/bin starts it; updating switches the link, then removes the old version.
@@ -15,7 +16,6 @@ window you can watch (and type your password into, if it asks).
 
 import hashlib
 import os
-import platform
 import shlex
 import shutil
 import subprocess
@@ -25,7 +25,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-from . import sources
+from . import packages, sources
 
 # Fetching can take a while for a big project on a slow connection.
 FETCH_TIMEOUT = 300
@@ -620,34 +620,20 @@ def program_version(link: Path) -> str:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# RPMs: the release's .rpm is downloaded, checked, and installed by dnf, as root, which asks for your password
-# (DECISIONS.md, D4, D6). Only RPMs installed from a downloaded file are tracked: dnf doesn't update those itself.
+# Packages: the release's .rpm, .deb or Arch package is downloaded, checked, and installed by the package manager
+# (packages.py), as root, which asks for your password (DECISIONS.md, D4, D6). Only packages installed from a
+# downloaded file are tracked: the package manager doesn't update those itself.
 
-DNF = ["/usr/bin/dnf"]
-RPM_MAGIC = b"\xed\xab\xee\xdb"
-# Installing can take a while (dnf may download what the package needs), plus typing the password.
-DNF_TIMEOUT = 1800
+# Installing can take a while (the package manager may download what the package needs), plus typing the password.
+INSTALL_TIMEOUT = 1800
 
 
 def downloads_dir() -> Path:
     return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "colliecourier" / "downloads"
 
 
-def rpm_info(path: Path) -> tuple[str, str, str]:
-    """(name, version, architecture) from an .rpm file's header, read without installing it."""
-    try:
-        result = subprocess.run(["rpm", "-qp", "--qf", "%{NAME}|%{VERSION}|%{ARCH}", str(path)], capture_output=True,
-                                text=True, timeout=60)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        raise UpdateError(f"Couldn’t read the RPM: {e}") from e
-    parts = result.stdout.strip().split("|")
-    if result.returncode != 0 or len(parts) != 3:
-        raise UpdateError("The download isn’t a readable RPM, so it wasn’t installed.")
-    return parts[0], parts[1], parts[2]
-
-
-# Run as root: copy the .rpm ($1, named $2) into a new folder only root can write to, check it's still the file that
-# was checked (sha256 $3), then install that copy with the dnf command that follows ($4…).
+# Run as root: copy the package ($1, named $2) into a new folder only root can write to, check it's still the file
+# that was checked (sha256 $3), then install that copy with the command that follows ($4…).
 _CHANGED = 3
 _INSTALL_COPY = (
     f'export PATH={SYSTEM_PATH}; '
@@ -655,15 +641,21 @@ _INSTALL_COPY = (
     'dir=$(mktemp -d) || exit 1; trap \'rm -rf "$dir"\' EXIT; '
     'cp -- "$src" "$dir/$name" || exit 1; '
     f'printf "%s  %s\\n" "$sum" "$dir/$name" | sha256sum -c --status - || exit {_CHANGED}; '
-    '"$@" install -y "$dir/$name"'
+    'chmod 644 "$dir/$name"; chmod 755 "$dir"; '  # apt reads it as its own unprivileged user
+    '"$@" "$dir/$name"'
 )
 
 
-def install_rpm(asset, others: list, package: str = "", progress=None, installing=None,
-                get_text=fetch_text) -> tuple[str, str, bool]:
-    """Downloads a release's .rpm, checks it, and installs it with dnf (asking for the password). `package`: the name
-    of the package you have, which the file must be. `installing()` is called when dnf starts. Returns (package name,
-    version, whether the download was checked against a published checksum). The download is deleted afterwards."""
+def install_package(asset, others: list, kind: str, package: str = "", progress=None, installing=None,
+                    get_text=fetch_text) -> tuple[str, str, bool, str]:
+    """Downloads a release's package (an .rpm, .deb or Arch package, by `kind`), checks it, and installs it with this
+    computer's package manager, which asks for the password. `package`: the name of the package you have, which the
+    file must be. `installing()` is called when the package manager starts. Returns (package name, version, whether
+    the download was checked against a published checksum, the package manager). The download is deleted after."""
+    tool = packages.tool_for(kind)
+    if not tool:
+        raise UpdateError(f"There\u2019s no package manager here for {packages.A_LABEL[kind]}, so it wasn\u2019t "
+                          "installed.")
     folder = downloads_dir()
     folder.mkdir(parents=True, exist_ok=True)
     name = Path(asset.name).name
@@ -671,35 +663,38 @@ def install_rpm(asset, others: list, package: str = "", progress=None, installin
     try:
         verified = _download_checked(asset, part, others, progress, get_text)
         with part.open("rb") as f:
-            if f.read(4) != RPM_MAGIC:
-                raise UpdateError(f"{name} isn’t an RPM, so it wasn’t installed.")
-        os.replace(part, file)  # dnf needs the .rpm name
-        rpm_name, version, arch = rpm_info(file)
-        if package and rpm_name != package:
-            raise UpdateError(f"The new file is the package “{rpm_name}”, not “{package}” that you "
-                              "have, so it wasn’t installed. The project may have renamed it.")
-        if arch not in (platform.machine(), "noarch"):
-            raise UpdateError(f"The new file is for {arch} computers, not this one, so it wasn’t installed.")
+            if not f.read(8).startswith(packages.MAGIC[kind]):
+                raise UpdateError(f"{name} isn\u2019t {packages.A_LABEL[kind]}, so it wasn\u2019t installed.")
+        os.replace(part, file)  # package managers go by the file's name
+        try:
+            found, version, arch = packages.file_info(kind, file)
+        except ValueError as e:
+            raise UpdateError(str(e)) from e
+        if package and found != package:
+            raise UpdateError(f"The new file is the package \u201c{found}\u201d, not \u201c{package}\u201d that you "
+                              "have, so it wasn\u2019t installed. The project may have renamed it.")
+        if not packages.suits(arch):
+            raise UpdateError(f"The new file is for {arch} computers, not this one, so it wasn\u2019t installed.")
         if installing:
             installing()
         # The checked file is in a folder you can write to, so as root it's first copied where only root can, and
-        # checked again there: nothing can swap it between the checks above and dnf installing it.
+        # checked again there: nothing can swap it between the checks above and the package manager installing it.
         with file.open("rb") as f:
             checked = hashlib.file_digest(f, "sha256").hexdigest()
         try:
-            result = subprocess.run([*ROOT, "/bin/sh", "-c", _INSTALL_COPY, "sh", str(file), name, checked, *DNF],
-                                    capture_output=True, text=True, timeout=DNF_TIMEOUT)
+            result = subprocess.run([*ROOT, "/bin/sh", "-c", _INSTALL_COPY, "sh", str(file), name, checked,
+                                     *packages.INSTALL[tool]], capture_output=True, text=True, timeout=INSTALL_TIMEOUT)
         except subprocess.TimeoutExpired as e:
-            raise UpdateError("dnf took too long; check Discover or a terminal to see if it’s still busy.") from e
+            raise UpdateError(f"{tool} took too long; check a terminal to see if it\u2019s still busy.") from e
         except OSError as e:
-            raise UpdateError(f"Couldn’t run dnf: {e}") from e
+            raise UpdateError(f"Couldn\u2019t run {tool}: {e}") from e
         if ROOT and result.returncode in (126, 127):
-            raise UpdateError("The password wasn’t given, so nothing was installed.")
+            raise UpdateError("The password wasn\u2019t given, so nothing was installed.")
         if result.returncode == _CHANGED:
             raise UpdateError("The downloaded file changed after it was checked, so nothing was installed.")
         if result.returncode != 0:
-            raise UpdateError(f"dnf couldn’t install it: {_last_line(result)}")
-        return rpm_name, version, verified
+            raise UpdateError(f"{tool} couldn\u2019t install it: {_last_line(result)}")
+        return found, version, verified, tool
     finally:
         part.unlink(missing_ok=True)
         file.unlink(missing_ok=True)

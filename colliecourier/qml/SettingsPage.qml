@@ -83,7 +83,7 @@ Kirigami.ScrollablePage {
         QQC2.Label {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 24
             text: page.s.scanning
-                ? "Looks for git clones, downloaded apps and RPMs installed from downloaded files, and lets you choose which to track (Scan, in the main window). Only what your package manager can\u2019t update is listed; anything dnf or Flatpak updates is left out. Repos added by hand that a scan later finds switch to the version found."
+                ? "Looks for git clones, downloaded apps and packages installed from downloaded files, and lets you choose which to track (Scan, in the main window). Only what your package manager can\u2019t update is listed; anything it or Flatpak updates is left out. Repos added by hand that a scan later finds switch to the version found."
                 : "Off: tracking is manual. You add repos yourself, and for each one set which version you have, or mark it as up to date."
             wrapMode: Text.Wrap
             opacity: 0.7
@@ -148,7 +148,7 @@ Kirigami.ScrollablePage {
 
             QQC2.Label {
                 visible: page.s.scanFolders.length === 0
-                text: "No folders. Only RPMs will be found."
+                text: "No folders. Only packages installed from downloaded files will be found."
                 opacity: 0.7
             }
 

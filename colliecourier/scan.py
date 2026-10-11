@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import assets, sources, updater
+from . import assets, packages, sources, updater
 from .config import FOLLOW_BRANCH, SOURCE_SCANNED, Config, TrackedRepo
 from .sources import RepoRef, SourceError
 
@@ -161,6 +161,65 @@ def find_rpms(dnf=_dnf) -> list[Found]:
     return [f for f in candidates if f.name not in offered]
 
 
+def _run_out(*args: str) -> str | None:
+    """A command's standard output, or None if it couldn't be run or failed."""
+    try:
+        result = subprocess.run(list(args), capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return result.stdout if result.returncode == 0 else None
+
+
+def _from_homepages(kind: str, lines: str) -> list[Found]:
+    """Packages as "name|version|homepage" lines, kept if the homepage is a project's page."""
+    found = []
+    for line in lines.splitlines():
+        parts = line.split("|")
+        if len(parts) != 3:
+            continue
+        name, version, url = parts
+        try:
+            ref = sources.parse_url(url)
+        except ValueError:
+            continue
+        found.append(Found(id=ref.id, name=name, url=ref.web_url, host="", path=packages.place(kind, name), kind=kind,
+                           version=packages.upstream_version(version)))
+    return found
+
+
+def find_debs(run=_run_out) -> list[Found]:
+    """Debian packages only you can update: apt marks one no repository you have offers as "local" (installed from
+    a downloaded file, and not added by a repository since). Kept if its homepage is a GitHub or GitLab project."""
+    listed = run("apt", "list", "--installed")
+    names = [line.split("/", 1)[0] for line in (listed or "").splitlines() if line.rstrip().endswith(",local]")]
+    if not names:
+        return []
+    return _from_homepages(assets.KIND_DEB, run("dpkg-query", "--show", "--showformat=${Package}|${Version}|${Homepage}\n",
+                                                *names) or "")
+
+
+def find_zypper_rpms(run=_run_out) -> list[Found]:
+    """openSUSE's RPMs only you can update: zypper lists one no repository offers under "(System Packages)"."""
+    listed = run("zypper", "--quiet", "--xmlout", "search", "--installed-only", "--details", "--type", "package")
+    names = sorted(set(re.findall(r'<solvable [^>]*name="([^"]+)"[^>]*repository="\(System Packages\)"', listed or "")))
+    if not names:
+        return []
+    return _from_homepages(assets.KIND_RPM, run("rpm", "-q", "--qf", "%{NAME}|%{VERSION}|%{URL}\n", *names) or "")
+
+
+def find_packages() -> list[Found]:
+    """Packages installed from a downloaded file that the package manager doesn't update: RPMs (dnf, or zypper),
+    and Debian packages (apt). Not Arch's: pacman can't tell a downloaded package from one built from the AUR, which
+    AUR helpers keep up to date."""
+    if assets.has("dnf"):
+        return find_rpms()
+    if assets.has("zypper"):
+        return find_zypper_rpms()
+    if assets.has("apt"):
+        return find_debs()
+    return []
+
+
 # AppImages made with the standard tools carry where they update from, e.g. "gh-releases-zsync|owner|repo|latest|…".
 _UPDATE_INFO = re.compile(rb"gh-releases-zsync\|([A-Za-z0-9_.-]+)\|([A-Za-z0-9_.-]+)\|")
 # "1.18.2", optionally with a pre-release part like "-beta.2" or "-rc1" (but not "-linux").
@@ -204,7 +263,7 @@ def find_appimages(dirs: Iterable[str]) -> list[Found]:
     return found
 
 
-def find_all(folders: Iterable[str] = DEFAULT_SCAN_FOLDERS, rpms: Callable[[], list[Found]] = find_rpms,
+def find_all(folders: Iterable[str] = DEFAULT_SCAN_FOLDERS, rpms: Callable[[], list[Found]] = find_packages,
              max_depth: int = MAX_DEPTH) -> list[Found]:
     """Everything on this computer, with each project listed once (extra places go in `other_paths`)."""
     roots = scan_roots(folders)
@@ -212,8 +271,8 @@ def find_all(folders: Iterable[str] = DEFAULT_SCAN_FOLDERS, rpms: Callable[[], l
     hidden = [d for d in HIDDEN_APPIMAGE_DIRS if any(_inside(Path(d).expanduser().resolve(), r) for r in roots)]
     items = clones + rpms() + [f for p in appimage_files if (f := _appimage(p))] + find_appimages(hidden)
     for item in items:
-        if item.kind == assets.KIND_RPM:
-            continue  # RPMs are always updated through dnf, which asks for the password itself
+        if item.kind in packages.LABELS:
+            continue  # packages are always updated through the package manager, which asks for the password itself
         # Updating a clone changes its folder; updating an AppImage replaces the file in its folder.
         target = item.path if item.kind == assets.KIND_GIT else str(Path(item.path).parent)
         item.needs_password = not os.access(target, os.W_OK)
@@ -230,14 +289,9 @@ def find_all(folders: Iterable[str] = DEFAULT_SCAN_FOLDERS, rpms: Callable[[], l
 def version_on_disk(path: str, releases: bool = False) -> tuple[str, bool]:
     """What's on this computer now for a scanned repo, read from where the scan found it: (version, still there).
     A clone's commit (or, when it follows releases, the release tag it's at), an AppImage's version from its file
-    name, or an RPM's installed version."""
-    if m := re.fullmatch(r"RPM package \u201c(.+)\u201d", path):
-        try:
-            result = subprocess.run(["rpm", "-q", "--qf", "%{VERSION}", m.group(1)], capture_output=True, text=True,
-                                    timeout=20)
-        except (OSError, subprocess.TimeoutExpired):
-            return "", True  # can't tell; assume it's still there
-        return (result.stdout.strip(), True) if result.returncode == 0 else ("", False)
+    name, or a package's installed version (packages.py)."""
+    if package := packages.from_place(path):
+        return packages.installed_version(*package)
     p = Path(path)
     if p.is_symlink() and (version := updater.program_version(p)):
         return version, True  # a program the app installed: its link points into that version's folder

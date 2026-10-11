@@ -1,7 +1,7 @@
 import unittest
 
 from colliecourier import assets
-from colliecourier.assets import KIND_APPIMAGE, KIND_FILE, KIND_OTHER, KIND_PROGRAM, KIND_RPM
+from colliecourier.assets import KIND_APPIMAGE, KIND_ARCH, KIND_DEB, KIND_FILE, KIND_OTHER, KIND_PROGRAM, KIND_RPM
 
 
 class ClassifyTest(unittest.TestCase):
@@ -36,15 +36,20 @@ class ClassifyTest(unittest.TestCase):
         def note(name):
             return self.check(name, KIND_OTHER, False).note
 
+        # Fedora: RPMs; another distro's packages say why not.
+        self.check("app-1.0.x86_64.rpm", KIND_RPM, True)
         self.assertEqual(note("app-1.0-1-x86_64.pkg.tar.zst"), "Arch package: not supported on your distro")
         self.assertEqual(note("app_1.0_amd64.deb"), "Debian package: not supported on your distro")
         self.assertEqual(note("app-1.0-x86_64.flatpak"), "Flatpak: install it with your software center instead")
-        assets.PACKAGE_TOOLS = {"pacman"}  # Arch: RPMs can't be installed, its own packages not yet
+        assets.PACKAGE_TOOLS = {"pacman"}  # Arch
         self.assertEqual(note("app-1.0.x86_64.rpm"), "RPM: not supported on your distro")
-        self.assertEqual(note("app-1.0-1-x86_64.pkg.tar.zst"), "Arch package: not supported yet")
+        self.check("app-1.0-1-x86_64.pkg.tar.zst", KIND_ARCH, True)
+        self.check("app-1.0-1-aarch64.pkg.tar.zst", KIND_ARCH, False)  # another processor
         self.check("app-1.0-linux-x86_64.tar.zst", KIND_PROGRAM, True)  # a plain archive is still a program
-        assets.PACKAGE_TOOLS = {"apt"}
-        self.assertEqual(note("app_1.0_amd64.deb"), "Debian package: not supported yet")
+        assets.PACKAGE_TOOLS = {"apt"}  # Debian, Ubuntu
+        self.check("app_1.0_amd64.deb", KIND_DEB, True)
+        assets.PACKAGE_TOOLS = {"zypper"}  # openSUSE: RPMs too
+        self.check("app-1.0.x86_64.rpm", KIND_RPM, True)
 
     def test_files_that_belong_to_another_systems_package(self):
         # Obtainium (an Android app) ships signature files next to each .apk; "x86_64" in the name mustn't count.
@@ -133,6 +138,19 @@ class OtherProcessorsTest(unittest.TestCase):
                      "tool-linux-sparc64.tar.gz"):
             self.assertFalse(assets.classify(name, machine="x86_64").suits, name)
         self.assertTrue(assets.classify("bottom_x86_64-unknown-linux-gnu.tar.gz", machine="x86_64").suits)
+
+
+class PackagesTest(unittest.TestCase):
+    def test_versions_and_places(self):
+        from colliecourier import packages
+
+        self.assertEqual(packages.upstream_version("1:2.3.4-1ubuntu2"), "2.3.4")  # epoch and Debian revision off
+        self.assertEqual(packages.upstream_version("2.3.4-1"), "2.3.4")  # Arch's pkgrel off
+        self.assertEqual(packages.upstream_version("2.3.4"), "2.3.4")
+        place = packages.place(assets.KIND_DEB, "tool")
+        self.assertEqual((place, packages.from_place(place)), ("Debian package “tool”", (assets.KIND_DEB, "tool")))
+        self.assertIsNone(packages.from_place("/home/you/tool"))
+        self.assertEqual(packages.A_LABEL[assets.KIND_RPM], "an RPM package")
 
 
 if __name__ == "__main__":

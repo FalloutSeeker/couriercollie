@@ -13,11 +13,12 @@ window, so there's one app to install and learn instead of several tools and the
 **Stages 1–5 of PLAN.md are built.** You can add GitHub/GitLab repos by hand or scan this computer for them, sort
 them into categories, browse their releases, build files and branches, set which version you have, check for updates
 (by hand or in the background, with notifications), and update with a click: git clones are pulled (or moved to the
-newest release), AppImages and programs from release archives are downloaded, checked and swapped in, and RPMs are
-installed with dnf. Stage 6 (GitHub sign-in, packaging, GNOME) and stage 7 (release) aren't built yet.
+newest release), AppImages and programs from release archives are downloaded, checked and swapped in, and packages
+(RPMs, Debian and Arch packages) are installed with the package manager. Stage 6 (GitHub sign-in, packaging, GNOME) and stage 7 (release) aren't built yet.
 
 **Developed and tested mainly on Fedora KDE.** Git clones, AppImages and programs from release archives should work
-on other distros, but those (and GNOME) still need thorough testing, and package handling is Fedora's (dnf) for now.
+on other distros, and packages install with dnf, zypper, apt or pacman (each tried in a container), but other
+distros (and GNOME) still need testing on real computers.
 If you try it elsewhere, please say how it went in a GitHub issue, whether it worked or not.
 
 ## Installing it as a package
@@ -72,7 +73,7 @@ Other ways to run it:
   "colliecourier: GitHub sign-in".
 - Only when you install or update something: AppImages in `~/Applications` (or beside the one you had), with a menu
   entry `~/.local/share/applications/colliecourier-<repo>.desktop`; programs unpacked in
-  `~/.local/share/colliecourier/programs/`, with a link in `~/.local/bin`; RPMs through dnf (downloaded first to
+  `~/.local/share/colliecourier/programs/`, with a link in `~/.local/bin`; packages through the package manager (downloaded first to
   `~/.cache/colliecourier/downloads/`, then deleted); projects you install by cloning, in `~/src`.
 
 To start over as if newly installed (the welcome screen shows again), run it with `--reset`. Your settings file is
@@ -108,6 +109,7 @@ python3 -I devtools/check_look.py [dark]     # a tour of every screen and state,
 python3 -I devtools/check_appimage.py        # installs then updates LocalSend's AppImage, in temporary folders
 python3 -I devtools/check_program.py         # installs then updates ripgrep from its .tar.gz, in temporary folders
 python3 -I devtools/check_rpm.py             # bottom's real .rpm up to dnf, which is a stand-in: nothing is installed
+devtools/check_distros.sh [fedora opensuse ubuntu arch]  # packages installed for real, in each distro's container
 ```
 
 ## Code layout
@@ -121,7 +123,8 @@ python3 -I devtools/check_rpm.py             # bottom's real .rpm up to dnf, whi
 | `colliecourier/icons.py`     | Repo icons: from this computer, the project's site, or the default (D13)          |
 | `colliecourier/checker.py`   | Checking every repo for updates; results kept apart from settings                 |
 | `colliecourier/integration.py` | Menu entry, notifications, taskbar badge, background timer, one copy at a time |
-| `colliecourier/updater.py`   | Updating: pulling and cloning, downloads checked and put in place, dnf          |
+| `colliecourier/updater.py`   | Updating: pulling and cloning, downloads checked and put in place, packages     |
+| `colliecourier/packages.py`  | Packages per distro: which tool installs each kind, reading names and versions  |
 | `colliecourier/backend.py`   | Connects the window to the above; runs network work in the background          |
 | `colliecourier/updating.py`  | The backend's Update and Install buttons and install scripts (part of it)      |
 | `colliecourier/github_login.py` | Signing in to GitHub: the code sign-in, and keeping it in the password store |

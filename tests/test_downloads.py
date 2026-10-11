@@ -6,7 +6,7 @@ import threading
 import unittest
 from pathlib import Path
 
-from colliecourier import config, sources, updater
+from colliecourier import assets, config, packages, sources, updater
 from colliecourier.sources import Asset, Release
 
 APP = b"\x7fELF\x02\x01\x01\x00AI\x02" + os.urandom(300_000)  # what an AppImage starts with, then anything
@@ -312,7 +312,7 @@ class RpmTest(AppImageCase):
 
     def setUp(self):
         super().setUp()
-        self.rpm = updater.RPM_MAGIC + os.urandom(50_000)
+        self.rpm = packages.MAGIC[assets.KIND_RPM][0] + os.urandom(50_000)
         _Files.files["tool-2.0-1.x86_64.rpm"] = self.rpm
         self.asked = Path(self.dir.name) / "dnf-asked"
         fake_dnf = Path(self.dir.name) / "dnf"
@@ -320,11 +320,13 @@ class RpmTest(AppImageCase):
         fake_dnf.write_text('#!/bin/sh\nfor a in "$@"; do echo "$a"; done > "$ASKED"\n[ -f "$3" ] && echo exists >> "$ASKED"\n'
                             'if [ -n "$DNF_FAILS" ]; then echo "Error: $DNF_FAILS" >&2; exit 1; fi\n')
         fake_dnf.chmod(0o755)
-        saved = updater.ROOT, updater.DNF, updater.rpm_info
-        updater.ROOT, updater.DNF = ["env", f"ASKED={self.asked}"], [str(fake_dnf)]
-        updater.rpm_info = lambda path: ("tool", "2.0", "x86_64")
-        self.addCleanup(lambda: (setattr(updater, "ROOT", saved[0]), setattr(updater, "DNF", saved[1]),
-                                 setattr(updater, "rpm_info", saved[2])))
+        saved = updater.ROOT, dict(packages.INSTALL), packages.file_info, assets.PACKAGE_TOOLS
+        updater.ROOT = ["env", f"ASKED={self.asked}"]
+        packages.INSTALL["dnf"] = [str(fake_dnf), "install", "-y"]
+        packages.file_info = lambda kind, path: ("tool", "2.0", "x86_64")
+        assets.PACKAGE_TOOLS = {"dnf"}  # a Fedora computer, whatever this one is
+        self.addCleanup(lambda: (setattr(updater, "ROOT", saved[0]), packages.INSTALL.update(saved[1]),
+                                 setattr(packages, "file_info", saved[2]), setattr(assets, "PACKAGE_TOOLS", saved[3])))
         self.addCleanup(os.environ.pop, "DNF_FAILS", None)
 
     def asset(self, name="tool-2.0-1.x86_64.rpm", digest=None, path=None):
@@ -334,15 +336,15 @@ class RpmTest(AppImageCase):
 
     def test_installs_with_dnf_and_cleans_up(self):
         started = []
-        name, version, verified = updater.install_rpm(self.asset(), [], "tool", installing=lambda: started.append(1))
-        self.assertEqual((name, version, verified, started), ("tool", "2.0", True, [1]))
+        result = updater.install_package(self.asset(), [], assets.KIND_RPM, "tool", installing=lambda: started.append(1))
+        self.assertEqual((result, started), (("tool", "2.0", True, "dnf"), [1]))
         asked = self.asked.read_text().split()
         self.assertEqual(asked[:2], ["install", "-y"])
         self.assertTrue(asked[2].endswith("tool-2.0-1.x86_64.rpm") and asked[3] == "exists")
         self.assertEqual(list(updater.downloads_dir().iterdir()), [])  # the download is deleted
 
     def test_installs_a_copy_only_root_can_change(self):
-        updater.install_rpm(self.asset(), [], "tool")
+        updater.install_package(self.asset(), [], assets.KIND_RPM, "tool")
         installed = Path(self.asked.read_text().split()[2])
         self.assertNotEqual(installed.parent, updater.downloads_dir())  # not the copy in your folder
         self.assertFalse(installed.parent.exists())  # and it's cleaned up
@@ -351,28 +353,28 @@ class RpmTest(AppImageCase):
         # Something running as you swaps the checked file just as dnf is asked for (here: the password prompt).
         updater.ROOT = ["sh", "-c", 'printf swapped > "$5"; exec "$@"', "polkit"]
         with self.assertRaisesRegex(updater.UpdateError, "changed after it was checked"):
-            updater.install_rpm(self.asset(), [], "tool")
+            updater.install_package(self.asset(), [], assets.KIND_RPM, "tool")
         self.assertFalse(self.asked.exists())  # dnf was never asked
 
     def test_a_different_package_isnt_installed(self):
         with self.assertRaisesRegex(updater.UpdateError, "not “other” that you have"):
-            updater.install_rpm(self.asset(), [], "other")
+            updater.install_package(self.asset(), [], assets.KIND_RPM, "other")
         self.assertFalse(self.asked.exists())  # dnf was never asked
 
     def test_dnf_failing_says_why(self):
         os.environ["DNF_FAILS"] = "nothing provides libfoo.so.3"
         with self.assertRaisesRegex(updater.UpdateError, "dnf couldn’t install it: Error: nothing provides"):
-            updater.install_rpm(self.asset(), [])
+            updater.install_package(self.asset(), [], assets.KIND_RPM)
         self.assertEqual(list(updater.downloads_dir().iterdir()), [])
 
     def test_no_password_nothing_installed(self):
         updater.ROOT = ["sh", "-c", "exit 126", "polkit"]
         with self.assertRaisesRegex(updater.UpdateError, "password wasn’t given"):
-            updater.install_rpm(self.asset(), [])
+            updater.install_package(self.asset(), [], assets.KIND_RPM)
 
     def test_something_thats_not_an_rpm_isnt_installed(self):
-        with self.assertRaisesRegex(updater.UpdateError, "isn’t an RPM"):
-            updater.install_rpm(self.asset("tool-2.0-1.x86_64.rpm", "", "not-an-app.AppImage"), [])
+        with self.assertRaisesRegex(updater.UpdateError, "isn’t an RPM package"):
+            updater.install_package(self.asset("tool-2.0-1.x86_64.rpm", "", "not-an-app.AppImage"), [], assets.KIND_RPM)
         self.assertFalse(self.asked.exists())
 
     def test_install_clicked(self):
