@@ -10,6 +10,10 @@ Newest first.
   Konsole in the clone's folder. Tested against real git repos made for the tests; your own clones weren't touched.
   - Also: a branch whose newest commit is your version is no longer asked about (it's the same, no request).
   - The scanned-repo window check now waits for each comparison to come back, rather than a fixed time.
+- RPMs kept in the plan (dnf never updates one installed from a downloaded file). The scan now also leaves out RPMs
+  that an enabled repository offers (some add their own repository when installed, so dnf updates them; on this
+  machine, the RPM Fusion release packages), and lists none if dnf can't say. The scan, welcome screen and Settings
+  say plainly that only what the package manager can't update is listed.
 - After an update, its note ("Pulled 1 new commit.") goes on Refresh or Check Now, so the page is back to its usual
   view with the new version.
 - Stage 5, AppImages: Install / Update download the newest release's AppImage with progress, check it against

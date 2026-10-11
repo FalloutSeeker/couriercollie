@@ -151,6 +151,27 @@ class FindOnDiskTest(unittest.TestCase):
         self.assertEqual(scan.find_git_clones(self.home, max_depth=6), [])
         self.assertEqual(len(scan.find_git_clones(self.home, max_depth=8)), 1)
 
+    def test_rpms_a_repository_offers_are_left_to_dnf(self):
+        installed = ("tool|1.0|@commandline|https://github.com/a/tool\n"
+                     "self-repo|2.0|@commandline|https://github.com/b/self-repo\n"  # added its own repository
+                     "fedora-thing|3.0|fedora|https://github.com/c/thing\n")
+        asked = []
+
+        def dnf(*args):
+            asked.append(args)
+            if "--installed" in args:
+                return installed
+            return "self-repo\n"  # the only one a repository offers
+
+        self.assertEqual([f.name for f in scan.find_rpms(dnf)], ["tool"])
+        self.assertEqual(asked[1][-2:], ("tool", "self-repo"))  # one question about just the candidates
+
+    def test_if_dnf_cant_say_which_are_offered_none_are_listed(self):
+        def dnf(*args):
+            return "tool|1.0|@commandline|https://github.com/a/tool\n" if "--installed" in args else None
+
+        self.assertEqual(scan.find_rpms(dnf), [])
+
     def test_rpms_from_a_downloaded_file(self):
         text = ("7zip|26.04|updates|https://7-zip.org\n"
                 "kmod-nvidia|615.71|@commandline|https://www.nvidia.com/\n"

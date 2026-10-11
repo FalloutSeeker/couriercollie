@@ -143,15 +143,33 @@ def parse_rpm_list(text: str) -> list[Found]:
     return found
 
 
-def find_rpms() -> list[Found]:
+def _dnf(*args: str) -> str | None:
+    """dnf's answer (its standard output), or None if it couldn't be asked."""
     try:
-        result = subprocess.run(
-            ["dnf", "repoquery", "--installed", "--qf", "%{name}|%{version}|%{from_repo}|%{url}\n"],
-            capture_output=True, text=True, timeout=60,
-        )
+        result = subprocess.run(["dnf", *args], capture_output=True, text=True, timeout=120)
     except (OSError, subprocess.TimeoutExpired):
+        return None
+    return result.stdout if result.returncode == 0 else None
+
+
+def offered_by_repos(names: list[str], dnf=_dnf) -> set[str] | None:
+    """Which of these packages a repository you have enabled offers (Fedora, RPM Fusion, a COPR, or one an RPM added
+    itself when installed): dnf updates those, so they're not for this app. None if dnf couldn't be asked."""
+    if not names:
+        return set()
+    out = dnf("repoquery", "--available", "--qf", "%{name}\n", *names)
+    return None if out is None else {line.strip() for line in out.splitlines()} & set(names)
+
+
+def find_rpms(dnf=_dnf) -> list[Found]:
+    """RPMs only you can update: installed from a downloaded file, from a GitHub or GitLab project, and offered by no
+    repository you have enabled. If dnf can't say which repositories offer them, none are listed (DECISIONS.md, D12)."""
+    out = dnf("repoquery", "--installed", "--qf", "%{name}|%{version}|%{from_repo}|%{url}\n")
+    candidates = parse_rpm_list(out) if out is not None else []
+    offered = offered_by_repos([f.name for f in candidates], dnf)
+    if offered is None:
         return []
-    return parse_rpm_list(result.stdout) if result.returncode == 0 else []
+    return [f for f in candidates if f.name not in offered]
 
 
 # AppImages made with the standard tools carry where they update from, e.g. "gh-releases-zsync|owner|repo|latest|…".

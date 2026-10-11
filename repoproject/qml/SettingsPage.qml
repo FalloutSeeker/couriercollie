@@ -69,7 +69,7 @@ Kirigami.ScrollablePage {
         QQC2.Label {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 24
             text: page.s.scanning
-                ? "Looks for git clones and downloaded apps, reads which version is installed, and lets you choose which to track. A Scan button appears in the main window. Repos can still be added by hand; if a scan later finds one on this computer, it switches to the version found there."
+                ? "Looks for git clones, downloaded apps and RPMs installed from downloaded files, reads which version is installed, and lets you choose which to track. A Scan button appears in the main window. Repos can still be added by hand; if a scan later finds one on this computer, it switches to the version found there. Only what your package manager can\u2019t update is listed. Anything dnf or Flatpak updates is left out: an RPM is only included if it was installed from a downloaded file and no repository you have enabled (Fedora, RPM Fusion, COPR\u2026) offers it."
                 : "Off: tracking is manual. You add repos yourself, and for each one set which version you have, or mark it as up to date."
             wrapMode: Text.Wrap
             opacity: 0.7

@@ -107,7 +107,7 @@ Kirigami.Dialog {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 26
             Layout.leftMargin: Kirigami.Units.gridUnit * 1.5
             text: scanBox.checked
-                ? `Looks in ${backend.settings.scanFoldersText} for git clones and downloaded apps. These folders are scanned by default; more can be added in Settings. Only the repos you choose are tracked, and others can still be added by hand.`
+                ? `Looks in ${backend.settings.scanFoldersText} for git clones and downloaded apps, and for RPMs installed from downloaded files. These folders are scanned by default; more can be added in Settings. Only the repos you choose are tracked, and others can still be added by hand. Only what your package manager can\u2019t update is listed. Anything dnf or Flatpak updates is left out: an RPM is only included if it was installed from a downloaded file and no repository you have enabled (Fedora, RPM Fusion, COPR\u2026) offers it.`
                 : "Off: tracking is manual. You add repos yourself, and for each one set which version you have, or mark it as up to date."
             wrapMode: Text.Wrap
             opacity: 0.7

@@ -34,7 +34,11 @@ drive) or removed. Subfolders are included up to 6 levels deep, except hidden on
 Finds in folders that belong to the system (common in `/opt`) are tracked like any other. Updating them will ask
 for the password, on the user's click.
 
-Anything already looked after by dnf or Flatpak is left out, since those update themselves.
+Anything already looked after by dnf or Flatpak is left out, since those update themselves, and the scan says so.
+For RPMs that takes two checks, both asked of dnf: the package was installed from a downloaded file (dnf records it
+as `@commandline`, where Fedora's would say `fedora` or `updates`); and no repository you have enabled offers a
+package of that name. The second catches RPMs that add their own repository when installed (like
+`rpmfusion-free-release`): installed from a file, but dnf updates them. If dnf can't answer, no RPMs are listed.
 
 > On this machine today, a scan would find 11 git clones (10 AeroThemePlasma repos and `ultrakanban`) and no
 > AppImages or GitHub RPMs.
