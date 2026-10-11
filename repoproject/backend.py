@@ -15,6 +15,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Property, QFileSystemWatcher, QObject, QProcess, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import QApplication
 
 from . import assets, checker, config, icons, integration, scan, sources, updater
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, Config, ConfigError, TrackedRepo
@@ -748,6 +749,13 @@ class Backend(QObject):
             "scanFoldersAreDefault": s.scan_folders == config.DEFAULT_SCAN_FOLDERS,
             "scanFoldersText": _join_folders(s.scan_folders),
         }
+
+    @Property(bool, constant=True)
+    def styleDrawsProgress(self):
+        """Whether the desktop's widget style draws progress bars in the window: KDE's styles (Breeze, Kvantum, …) do;
+        Fusion, Qt's own (outside KDE, and in windows off-screen), leaves them blank."""
+        app = QApplication.instance()
+        return isinstance(app, QApplication) and app.style().name().lower() not in ("fusion", "windows")
 
     @Property("QVariantList", constant=True)
     def checkIntervals(self):

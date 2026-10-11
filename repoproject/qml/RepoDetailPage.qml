@@ -415,13 +415,21 @@ Kirigami.ScrollablePage {
                             : page.followsReleases ? "Moving to the new release\u2026" : "Pulling the new commits\u2026"
                     }
 
-                    // Drawn here rather than with the style's progress bar, which some styles leave blank.
-                    Rectangle {
+                    QQC2.ProgressBar {
                         objectName: "downloadProgress"
                         Layout.fillWidth: true
+                        visible: backend.styleDrawsProgress && page.details.isDownload === true
+                                 && page.details.progress >= 0 && page.details.updatePhase !== "installing"
+                        value: Math.max(page.details.progress, 0)
+                    }
+
+                    // Where the style leaves progress bars blank (Fusion), one drawn here in its colors.
+                    Rectangle {
+                        objectName: "downloadProgressDrawn"
+                        Layout.fillWidth: true
                         Layout.preferredHeight: Kirigami.Units.smallSpacing * 2
-                        visible: page.details.isDownload === true && page.details.progress >= 0
-                                 && page.details.updatePhase !== "installing"
+                        visible: !backend.styleDrawsProgress && page.details.isDownload === true
+                                 && page.details.progress >= 0 && page.details.updatePhase !== "installing"
                         radius: height / 2
                         color: Kirigami.ColorUtils.tintWithAlpha(Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.15)
 

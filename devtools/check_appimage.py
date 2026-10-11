@@ -69,7 +69,9 @@ def mid_download():
     if 0.2 < p < 0.8 and "mid" not in state:
         from PySide6.QtCore import QObject
 
-        bar = h.win.findChild(QObject, "downloadProgress")
+        # The style's bar, or the one drawn by the page where the style leaves it blank (off-screen windows).
+        bar = next((b for n in ("downloadProgress", "downloadProgressDrawn")
+                    if (b := h.win.findChild(QObject, n)) and b.property("visible")), None)
         state["mid"] = True
         state["bar"] = (bar.property("visible"), bar.property("width"), bar.property("value")) if bar else None
         h.shot("appimage-1-downloading")
