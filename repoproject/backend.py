@@ -116,6 +116,17 @@ def _head(repo: TrackedRepo, d: Details) -> str:
     return next((b.sha for b in d.branches if b.name == (repo.branch or d.default_branch)), "")
 
 
+_MD_IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)[^)]*\)")
+_HTML_IMAGE = re.compile(r"<img\b[^>]*?src=[\"']([^\"']+)[\"'][^>]*>", re.I)
+
+
+def _without_images(notes: str) -> str:
+    """Release notes with each picture replaced by a link to it: the window would otherwise download every picture in
+    them from wherever it's hosted, just for opening the notes."""
+    notes = _MD_IMAGE.sub(lambda m: f"[picture: {m.group(1) or 'image'}]({m.group(2)})", notes)
+    return _HTML_IMAGE.sub(lambda m: f"[picture]({m.group(1)})", notes)
+
+
 def _set_baseline(repo: TrackedRepo, d: Details) -> bool:
     """If your version isn't known yet: a repo added by hand starts as "Not installed" (adding it doesn't mean you have
     it); you set your version once you do. A scanned repo's version comes from disk instead."""
@@ -1095,7 +1106,7 @@ class Backend(QObject):
                 "date": _date_text(rel.date),
                 "prerelease": rel.prerelease,
                 "isLatest": i == 0,
-                "notes": rel.notes,
+                "notes": _without_images(rel.notes),
                 "url": rel.url,
                 "assets": files,
                 "hasSelected": any(f["selected"] for f in files),

@@ -22,6 +22,10 @@ Newest first.
     explanations on the welcome screen and in Settings. A scan says when a find can't be updated from here.
   - Removing a repo clears its last result. Duplicated code merged (downloads, saving check results). README brought
     up to date. Tests 12 s -> 1.5 s.
+  - Names and text from the sites show as written (a name with "<b>" in it isn't turned bold). Pictures in release
+    notes become links: opening the notes no longer downloads every picture in them.
+  - One git helper for the scanner and updates; the background check's printout marks results that weren't
+    rechecked.
   - Test windows draw with OpenGL, like the desktop: the software renderer had drawn list icons over dialogs, which
     the desktop never does. The small-font line spacing in screenshots is also a test-window effect (checked against
     the real session's fonts).

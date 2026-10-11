@@ -369,6 +369,14 @@ class BackendTest(unittest.TestCase):
         self.backend.deleteCategory("Tools")
         self.assertEqual(self.rows(), [("repo", "AeroThemePlasma"), ("repo", "LocalSend")])
 
+    def test_release_notes_pictures_become_links(self):
+        from repoproject.backend import _without_images
+
+        notes = ('New look ![screenshot](https://x.org/a.png "title")\n'
+                 '<img width="300" src="https://x.org/b.png" alt="b">\n![](https://x.org/c.gif)')
+        self.assertEqual(_without_images(notes), "New look [picture: screenshot](https://x.org/a.png)\n"
+                                                 "[picture](https://x.org/b.png)\n[picture: image](https://x.org/c.gif)")
+
     def test_remove(self):
         from repoproject import checker
 
