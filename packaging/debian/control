@@ -1,0 +1,17 @@
+Package: couriercollie
+Version: @VERSION@
+Architecture: all
+Section: utils
+Priority: optional
+Maintainer: couriercollie <couriercollie@users.noreply.github.com>
+Homepage: https://github.com/FalloutSeeker/couriercollie
+Depends: python3 (>= 3.13), python3-pyside6.qtcore, python3-pyside6.qtgui, python3-pyside6.qtwidgets,
+ python3-pyside6.qtqml, python3-pyside6.qtquick, python3-pyside6.qtdbus, python3-pyside6.qtnetwork,
+ python3-pyside6.qtsvg, qml6-module-org-kde-kirigami, qml6-module-qtquick-controls,
+ qml6-module-qtquick-dialogs, qml6-module-qtquick-layouts, qml6-module-qtquick-window, libnotify-bin, git, pkexec,
+ libsecret-tools
+Recommends: qml6-module-org-kde-desktop
+Description: Keep software from GitHub and GitLab up to date
+ A desktop app that keeps track of software you got straight from GitHub or GitLab: git clones, AppImages,
+ programs from release archives, packages installed from downloaded files and Flatpak bundles. It checks for new
+ versions on a schedule, and updates them with a click.

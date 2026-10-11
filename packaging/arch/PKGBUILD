@@ -1,4 +1,4 @@
-# couriercollie for Arch Linux (the AUR). Built and tested by devtools/build_arch.sh in an Arch container.
+# couriercollie for Arch Linux (the AUR). Built and tested by devtools/build_package.sh arch, in a container.
 # Before publishing to the AUR: a public release tag to download, its real sha256sum, and a license.
 pkgname=couriercollie
 pkgver=0.6.0
@@ -7,7 +7,7 @@ pkgdesc="Keep track of software from GitHub and GitLab, and update it"
 arch=('any')
 url="https://github.com/FalloutSeeker/couriercollie"
 license=('LicenseRef-not-yet-chosen')
-depends=('python' 'pyside6' 'kirigami' 'breeze-icons' 'libnotify' 'git' 'polkit' 'libsecret')
+depends=('python' 'pyside6' 'kirigami' 'libnotify' 'git' 'polkit' 'libsecret')
 optdepends=('qqc2-desktop-style: KDE look for the window (without it, Qt Fusion)')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')
