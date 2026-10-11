@@ -23,7 +23,8 @@ Kirigami.ScrollablePage {
                                                 && details.installed !== "-"
     // Update pulls a clone's new commits or moves it to the newest release; for an AppImage it downloads the newest,
     // or installs it if you don't have it yet.
-    readonly property bool installing: details.isDownload === true && details.statusKind === "notInstalled"
+    readonly property bool installing: (details.isDownload === true || details.installClones === true)
+                                       && details.statusKind === "notInstalled"
     readonly property bool canUpdate: ready && details.canUpdate === true && !details.updating
                                       && (details.updateAvailable === true || installing)
 
@@ -410,6 +411,7 @@ Kirigami.ScrollablePage {
                         text: page.details.updatePhase === "installing" ? "Installing with dnf\u2026"
                             : page.details.isDownload ? (page.details.progress >= 0
                                   ? `Downloading\u2026 ${Math.round(page.details.progress * 100)}%` : "Downloading\u2026")
+                            : page.details.installClones ? "Cloning\u2026"
                             : page.followsReleases ? "Moving to the new release\u2026" : "Pulling the new commits\u2026"
                     }
 
@@ -439,9 +441,7 @@ Kirigami.ScrollablePage {
                     type: page.details.updateNoteKind === "error" ? Kirigami.MessageType.Error
                         : page.details.updateNoteKind === "warning" ? Kirigami.MessageType.Warning
                         : Kirigami.MessageType.Positive
-                    text: page.details.updateNote + (page.details.updateNoteKind !== "error"
-                          && (page.details.installScripts || []).length > 0
-                          ? " If the project needs installing again, run its install script (under Tracking)." : "")
+                    text: page.details.updateNote || ""
                 }
 
                 // The archive has several programs: which one to run.
@@ -497,7 +497,10 @@ Kirigami.ScrollablePage {
                 QQC2.Label {
                     Layout.fillWidth: true
                     visible: page.canUpdate && page.installing
-                    text: page.details.isRpm
+                    text: page.details.installClones
+                          ? (page.followsReleases ? `Clones the project at ${page.details.newestText} into a folder in ${page.details.clonesFolder}.`
+                                                  : `Clones the project\u2019s ${page.currentBranch} branch into a folder in ${page.details.clonesFolder}.`)
+                          : page.details.isRpm
                           ? `Downloads the newest release\u2019s ${page.repo.assetPattern} and installs it with dnf.`
                           : page.details.isProgram
                           ? `Downloads the newest release\u2019s ${page.repo.assetPattern}, unpacks it into ${page.details.programsFolder}, and puts a link to its program in ${page.details.binFolder}, so it runs as a command.`

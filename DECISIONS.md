@@ -104,7 +104,9 @@ optional sign-in as designed in DESIGN.md §8.
 ## D8. Where downloaded apps go
 
 AppImages in `~/Applications`, loose programs in `~/.local/bin`, with a menu entry created for AppImages so they show
-up in the KDE launcher. Nothing in system folders except through dnf.
+up in the KDE launcher. Nothing in system folders except through dnf. Projects Install clones (ones you don't have,
+followed by branch or source only) go in `~/src`, a common place for source code, and inside the default scan
+folders.
 
 **Status:** decided 2026-10-10.
 

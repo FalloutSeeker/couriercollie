@@ -128,8 +128,13 @@ What "Update" does depends on the kind:
 | Program     | Downloads, unpacks, and swaps in the new program file                           |
 | Git clone   | Pulls the new commits. Re-running the project's install script is a separate, deliberate step |
 
-**Git clones (built 2026-10-11).** For clones found by a scan. Update is on the repo page, and the ⬆ in the list
-becomes a button.
+**Git clones (built 2026-10-11).** For clones found by a scan, or made by Install. Update is on the repo page, and
+the ⬆ in the list becomes a button.
+
+- **Install, for a project you don't have** (added by hand, and following a branch, or releases with nothing to
+  download for this computer): clones it into `~/src/<name>` (D8; `<name>-2` if that's taken), on the branch, or at
+  the newest release's tag. It's cloned under a hidden name first, so a failed clone leaves nothing behind.
+  Afterwards it's a clone like one a scan found: its version is read from disk, and Update pulls it.
 
 - **Following a branch:** fetches the branch from the clone's remote for the project and fast-forwards to it.
 - **Following releases:** the clone's version is the release tag it's at (else its commit). Update fetches the newest

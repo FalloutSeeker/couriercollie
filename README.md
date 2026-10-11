@@ -37,7 +37,7 @@ Other ways to run it:
 - Only when you install or update something: AppImages in `~/Applications` (or beside the one you had), with a menu
   entry `~/.local/share/applications/repoproject-<repo>.desktop`; programs unpacked in
   `~/.local/share/repoproject/programs/`, with a link in `~/.local/bin`; RPMs through dnf (downloaded first to
-  `~/.cache/repoproject/downloads/`, then deleted).
+  `~/.cache/repoproject/downloads/`, then deleted); projects you install by cloning, in `~/src`.
 
 To start over as if newly installed (the welcome screen shows again), run it with `--reset`. Your settings file is
 renamed to a dated backup next to it, not deleted:
@@ -67,6 +67,7 @@ python3 -I devtools/check_icons.py           # looks up icons for your repos (te
 python3 -I devtools/check_updates.py         # Check Now, the status line, results, the rate-limit bar
 python3 -I devtools/check_categories.py      # new category, dragging, renaming, deleting one
 python3 -I devtools/check_update_clone.py    # Update on a temporary clone, refusals, showing and running a script
+python3 -I devtools/check_install_clone.py   # Install clones a project added by hand, into a temporary folder
 python3 -I devtools/check_appimage.py        # installs then updates LocalSend's AppImage, in temporary folders
 python3 -I devtools/check_program.py         # installs then updates ripgrep from its .tar.gz, in temporary folders
 python3 -I devtools/check_rpm.py             # bottom's real .rpm up to dnf, which is a stand-in: nothing is installed

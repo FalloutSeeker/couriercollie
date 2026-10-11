@@ -109,8 +109,12 @@ class Harness:
 
     def find(self, name, window=None):
         """[x, y, checked] of a visible item with this objectName, or None. Looks in dialogs too."""
+        from PySide6.QtQml import QJSValue
+
         window = window or self.win
-        return self._find.call([self.engine.newQObject(window.contentItem()), name, window.height()]).toVariant()
+        # The name as a QJSValue: PySide can't pass a plain str with characters beyond ASCII (e.g. ’) in the list.
+        return self._find.call([self.engine.newQObject(window.contentItem()), QJSValue(name),
+                                window.height()]).toVariant()
 
     def click(self, name, window=None):
         from PySide6.QtCore import QPoint, Qt
@@ -158,10 +162,12 @@ class Harness:
 
     def _find_box(self, name, window):
         """[x, y, width, height] of a visible item, in the window."""
+        from PySide6.QtQml import QJSValue
+
         where = self.find(name, window)
         if not where:
             return None
-        return self._box.call([self.engine.newQObject(window.contentItem()), name]).toVariant()
+        return self._box.call([self.engine.newQObject(window.contentItem()), QJSValue(name)]).toVariant()
 
     def call(self, object_name, method):
         from PySide6.QtCore import QMetaObject, QObject

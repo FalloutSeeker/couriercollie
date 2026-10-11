@@ -100,7 +100,8 @@ h.run([
     h.until(lambda: not details()["updating"], 30000),
     (500, lambda: h.check("pulled to the newest commit", git("rev-parse", "HEAD", cwd=clone) == newest)),
     (0, lambda: h.check("your version follows", b._config.find(ID).installed == newest)),
-    (0, lambda: h.check("says what it did", details()["updateNote"] == "Pulled 2 new commits.", details()["updateNote"])),
+    (0, lambda: h.check("says what it did", details()["updateNote"].startswith("Pulled 2 new commits. If the project"),
+                        details()["updateNote"])),
     (0, lambda: h.check("now up to date", details()["statusKind"] == "current")),
     (0, lambda: h.check("Update gone from page and list", h.find("updateNow") is None
                         and h.find("updateButton:" + ID) is None)),

@@ -8,8 +8,8 @@ Programs (an archive with a ready-made program inside): each version is unpacked
 AppImages: the new file is downloaded next to yours, checked against the project's published checksum (and that it
 really is an AppImage), then swapped in; the old one is removed once the new one is in place.
 
-Git clones: the new commits on the followed branch are pulled, fast-forward only, so nothing of yours is merged,
-rebased or thrown away. A project's install script is never run here; it's shown to you first, and runs in a terminal
+Git clones: a project you don't have yet is cloned into ~/src. The new commits on the followed branch are pulled,
+fast-forward only, so nothing of yours is merged, rebased or thrown away. A project's install script is never run here; it's shown to you first, and runs in a terminal
 window you can watch (and type your password into, if it asks).
 """
 
@@ -169,6 +169,35 @@ def pull(path: str, branch: str, repo_ids: list[str]) -> tuple[str, str, int]:
     after = git_out(path, "rev-parse", "HEAD")
     count = int(git_out(path, "rev-list", "--count", f"{before}..{after}") or 0) if before and after else 0
     return before, after, count
+
+
+# A whole project's history can be big.
+CLONE_TIMEOUT = 1800
+
+
+def clones_dir() -> Path:
+    """Where Install puts a clone of a project you don't have yet (D8)."""
+    return Path(os.environ.get("REPOPROJECT_CLONES") or Path.home() / "src")
+
+
+def clone(url: str, ref: str, name: str) -> Path:
+    """Clones the project at `url` into its own folder in clones_dir(), on branch `ref` (or at the release tag `ref`).
+    Cloned under a hidden name first, so a failed clone leaves no half-made folder behind. Returns the folder."""
+    parent = clones_dir()
+    parent.mkdir(parents=True, exist_ok=True)
+    base = _folder_name(name)
+    dest = next(parent / n for n in (base, *(f"{base}-{i}" for i in range(2, 100))) if not (parent / n).exists())
+    part = parent / f".{dest.name}.part"
+    shutil.rmtree(part, ignore_errors=True)
+    try:
+        result = _git(str(parent), "-c", "advice.detachedHead=false", "clone", "--quiet", "--branch", ref, "--",
+                      url, part.name, timeout=CLONE_TIMEOUT)
+        if result.returncode != 0:
+            raise UpdateError(f"Couldn\u2019t clone the project: {_last_line(result)}")
+        part.rename(dest)
+    finally:
+        shutil.rmtree(part, ignore_errors=True)
+    return dest
 
 
 def checkout_release(path: str, tag: str, repo_ids: list[str]) -> tuple[str, str]:

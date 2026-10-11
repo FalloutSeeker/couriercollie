@@ -215,10 +215,18 @@ def _rpm_package(repo: TrackedRepo) -> str:
     return m.group(1) if m else ""
 
 
+def _can_clone(repo: TrackedRepo) -> bool:
+    """A project added by hand that you don't have yet, following a branch, or releases with nothing to download for
+    this computer: Install clones it (updater.clone), at the branch or the newest release's tag."""
+    return (repo.source != config.SOURCE_SCANNED and repo.installed == NOT_INSTALLED
+            and (repo.follow == FOLLOW_BRANCH or repo.kind == assets.KIND_VERSIONS))
+
+
 def _can_update(repo: TrackedRepo) -> bool:
-    """Whether Update can do anything for this repo: a git clone found by a scan (pulled, or moved to the newest
-    release's tag), or a release's AppImage, program archive or RPM (downloaded, checked and put in place)."""
-    return _is_clone(repo) or _is_appimage(repo) or _is_program(repo) or _is_rpm(repo)
+    """Whether Update (or Install) can do anything for this repo: a git clone found by a scan (pulled, or moved to
+    the newest release's tag), a release's AppImage, program archive or RPM (downloaded, checked and put in place), or
+    a project to clone."""
+    return _is_clone(repo) or _is_appimage(repo) or _is_program(repo) or _is_rpm(repo) or _can_clone(repo)
 
 
 def _needs_password(repo: TrackedRepo) -> bool:
@@ -1142,6 +1150,9 @@ class Backend(QObject):
             "branchError": d.branch_error,
             "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing,
             "isClone": bool(repo) and _is_clone(repo),
+            # Install clones the project into clonesFolder.
+            "installClones": bool(repo) and _can_clone(repo),
+            "clonesFolder": str(updater.clones_dir()),
             "updateNeedsPassword": bool(repo) and _needs_password(repo),
             "isRpm": bool(repo) and _is_rpm(repo),
             "updatePhase": self._phases.get(repo_id, ""),
@@ -1354,6 +1365,9 @@ class Backend(QObject):
         repo = self._config.find(repo_id)
         if not repo or repo_id in self._updating or not _can_update(repo):
             return
+        if _can_clone(repo):
+            self._install_clone(repo)
+            return
         if not _is_clone(repo):
             self._update_download(repo)
             return
@@ -1376,20 +1390,22 @@ class Backend(QObject):
         def done(result, error):
             self._updating.discard(repo_id)
             repo = self._config.find(repo_id)
+            scripts = " If the project needs installing again, run its install script (under Tracking)." \
+                if (d := self._details.get(repo_id)) and d.install_scripts else ""
             if repo and error:
                 self._update_notes[repo_id] = ("error", self._error_text(error))
             elif repo and by_branch:
                 _before, after, count = result
                 self._pulled(repo, branch, after)
-                self._update_notes[repo_id] = ("done", "Already up to date." if not count else
-                                               "Pulled 1 new commit." if count == 1 else f"Pulled {count} new commits.")
+                self._update_notes[repo_id] = ("done", ("Already up to date." if not count else "Pulled 1 new commit."
+                                                        if count == 1 else f"Pulled {count} new commits.") + scripts)
             elif repo:
                 _before, left = result
                 repo.installed = tag
                 self._version_changed(repo)
                 self._changed(repo_id)
                 back = f" Your branch {left} is unchanged; git switch {left} goes back to it." if left else ""
-                self._update_notes[repo_id] = ("done", f"Now at {tag}.{back}")
+                self._update_notes[repo_id] = ("done", f"Now at {tag}.{back}{scripts}")
             self.reposChanged.emit()
             self.detailsChanged.emit(repo_id)
             if repo and error:
@@ -1397,6 +1413,56 @@ class Backend(QObject):
 
         self._run(lambda: updater.pull(path, branch, ids) if by_branch else updater.checkout_release(path, tag, ids),
                   done)
+
+    def _install_clone(self, repo: TrackedRepo):
+        """Install, for a project you don't have that's followed by branch or version: cloned into ~/src, after which
+        it's a clone like one a scan found (its version read from disk, Update pulls it)."""
+        repo_id, d = repo.id, self._details.get(repo.id)
+        by_branch = repo.follow == FOLLOW_BRANCH
+        ready = d is not None and d.state == "ready"
+        ref = (repo.branch or (d.default_branch if d else "")) if by_branch else (_newest_version(repo, d) if ready
+                                                                                   else "")
+        if not ref:
+            self._update_notes[repo_id] = ("error", "What to clone isn\u2019t known yet: Refresh, then try again.")
+            self.detailsChanged.emit(repo_id)
+            return
+        project = RepoRef.from_id(repo_id)
+        self._updating.add(repo_id)
+        self._update_notes.pop(repo_id, None)
+        self.reposChanged.emit()
+        self.detailsChanged.emit(repo_id)
+
+        def work():
+            folder = updater.clone(project.git_url, ref, project.name)
+            return folder, updater.git_out(str(folder), "rev-parse", "HEAD"), updater.install_scripts(str(folder))
+
+        def done(result, error):
+            self._updating.discard(repo_id)
+            repo = self._config.find(repo_id)
+            if repo and error:
+                self._update_notes[repo_id] = ("error", self._error_text(error))
+            elif repo:
+                folder, head, scripts = result
+                # From now on it's a clone like one a scan found.
+                repo.source, repo.local_path, repo.kind, repo.asset_pattern = \
+                    config.SOURCE_SCANNED, str(folder), assets.KIND_GIT, ""
+                if d := self._details.get(repo_id):
+                    d.install_scripts, d.branch_on_disk = scripts, ref if by_branch else ""
+                if by_branch:
+                    self._pulled(repo, ref, head)
+                else:
+                    repo.installed = ref
+                self._version_changed(repo)
+                self._changed(repo_id)
+                what = f"Cloned {ref} into {folder}." if by_branch else f"Cloned {project.name} at {ref} into {folder}."
+                self._update_notes[repo_id] = ("done", what + (" To install it, run its install script (under "
+                                                               "Tracking)." if scripts else ""))
+            self.reposChanged.emit()
+            self.detailsChanged.emit(repo_id)
+            if repo and error:
+                self.updateFailed.emit(repo_id)
+
+        self._run(work, done)
 
     def _update_download(self, repo: TrackedRepo):
         """Download the newest release's AppImage or program archive, check it, and put it in place

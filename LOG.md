@@ -4,6 +4,12 @@ Newest first.
 
 ## 2026-10-11
 
+- Install for projects added by hand that follow a branch (or releases with nothing to download for this computer):
+  clones them into `~/src`, after which they're clones like ones a scan found. Install scripts are offered right away.
+- A check where no site answered (no connection yet after waking up) no longer counts as the last check, so the next
+  automatic one isn't put off a whole interval. Opening the app still never checks on its own.
+- The "run its install script" hint after an update is added by the backend, so it reads right after a fresh clone.
+
 - Stage 5, git clones: Update pulls a scanned clone's followed branch (fast-forward only) from the repo page or the
   list's ⬆ button, and refuses with the reason when the clone is on another branch, has its own commits, has changes
   that would be overwritten, or isn't yours to write. Install scripts get "Show and Run…": shown in full, then run in
