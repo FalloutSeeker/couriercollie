@@ -115,16 +115,12 @@ def _yours(repo: TrackedRepo) -> str:
     return repo.installed
 
 
-# A check only needs the newest release, so it asks for a few, not the page's full list: each release comes with its
-# notes and files, so 30 of a busy project can be half a megabyte. More only if those few are all pre-releases you
-# don't follow.
+# A check only needs the newest release, so it asks for a few (sources.newest_releases).
 CHECK_RELEASES = 5
 
 
 def _check_releases(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
-    rels = sources.releases(ref, repo.host, count=CHECK_RELEASES)
-    if len(rels) == CHECK_RELEASES and not repo.prereleases and all(r.prerelease for r in rels):
-        rels = sources.releases(ref, repo.host)
+    rels = sources.newest_releases(ref, repo.host, CHECK_RELEASES, repo.prereleases)
     shown = [r for r in rels if repo.prereleases or not r.prerelease]
     if not shown:
         return Result(NO_RELEASES, "No releases yet")

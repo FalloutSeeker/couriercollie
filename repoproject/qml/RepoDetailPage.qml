@@ -787,7 +787,8 @@ Kirigami.ScrollablePage {
             QQC2.Label {
                 Layout.fillWidth: true
                 Layout.maximumWidth: Kirigami.Units.gridUnit * 30
-                text: "None of this project’s files run on this computer, so only its versions are tracked. Nothing is downloaded or installed."
+                text: "None of this project’s files run on this computer, so only its versions are tracked."
+                      + (page.details.installClones ? " Install, above, clones its source code at the newest release instead." : "")
                 wrapMode: Text.Wrap
                 opacity: 0.8
             }
@@ -937,6 +938,24 @@ Kirigami.ScrollablePage {
                     }
                 }
             }
+        }
+
+        QQC2.Button {
+            objectName: "olderReleases"
+            visible: page.followsReleases && page.ready && page.details.moreReleases === true
+            enabled: !page.details.loadingMore
+            flat: true
+            text: page.details.loadingMore ? "Loading\u2026" : "Show Older Releases"
+            icon.name: "go-down"
+            onClicked: backend.loadOlderReleases(page.repoId)
+        }
+
+        QQC2.Label {
+            Layout.fillWidth: true
+            visible: page.followsReleases && (page.details.moreError || "") !== ""
+            text: page.details.moreError || ""
+            wrapMode: Text.Wrap
+            color: Kirigami.Theme.negativeTextColor
         }
 
         QQC2.Label {

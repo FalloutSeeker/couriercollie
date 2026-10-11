@@ -4,6 +4,9 @@ Newest first.
 
 ## 2026-10-11
 
+- Repo pages load the newest 10 releases, with Show Older Releases for a full page (30) when there may be more.
+  The update code moved out of `backend.py` into `updating.py` (no change in behaviour). A versions-only project's
+  page no longer says "Nothing is downloaded or installed" when Install can clone it.
 - Checks ask for the newest 5 releases instead of 30 (more only if those are all pre-releases you don't follow):
   each release comes with its notes and file list, so a check of LocalSend went from 572 KB to 160 KB.
 - Scan folders a scan would skip say why in Settings ("You can't open this folder", "Not found"), and the scan's

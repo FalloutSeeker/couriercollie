@@ -443,7 +443,7 @@ class ScannedClonePageTest(unittest.TestCase):
             return sources.Comparison(sources.BEHIND, 1, [sources.Commit(head, "Button: fallback textures")])
 
         self.saved = (sources.releases, sources.branches, sources.compare)
-        sources.releases, sources.branches, sources.compare = (lambda ref, host: []), fake_branches, fake_compare
+        sources.releases, sources.branches, sources.compare = (lambda ref, host, **_: []), fake_branches, fake_compare
 
     def tearDown(self):
         sources.releases, sources.branches, sources.compare = self.saved
@@ -464,7 +464,7 @@ class ScannedClonePageTest(unittest.TestCase):
         asked = []
         for name in ("releases", "branches", "compare"):
             fake = getattr(sources, name)
-            setattr(sources, name, lambda *a, _f=fake, _n=name: (asked.append(_n), _f(*a))[1])
+            setattr(sources, name, lambda *a, _f=fake, _n=name, **k: (asked.append(_n), _f(*a, **k))[1])
         self.backend.loadDetails(smod, False)
         self.assertEqual(sorted(asked), ["branches", "compare", "releases"])
         asked.clear()
@@ -536,7 +536,7 @@ class OfflineTest(unittest.TestCase):
         def unreachable(*_args, **_kw):
             raise sources.SourceError("Couldn\u2019t reach github.com. Check your internet connection.")
 
-        def releases(*a):
+        def releases(*a, **_):
             if self.offline:
                 unreachable()
             return sources.parse_github_releases(json.loads((FIXTURES / "github_releases.json").read_text()))
@@ -692,3 +692,43 @@ class ScanFlowTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OlderReleasesTest(unittest.TestCase):
+    """A repo's page loads the newest few releases; Show Older Releases loads a full page."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        path = Path(self.dir.name) / "repos.toml"
+        self.id = "github.com/a/app"
+        config.save(config.Config(repos=[TrackedRepo(id=self.id, name="App", url="", host="github",
+                                                     installed="v25")]), path)
+        self.backend = Backend(path)
+        self.backend._run = lambda work, done: done(work(), None)
+        self.asked = []
+        all_releases = [sources.Release(f"v{n}", f"v{n}", None, False, "", "", []) for n in range(40, 0, -1)]
+
+        def releases(ref, host, count=sources.RELEASES_PER_PAGE):
+            self.asked.append(count)
+            return all_releases[:count]
+
+        self.saved = sources.releases, sources.branches
+        sources.releases, sources.branches = releases, lambda ref: ("main", [])
+
+    def tearDown(self):
+        sources.releases, sources.branches = self.saved
+        self.backend.shutdown()
+        self.dir.cleanup()
+
+    def test_newest_few_then_older_on_request(self):
+        self.backend.loadDetails(self.id, False)
+        d = self.backend.details(self.id)
+        self.assertEqual((len(d["releases"]), d["moreReleases"], self.asked), (10, True, [10]))
+        # Your version (v25) isn't among them yet: still an update.
+        self.assertEqual(d["statusKind"], "update")
+        self.backend.loadOlderReleases(self.id)
+        d = self.backend.details(self.id)
+        self.assertEqual((len(d["releases"]), d["moreReleases"], self.asked[-1]), (30, False, 30))
+        self.assertTrue(next(r for r in d["releases"] if r["tag"] == "v25")["isInstalled"])
+        self.backend.loadOlderReleases(self.id)  # nothing more to ask for
+        self.assertEqual(len(self.asked), 2)

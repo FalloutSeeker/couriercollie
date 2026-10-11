@@ -81,8 +81,9 @@ Details:
   version), so it follows a `git pull` or reinstall done outside the app, and isn't set by hand. Like everything on
   the page, it's read the first time the page opens after the app starts, then only on **Refresh** or when an update
   check finds something newer: opening a page again makes no requests. When following a branch you're behind on, the new commits are listed (up to 5, newest first).
-- **Releases list**: every version, newest first, with its date and release notes. Pre-releases are hidden unless
-  you turn them on for that repo.
+- **Releases list**: the newest 10 versions, newest first, with their dates and release notes; **Show Older
+  Releases** loads up to 30. Pre-releases are hidden unless you turn them on for that repo. (Each release comes with
+  its notes and file list, so a busy project's 30 can be half a megabyte; a check asks for only the newest 5.)
 - **Your build file**: one project often publishes several files for the same version (an `.rpm`, an AppImage, ARM
   and Intel builds, etc.). You pick the one you use in one place, from the newest release's files, and the app
   follows that same file in future releases (it matches by pattern, so `app-1.2-x86_64.rpm` → `app-1.3-x86_64.rpm`

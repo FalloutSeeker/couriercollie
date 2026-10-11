@@ -335,6 +335,16 @@ def releases(ref: RepoRef, host: str, get=http_get_json, count: int = RELEASES_P
     return parse_gitlab_releases(ref.domain, ref.path, data)
 
 
+def newest_releases(ref: RepoRef, host: str, count: int, prereleases: bool) -> list[Release]:
+    """The newest `count` releases: each comes with its notes and file list, so asking for fewer than a page keeps
+    the download small (30 of a busy project can be half a megabyte). If they're all pre-releases you don't follow, a
+    full page instead, to find a release that counts."""
+    rels = releases(ref, host, count=count)
+    if len(rels) == count < RELEASES_PER_PAGE and not prereleases and all(r.prerelease for r in rels):
+        rels = releases(ref, host)
+    return rels
+
+
 # How your version relates to a branch's newest commit.
 SAME = "same"
 BEHIND = "behind"  # the branch has newer commits: an update

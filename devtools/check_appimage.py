@@ -97,4 +97,11 @@ h.run([
     h.until(lambda: not details()["updating"], 600000),
     (500, updated),
     (0, lambda: h.shot("appimage-3-updated")),
+    # The page loaded the newest 10 releases; older ones on request.
+    (0, lambda: h.check("10 releases at first, and a button for older ones", len(details()["releases"]) == 10
+                        and h.find("olderReleases") is not None, str(len(details()["releases"])))),
+    (0, lambda: h.click("olderReleases")),
+    h.until(lambda: not details()["loadingMore"], 60000),
+    (500, lambda: h.check("older releases shown", len(details()["releases"]) > 10 and h.find("olderReleases") is None,
+                          str(len(details()["releases"])))),
 ])

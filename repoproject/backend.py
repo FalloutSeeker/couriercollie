@@ -38,6 +38,8 @@ STATUS_UPDATE, STATUS_CURRENT, STATUS_NOT_INSTALLED = "update", "current", "notI
 STATUS_AHEAD, STATUS_CHECKING, STATUS_PROBLEM = "ahead", "checking", "problem"
 # The heading for repos that aren't in one of your categories.
 UNCATEGORIZED = "Uncategorized"
+# Releases a repo's page loads at first; Show Older Releases loads a full page (sources.RELEASES_PER_PAGE).
+PAGE_RELEASES = 10
 
 
 @dataclass
@@ -48,6 +50,9 @@ class Details:
     state: str = "loading"  # "loading", "ready" or "error"
     error: str = ""
     releases: list[sources.Release] = field(default_factory=list)
+    more_releases: bool = False  # the site may have older ones (Show Older Releases)
+    loading_more: bool = False
+    more_error: str = ""
     default_branch: str = ""
     branches: list[sources.Branch] = field(default_factory=list)
     branch_error: str = ""
@@ -776,7 +781,7 @@ class Backend(QObject, Updating):
 
         def work():
             info = sources.project_info(ref)
-            rels = sources.releases(info.ref, info.host)
+            rels = sources.newest_releases(info.ref, info.host, PAGE_RELEASES, False)
             default, branches, branch_error = _fetch_branches(info.ref)
             return info, rels, default, branches, branch_error
 
@@ -807,7 +812,7 @@ class Backend(QObject, Updating):
             else:
                 repo.follow, repo.kind = FOLLOW_BRANCH, assets.KIND_GIT
             details = Details(
-                state="ready", releases=rels,
+                state="ready", releases=rels, more_releases=len(rels) == PAGE_RELEASES,
                 default_branch=default or info.default_branch, branches=branches, branch_error=branch_error,
             )
             self._details[repo.id] = details
@@ -983,13 +988,13 @@ class Backend(QObject, Updating):
         self.detailsChanged.emit(repo_id)
         ref, host = RepoRef.from_id(repo_id), repo.host
         scanned, local_path = repo.source == config.SOURCE_SCANNED, repo.local_path
-        follow, branch, installed = repo.follow, repo.branch, repo.installed
+        follow, branch, installed, prereleases = repo.follow, repo.branch, repo.installed, repo.prereleases
 
         # One API request for the releases, and one for what's new on a branch you're behind on. Branches and the
         # version on disk come from git, which doesn't count against API limits.
         def work():
             on_disk, branch_on_disk = _on_disk(scanned, local_path, follow == FOLLOW_RELEASES)
-            rels = sources.releases(ref, host)
+            rels = sources.newest_releases(ref, host, PAGE_RELEASES, prereleases)
             default, branches, branch_error = _fetch_branches(ref)
             yours = on_disk[0] if on_disk and on_disk[0] else installed
             head = next((b.sha for b in branches if b.name == (branch or default)), "")
@@ -1005,7 +1010,8 @@ class Backend(QObject, Updating):
             else:
                 rels, default, branches, branch_error, on_disk, branch_on_disk, yours, head, comparison, scripts = result
                 self._details[repo_id] = Details(
-                    state="ready", releases=rels, default_branch=default, branches=branches, branch_error=branch_error,
+                    state="ready", releases=rels, more_releases=len(rels) == PAGE_RELEASES, default_branch=default,
+                    branches=branches, branch_error=branch_error,
                     comparison=comparison, commits_base=yours, commits_head=head,
                     local_missing=bool(on_disk) and not on_disk[1], branch_on_disk=branch_on_disk,
                     install_scripts=scripts,
@@ -1043,6 +1049,31 @@ class Backend(QObject, Updating):
                 self._refresh_whats_new(repo_id)
 
         self._run(lambda: _on_disk(scanned, local_path, releases), done)
+
+    @Slot(str)
+    def loadOlderReleases(self, repo_id):
+        """Show Older Releases: a full page of them, instead of the newest few the page loaded with."""
+        repo, d = self._config.find(repo_id), self._details.get(repo_id)
+        if not repo or not d or d.state != "ready" or not d.more_releases or d.loading_more:
+            return
+        d.loading_more, d.more_error = True, ""
+        self.detailsChanged.emit(repo_id)
+        ref, host = RepoRef.from_id(repo_id), repo.host
+
+        def done(result, error):
+            if self._details.get(repo_id) is not d:
+                return  # refreshed or removed meanwhile
+            d.loading_more = False
+            if error:
+                d.more_error = self._error_text(error)
+            else:
+                d.releases, d.more_releases = result, False
+                # Your version may be one of the older releases.
+                if (repo := self._config.find(repo_id)) and _match_tag(repo, d):
+                    self._changed(repo_id)
+            self.detailsChanged.emit(repo_id)
+
+        self._run(lambda: sources.releases(ref, host), done)
 
     @Slot(str, result="QVariantMap")
     def details(self, repo_id):
@@ -1095,6 +1126,9 @@ class Backend(QObject, Updating):
             "error": d.error,
             "description": repo.description if repo else "",
             "hasReleases": bool(d.releases),
+            "moreReleases": d.more_releases,
+            "loadingMore": d.loading_more,
+            "moreError": d.more_error,
             "releases": releases,
             "latestTag": latest["tag"] if latest else "",
             "fileChoices": choices,

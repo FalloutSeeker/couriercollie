@@ -262,7 +262,7 @@ class UpdateClickedTest(UpstreamCase):
         self.backend.updateRepo(self.id)
         self.assertEqual(self.backend.details(self.id)["updateNote"], "Pulled 1 new commit.")
         saved = sources.releases, sources.branches
-        sources.releases, sources.branches = (lambda ref, host: []), (lambda ref: ("main", []))
+        sources.releases, sources.branches = (lambda ref, host, **_: []), (lambda ref: ("main", []))
         self.addCleanup(lambda: (setattr(sources, "releases", saved[0]), setattr(sources, "branches", saved[1])))
         self.backend.loadDetails(self.id, True)  # Refresh on the repo page
         self.assertEqual(self.backend.details(self.id)["updateNote"], "")
