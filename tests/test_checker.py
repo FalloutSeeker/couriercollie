@@ -3,8 +3,8 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from repoproject import checker, sources
-from repoproject.config import Settings, TrackedRepo
+from colliecourier import checker, sources
+from colliecourier.config import Settings, TrackedRepo
 from tests.test_scan import make_clone
 
 

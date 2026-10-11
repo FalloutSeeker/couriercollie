@@ -22,7 +22,7 @@ Kirigami.Dialog {
         dialog.finished(scanBox.checked);
     }
 
-    title: "Welcome to RepoProject"
+    title: "Welcome to colliecourier"
     padding: Kirigami.Units.largeSpacing * 2
     preferredWidth: Kirigami.Units.gridUnit * 30
     closePolicy: QQC2.Popup.NoAutoClose

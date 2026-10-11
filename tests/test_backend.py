@@ -3,9 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from repoproject import config, scan, sources
-from repoproject.backend import Backend, Details, _fit_files, _match_tag, _set_baseline
-from repoproject.config import TrackedRepo
+from colliecourier import config, scan, sources
+from colliecourier.backend import Backend, Details, _fit_files, _match_tag, _set_baseline
+from colliecourier.config import TrackedRepo
 
 FIXTURES = Path(__file__).parent / "fixtures"
 LOCALSEND = "github.com/localsend/localsend"
@@ -176,7 +176,7 @@ class BackendTest(unittest.TestCase):
         self.assertEqual(self.backend.details(LOCALSEND)["status"], "Newer commits on dev (you have commit aaaaaaa)")
 
     def test_clicking_quickly_through_branches_asks_about_the_last_only(self):
-        from repoproject import backend as backend_module
+        from colliecourier import backend as backend_module
 
         waiting = []
         saved = backend_module.QTimer.singleShot
@@ -198,7 +198,7 @@ class BackendTest(unittest.TestCase):
         self.assertEqual(self.backend.details(LOCALSEND)["status"], "Newer commits on dev (you have commit aaaaaaa)")
 
     def test_own_saves_to_the_results_file_dont_reload_the_list(self):
-        from repoproject import checker
+        from colliecourier import checker
 
         changed = []
         self.backend.checksChanged.connect(lambda: changed.append(1))
@@ -212,7 +212,7 @@ class BackendTest(unittest.TestCase):
         self.assertEqual((changed, self.backend._checks), ([1], state))
 
     def test_a_check_keeps_repo_pages_that_are_still_current(self):
-        from repoproject import checker
+        from colliecourier import checker
 
         repo = self.backend._config.find(LOCALSEND)
         repo.installed = "v1.18.1"
@@ -370,7 +370,7 @@ class BackendTest(unittest.TestCase):
         self.assertEqual(self.rows(), [("repo", "AeroThemePlasma"), ("repo", "LocalSend")])
 
     def test_release_notes_pictures_become_links(self):
-        from repoproject.backend import _without_images
+        from colliecourier.backend import _without_images
 
         notes = ('New look ![screenshot](https://x.org/a.png "title")\n'
                  '<img width="300" src="https://x.org/b.png" alt="b">\n![](https://x.org/c.gif)')
@@ -378,7 +378,7 @@ class BackendTest(unittest.TestCase):
                                                  "[picture](https://x.org/b.png)\n[picture: image](https://x.org/c.gif)")
 
     def test_remove(self):
-        from repoproject import checker
+        from colliecourier import checker
 
         self.backend._checks.results[AERO] = checker.Result(checker.UPDATE, "Update available", "x")
         self.backend.removeRepo(AERO)

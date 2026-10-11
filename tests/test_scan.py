@@ -5,10 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from repoproject import config, scan, sources
-from repoproject.config import Config, TrackedRepo
-from repoproject.scan import Found
-from repoproject.sources import ProjectInfo, RepoRef
+from colliecourier import config, scan, sources
+from colliecourier.config import Config, TrackedRepo
+from colliecourier.scan import Found
+from colliecourier.sources import ProjectInfo, RepoRef
 
 AERO_NEW = "gitgud.io/aeroshell/atp/aerothemeplasma"
 AERO_OLD = "gitgud.io/wackyideas/aerothemeplasma"

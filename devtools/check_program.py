@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import harness  # noqa: E402
 
 work = Path(tempfile.mkdtemp())
-os.environ.update(XDG_DATA_HOME=str(work / "data"), REPOPROJECT_BIN=str(work / "bin"))
+os.environ.update(XDG_DATA_HOME=str(work / "data"), COLLIECOURIER_BIN=str(work / "bin"))
 ID = "github.com/burntsushi/ripgrep"
 settings = work / "repos.toml"
 settings.write_text(f'[[repos]]\nid = "{ID}"\nname = "ripgrep"\nurl = "https://{ID}"\nhost = "github"\n'
@@ -24,7 +24,7 @@ settings.write_text(f'[[repos]]\nid = "{ID}"\nname = "ripgrep"\nurl = "https://{
 
 h = harness.start(copy_settings_from=settings)
 b = h.backend
-from repoproject import updater  # noqa: E402
+from colliecourier import updater  # noqa: E402
 
 state = {}
 

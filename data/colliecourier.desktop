@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=RepoProject
+Name=colliecourier
 GenericName=Update Tracker
 Comment=Keep track of software from GitHub and GitLab, and hear about updates
-Exec=repoproject
-Icon=repoproject
+Exec=colliecourier
+Icon=colliecourier
 Terminal=false
 Categories=System;Utility;

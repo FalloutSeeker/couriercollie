@@ -4,11 +4,14 @@ Newest first.
 
 ## 2026-10-11
 
+- Renamed the app **colliecourier** (D10), all lowercase, everywhere: code, command, package, menu entry, icon,
+  timer, the app's folders in your home (moved, with your settings and check results), the GitHub repository and
+  this folder.
 - The install-script button says what it's for now: "Show and Run install.sh…" (never run from the app), "Run
   install.sh Again…" (run at the version you have), or "Install the Update: Run install.sh…" (the clone changed since;
   highlighted), with when it was last run. The app can only tell that it started the script, not that it worked.
 - Stage 6, packaging: an app icon, and the app's own RPM (`devtools/build_rpm.sh`). Installed, it runs as
-  `repoproject`, uses the system's menu entry and icon, and the background timer points at it. Tested by unpacking the
+  `colliecourier`, uses the system's menu entry and icon, and the background timer points at it. Tested by unpacking the
   RPM into a temporary folder and opening the window from there.
 - Stage 6, other distros: `.rpm` files are offered only where dnf is; `.deb` and Arch packages say "not supported
   yet" where apt or pacman is (or which distro they're for). Arch packages were mistaken for program archives.
@@ -75,7 +78,7 @@ Newest first.
   - Source stays "Found on this computer" for what the app installed, as wanted.
 - Stage 5, programs (brought back from Later): release archives with a program inside are downloaded, checked,
   unpacked safely into their own folder per version, and linked from ~/.local/bin; updating switches the link and
-  keeps the old version. Several programs in one archive: the page asks which. A command RepoProject didn't put in
+  keeps the old version. Several programs in one archive: the page asks which. A command colliecourier didn't put in
   ~/.local/bin is never replaced. Tested with a local fake server (tar.gz, zip, archives reaching outside their
   folder), and for real with ripgrep (its `rg --version` runs from the link after install and update).
 - A clone from a site that isn't supported (sourcehut, Codeberg, …) now says so ("git.sr.ht isn't supported yet:
@@ -256,7 +259,7 @@ Newest first.
 - Classification fix: `app-x86_64-release.apk.idsig` (an Android signature file) counted as fitting this PC because
   of "x86_64". Files belonging to another system's package (`.apk.`, `.exe.`, …) and `.idsig` files are now excluded.
 - Cleaned up terminal warnings:
-  - "Could not register app ID: App info not found for 'repoproject'": the app told KDE its menu-entry name, but no
+  - "Could not register app ID: App info not found for 'colliecourier'": the app told KDE its menu-entry name, but no
     menu entry exists yet (stage 6). The name is now only sent once the entry is installed.
   - "StackView has detected conflicting anchors": from Kirigami's layers, used to show Settings. Settings now opens in
     its own window, as in other KDE apps.
@@ -269,7 +272,7 @@ Newest first.
 - The welcome screen didn't get a fair chance: the app started at 19:55 and the settings file was written with the
   screen's starting answers in the same minute, so Done was likely hit by accident. Added `--reset` (renames the
   settings file to a dated backup) and reset the real settings; the old file is
-  `~/.config/repoproject/repos.toml.backup-20261010-195941`.
+  `~/.config/colliecourier/repos.toml.backup-20261010-195941`.
 - My radio-button fix had stopped KDE's style from highlighting the active list filter. The filter buttons are
   checkable again and re-tied to the saved filter after each click.
 - Check intervals: added 3 days, 2 weeks and "month" (4 weeks), as a fixed list rather than a number + unit. The

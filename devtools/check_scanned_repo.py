@@ -16,13 +16,13 @@ REPO = sys.argv[1] if len(sys.argv) > 1 else "gitgud.io/aeroshell/smod"
 def compared():
     """The comparison for the branch now followed has come back (not just that none is running: a new one starts a
     moment after the click)."""
-    from repoproject.updating import _head
+    from colliecourier.updating import _head
 
     d, r = b._details.get(REPO), b._config.find(REPO)
     return bool(d) and not d.comparing and d.commits_head == _head(r, d)
 
 
-h = harness.start(copy_settings_from=Path.home() / ".config/repoproject/repos.toml")
+h = harness.start(copy_settings_from=Path.home() / ".config/colliecourier/repos.toml")
 b = h.backend
 repo = b._config.find(REPO)
 if not repo or repo.source != "scanned":

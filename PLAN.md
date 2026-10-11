@@ -18,7 +18,7 @@ AeroThemePlasma and ultrakanban repos), and nothing in a stage can change your s
 ## Stage 1: Skeleton (done)
 
 - Project layout, a Kirigami window that opens from a terminal command.
-- Reading and writing the settings file (`~/.config/repoproject/repos.toml`).
+- Reading and writing the settings file (`~/.config/colliecourier/repos.toml`).
 - Automated tests set up, so later stages can be checked without clicking through everything.
 
 ## Stage 2: Tracking repos by hand (done)
@@ -67,8 +67,8 @@ Each update removes the version it replaced once the new one is in place (no Und
 - **Sign in to GitHub** (DESIGN.md §8). With it, checks send each repo's last ETag (`If-None-Match`), and an
   unchanged answer (304) doesn't count against the limit when signed in (GitHub's docs). Signed out, a 304 still
   counts (tried 2026-10-11) but has no body, so it's still worth sending.
-- Done (2026-10-11): an app icon (`data/repoproject.svg`), the menu entry, and the app's own RPM
-  (`packaging/repoproject.spec`, built by `devtools/build_rpm.sh`; tested unpacked, not yet installed with dnf).
+- Done (2026-10-11): an app icon (`data/colliecourier.svg`), the menu entry, and the app's own RPM
+  (`packaging/colliecourier.spec`, built by `devtools/build_rpm.sh`; tested unpacked, not yet installed with dnf).
 - **GNOME support** (checked 2026-10-11 by running the window with GNOME settings; the list, dragging and menus work):
   - Done: KDE's control style only if it's installed (`kf6-qqc2-desktop-style`), else Qt's Fusion (the window
     works in it, tested).
@@ -96,7 +96,7 @@ Each update removes the version it replaced once the new one is in place (no Und
 
 ## Stage 7: Release (once the app is complete)
 
-- **Before it:** a real name (D10), and the project published as a public repo with releases that carry the RPM
+- **Before it:** the project published as a public repo with releases that carry the RPM
   from stage 6.
 - **The app's own repo is added on first launch**, in Uncategorized, so you're told about new versions of the app
   like anything else you track. Your version is the version that's running, so it starts as Up to date.
@@ -133,7 +133,7 @@ Each update removes the version it replaced once the new one is in place (no Und
   - *nvchecker* tells you a new version is out, from a terminal, but doesn't update anything.
   - *Discover* updates packages and Flatpaks, not what you downloaded or cloned yourself.
   - *Obtainium* is the same idea as this app, for Android.
-  RepoProject brings these together for software from GitHub and GitLab: clones, AppImages, programs from release
+  colliecourier brings these together for software from GitHub and GitLab: clones, AppImages, programs from release
   archives and RPMs, found by a scan or added by hand, checked on a schedule, and updated with a click. The pitch is
   one app to install and learn, not a handful of tools and their commands.
   Also include how the scan decides an RPM is one dnf won't update, in plain words:

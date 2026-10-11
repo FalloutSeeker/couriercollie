@@ -57,10 +57,10 @@ class State:
 
 
 def state_path() -> Path:
-    if env := os.environ.get("REPOPROJECT_STATE"):
+    if env := os.environ.get("COLLIECOURIER_STATE"):
         return Path(env)
     base = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
-    return base / "repoproject" / "checks.json"
+    return base / "colliecourier" / "checks.json"
 
 
 def load_state(path: Path | None = None) -> State:

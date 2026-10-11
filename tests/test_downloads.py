@@ -6,8 +6,8 @@ import threading
 import unittest
 from pathlib import Path
 
-from repoproject import config, sources, updater
-from repoproject.sources import Asset, Release
+from colliecourier import config, sources, updater
+from colliecourier.sources import Asset, Release
 
 APP = b"\x7fELF\x02\x01\x01\x00AI\x02" + os.urandom(300_000)  # what an AppImage starts with, then anything
 SHA = hashlib.sha256(APP).hexdigest()
@@ -37,8 +37,8 @@ class AppImageCase(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
         root = Path(self.dir.name)
-        self.saved_env = {k: os.environ.get(k) for k in ("XDG_DATA_HOME", "REPOPROJECT_APPS", "XDG_CACHE_HOME")}
-        os.environ.update(XDG_DATA_HOME=str(root / "data"), REPOPROJECT_APPS=str(root / "Applications"),
+        self.saved_env = {k: os.environ.get(k) for k in ("XDG_DATA_HOME", "COLLIECOURIER_APPS", "XDG_CACHE_HOME")}
+        os.environ.update(XDG_DATA_HOME=str(root / "data"), COLLIECOURIER_APPS=str(root / "Applications"),
                           XDG_CACHE_HOME=str(root / "cache"))
         _Files.files = {NAME: APP, "SHA256SUMS": f"{'0' * 64}  other.AppImage\n{SHA}  {NAME}\n".encode(),
                         "not-an-app.AppImage": b"<html>sign in</html>", "wrong.sha256": f"{'1' * 64}\n".encode()}
@@ -112,7 +112,7 @@ class InstallTest(AppImageCase):
         entry = updater.write_menu_entry("github.com/a/app", "App", self.folder / "My $App.AppImage", "")
         text = entry.read_text()
         self.assertIn('Exec="' + str(self.folder) + '/My \\\\$App.AppImage" %U', text)
-        self.assertIn("X-RepoProject-Repo=github.com/a/app", text)
+        self.assertIn("X-colliecourier-Repo=github.com/a/app", text)
 
 
 class InstallClickedTest(AppImageCase):
@@ -120,7 +120,7 @@ class InstallClickedTest(AppImageCase):
 
     def setUp(self):
         super().setUp()
-        from repoproject.backend import Backend
+        from colliecourier.backend import Backend
 
         self.path = Path(self.dir.name) / "repos.toml"
         self.id = "github.com/a/app"
@@ -198,8 +198,8 @@ ELF = b"\x7fELF" + b"\x00" * 60
 class ProgramTest(AppImageCase):
     def setUp(self):
         super().setUp()
-        os.environ["REPOPROJECT_BIN"] = str(Path(self.dir.name) / "bin")
-        self.addCleanup(os.environ.pop, "REPOPROJECT_BIN", None)
+        os.environ["COLLIECOURIER_BIN"] = str(Path(self.dir.name) / "bin")
+        self.addCleanup(os.environ.pop, "COLLIECOURIER_BIN", None)
         for version in ("1.0", "2.0"):
             files = {f"tool-{version}/tool": (ELF + version.encode(), 0o755),
                      f"tool-{version}/lib/libtool.so.1": (ELF, 0o755),  # a library, not the program
@@ -213,7 +213,7 @@ class ProgramTest(AppImageCase):
                                        f"sha256:{hashlib.sha256(data).hexdigest()}"), [], wanted, list(hints))
 
     def test_installs_with_a_link_then_updates_removing_the_old_version(self):
-        from repoproject import scan
+        from colliecourier import scan
 
         link, verified, replaced = self.install("v1.0", "tool-1.0.tar.gz")
         self.assertEqual((link, verified, replaced), (updater.bin_dir() / "tool", True, False))
@@ -235,7 +235,7 @@ class ProgramTest(AppImageCase):
     def test_never_replaces_a_command_it_didnt_put_there(self):
         updater.bin_dir().mkdir(parents=True)
         (updater.bin_dir() / "tool").write_text("#!/bin/sh\necho mine\n")
-        with self.assertRaisesRegex(updater.UpdateError, "wasn’t put there by RepoProject"):
+        with self.assertRaisesRegex(updater.UpdateError, "wasn’t put there by colliecourier"):
             self.install("v1.0", "tool-1.0.tar.gz")
         self.assertEqual((updater.bin_dir() / "tool").read_text(), "#!/bin/sh\necho mine\n")
 
@@ -265,10 +265,10 @@ class ProgramClickedTest(InstallClickedTest):
 
     def setUp(self):
         AppImageCase.setUp(self)
-        from repoproject.backend import Backend
+        from colliecourier.backend import Backend
 
-        os.environ["REPOPROJECT_BIN"] = str(Path(self.dir.name) / "bin")
-        self.addCleanup(os.environ.pop, "REPOPROJECT_BIN", None)
+        os.environ["COLLIECOURIER_BIN"] = str(Path(self.dir.name) / "bin")
+        self.addCleanup(os.environ.pop, "COLLIECOURIER_BIN", None)
         _Files.files["pair-2.0.tar.gz"] = _archive("tar", {"pair/left": (ELF, 0o755), "pair/right": (ELF, 0o755)})
         self.path = Path(self.dir.name) / "repos.toml"
         self.id = "github.com/a/pair"
@@ -357,7 +357,7 @@ class RpmTest(AppImageCase):
         self.assertFalse(self.asked.exists())
 
     def test_install_clicked(self):
-        from repoproject.backend import Backend
+        from colliecourier.backend import Backend
 
         path = Path(self.dir.name) / "repos.toml"
         config.save(config.Config(repos=[config.TrackedRepo(
@@ -377,7 +377,7 @@ class RpmTest(AppImageCase):
         self.assertIn("Installed v2.0 with dnf", backend.details("github.com/a/tool")["updateNote"])
 
     def test_a_scanned_rpm_must_stay_the_same_package(self):
-        from repoproject.backend import Backend
+        from colliecourier.backend import Backend
 
         path = Path(self.dir.name) / "repos.toml"
         config.save(config.Config(repos=[config.TrackedRepo(

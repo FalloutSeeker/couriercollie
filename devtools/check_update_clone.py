@@ -49,7 +49,7 @@ h = harness.start(copy_settings_from=settings)
 b = h.backend
 from PySide6.QtCore import QObject  # noqa: E402
 
-from repoproject import checker, sources, updater  # noqa: E402
+from colliecourier import checker, sources, updater  # noqa: E402
 
 releases = []  # the project's releases, as the site would list them; one is added later
 sources.releases = lambda ref, host, **_: list(releases)

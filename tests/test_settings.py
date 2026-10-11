@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from repoproject import config, scan
-from repoproject.backend import Backend
+from colliecourier import config, scan
+from colliecourier.backend import Backend
 
 
 class SettingsTest(unittest.TestCase):

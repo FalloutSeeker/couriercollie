@@ -47,7 +47,7 @@ Kirigami.ApplicationWindow {
         });
     }
 
-    title: "RepoProject"
+    title: "colliecourier"
     width: Kirigami.Units.gridUnit * 56
     height: Kirigami.Units.gridUnit * 38
     minimumWidth: Kirigami.Units.gridUnit * 22

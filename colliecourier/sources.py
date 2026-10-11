@@ -14,7 +14,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-USER_AGENT = "RepoProject (https://github.com/FalloutSeeker)"
+USER_AGENT = "colliecourier (https://github.com/FalloutSeeker)"
 TIMEOUT = 20
 RELEASES_PER_PAGE = 30
 

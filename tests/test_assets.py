@@ -1,7 +1,7 @@
 import unittest
 
-from repoproject import assets
-from repoproject.assets import KIND_APPIMAGE, KIND_FILE, KIND_OTHER, KIND_PROGRAM, KIND_RPM
+from colliecourier import assets
+from colliecourier.assets import KIND_APPIMAGE, KIND_FILE, KIND_OTHER, KIND_PROGRAM, KIND_RPM
 
 
 class ClassifyTest(unittest.TestCase):

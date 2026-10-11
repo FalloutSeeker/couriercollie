@@ -28,7 +28,7 @@ def check(if_due: bool) -> int:
     if if_due and not checker.due(cfg.settings, state):
         return 0
     if integration.tell_running_app("check"):
-        print("RepoProject is open; it's checking.")
+        print("colliecourier is open; it's checking.")
         return 0
     state, fresh = checker.check_all(cfg.repos, state)
     checker.save_state(state)
@@ -106,8 +106,8 @@ def main() -> int:
     from .backend import Backend
 
     app = QApplication([sys.argv[0], *args])
-    app.setApplicationName("RepoProject")
-    app.setOrganizationName("RepoProject")
+    app.setApplicationName("colliecourier")
+    app.setOrganizationName("colliecourier")
     # Ties the window, its notifications and its taskbar badge to the menu entry.
     app.setDesktopFileName(integration.APP_ID)
     fill_in_icons()

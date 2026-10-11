@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from repoproject import updater
+from colliecourier import updater
 
 ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
        "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": "/dev/null"}
@@ -132,7 +132,7 @@ class PullTest(UpstreamCase):
         git(self.other, "tag", "v2")
         git(self.other, "push", "-q", "origin", "v1", "v2")
         git(self.clone, "fetch", "-q", "--tags")
-        from repoproject import scan
+        from colliecourier import scan
 
         self.assertEqual(scan.version_on_disk(str(self.clone), releases=True), ("v1", True))
         self.assertEqual(updater.checkout_release(str(self.clone), "v2", []), (self.start, "main"))
@@ -212,8 +212,8 @@ class UpdateClickedTest(UpstreamCase):
 
     def setUp(self):
         super().setUp()
-        from repoproject import checker, config, sources
-        from repoproject.backend import Backend, Details
+        from colliecourier import checker, config, sources
+        from colliecourier.backend import Backend, Details
 
         self.checker, self.config = checker, config
         self.path = Path(self.dir.name) / "repos.toml"
@@ -234,7 +234,7 @@ class UpdateClickedTest(UpstreamCase):
         sources.http_get_json = lambda *a, **k: self.fail("asked the site")
 
     def tearDown(self):
-        from repoproject import sources
+        from colliecourier import sources
 
         sources.http_get_json = self.saved
         self.backend.shutdown()
@@ -271,7 +271,7 @@ class UpdateClickedTest(UpstreamCase):
         self.assertEqual(self.backend.details(self.id)["scriptRun"], "older")  # "Install the Update"
 
     def test_refresh_or_a_check_clears_the_note(self):
-        from repoproject import sources
+        from colliecourier import sources
 
         self.backend.updateRepo(self.id)
         self.assertEqual(self.backend.details(self.id)["updateNote"], "Pulled 1 new commit.")
@@ -297,7 +297,7 @@ class UpdateClickedTest(UpstreamCase):
         self.assertTrue(self.backend.repo(self.id)["updateAvailable"])
 
     def test_a_clone_following_releases_moves_to_the_newest(self):
-        from repoproject import sources
+        from colliecourier import sources
 
         git(self.other, "tag", "v2")
         git(self.other, "push", "-q", "origin", "v2")
@@ -326,8 +326,8 @@ class CloneTest(UpstreamCase):
     def setUp(self):
         super().setUp()
         root = Path(self.dir.name)
-        os.environ["REPOPROJECT_CLONES"] = str(root / "src")
-        self.addCleanup(os.environ.pop, "REPOPROJECT_CLONES", None)
+        os.environ["COLLIECOURIER_CLONES"] = str(root / "src")
+        self.addCleanup(os.environ.pop, "COLLIECOURIER_CLONES", None)
         # The project's address leads to the local upstream, as if it were on GitHub.
         for key, value in (("GIT_CONFIG_COUNT", "1"), ("GIT_CONFIG_KEY_0", f"url.{self.upstream}.insteadOf"),
                            ("GIT_CONFIG_VALUE_0", "https://github.com/a/project.git")):
@@ -336,8 +336,8 @@ class CloneTest(UpstreamCase):
             os.environ[key] = value
 
     def backend(self, follow="branch", kind=""):
-        from repoproject import config, sources
-        from repoproject.backend import Backend, Details
+        from colliecourier import config, sources
+        from colliecourier.backend import Backend, Details
 
         path = Path(self.dir.name) / "repos.toml"
         self.id = "github.com/a/project"
@@ -355,7 +355,7 @@ class CloneTest(UpstreamCase):
     def test_clones_into_a_free_folder_and_a_failed_one_leaves_nothing(self):
         url = "https://github.com/a/project.git"
         first = updater.clone(url, "main", "project")
-        self.assertEqual(first, Path(os.environ["REPOPROJECT_CLONES"]) / "project")
+        self.assertEqual(first, Path(os.environ["COLLIECOURIER_CLONES"]) / "project")
         self.assertEqual(git(first, "symbolic-ref", "--short", "HEAD"), "main")
         self.assertEqual(updater.clone(url, "main", "project").name, "project-2")
         with self.assertRaisesRegex(updater.UpdateError, "Couldn’t clone the project"):
@@ -373,14 +373,14 @@ class CloneTest(UpstreamCase):
         self.assertEqual(d["statusKind"], "notInstalled")
         backend.updateRepo(self.id)
         d = backend.details(self.id)
-        folder = Path(os.environ["REPOPROJECT_CLONES"]) / "project"
+        folder = Path(os.environ["COLLIECOURIER_CLONES"]) / "project"
         self.assertEqual(d["updateNote"], f"Cloned main into {folder}. To install it, run its install script (under "
                                           "Tracking).")
         self.assertEqual(d["statusKind"], "current")
         self.assertEqual(d["installScripts"], ["install.sh"])
         self.assertFalse(d["installClones"])
         self.assertTrue(d["isClone"])
-        from repoproject import config
+        from colliecourier import config
 
         saved = config.load(path).repos[0]
         self.assertEqual((saved.source, saved.local_path, saved.kind, saved.installed),
@@ -395,9 +395,9 @@ class CloneTest(UpstreamCase):
         d = backend.details(self.id)
         self.assertEqual(d["updateNoteKind"], "done", d["updateNote"])
         self.assertEqual(d["statusKind"], "current")
-        folder = Path(os.environ["REPOPROJECT_CLONES"]) / "project"
+        folder = Path(os.environ["COLLIECOURIER_CLONES"]) / "project"
         self.assertEqual(git(folder, "rev-parse", "HEAD"), self.start)
-        from repoproject import scan
+        from colliecourier import scan
 
         self.assertEqual(scan.version_on_disk(str(folder), releases=True), ("v1", True))
 

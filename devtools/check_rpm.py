@@ -26,7 +26,7 @@ fake_dnf.chmod(0o755)
 
 h = harness.start(copy_settings_from=settings)  # its downloads go to the run's own temporary cache folder
 b = h.backend
-from repoproject import updater  # noqa: E402
+from colliecourier import updater  # noqa: E402
 
 updater.ROOT, updater.DNF = ["env"], [str(fake_dnf)]  # instead of pkexec dnf
 

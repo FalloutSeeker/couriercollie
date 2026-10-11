@@ -33,7 +33,7 @@ git("push", "-q", "origin", "HEAD:main", cwd=other)
 newest = git("rev-parse", "HEAD", cwd=other)
 
 ID = "github.com/example/project"
-os.environ.update(REPOPROJECT_CLONES=str(clones), GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0=f"url.{upstream}.insteadOf",
+os.environ.update(COLLIECOURIER_CLONES=str(clones), GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0=f"url.{upstream}.insteadOf",
                   GIT_CONFIG_VALUE_0=f"https://{ID}.git")
 settings = work / "repos.toml"
 settings.write_text(f'[[repos]]\nid = "{ID}"\nname = "Project"\nurl = "https://{ID}"\nhost = "github"\n'
@@ -43,7 +43,7 @@ h = harness.start(copy_settings_from=settings)
 b = h.backend
 from PySide6.QtCore import QObject  # noqa: E402
 
-from repoproject import sources  # noqa: E402
+from colliecourier import sources  # noqa: E402
 
 sources.releases = lambda ref, host, **_: []
 sources.branches = lambda ref: ("main", [sources.Branch("main", newest)])

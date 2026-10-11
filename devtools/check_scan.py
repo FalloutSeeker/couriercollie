@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import harness  # noqa: E402
 
 # The copy has the welcome screen done already; show it again for this check.
-h = harness.start(copy_settings_from=Path.home() / ".config/repoproject/repos.toml",
+h = harness.start(copy_settings_from=Path.home() / ".config/colliecourier/repos.toml",
                   settings={"firstLaunchDone": False, "scanning": False})
 b = h.backend
 before = len(b._config.repos)

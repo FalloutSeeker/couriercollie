@@ -1,11 +1,11 @@
-# RepoProject
+# colliecourier
 
-**Working name.** Something like Obtainium, but for Fedora KDE: a desktop app that keeps track of software you got
+Something like Obtainium, but for Fedora KDE: a desktop app that keeps track of software you got
 straight from GitHub or GitLab (git clones, release downloads, AppImages, loose programs), checks for new versions on a
 schedule, and lets you update with a click.
 
 Tools already exist for pieces of this: Topgrade runs your updaters from a terminal, Gear Lever handles AppImages,
-eget fetches release programs, nvchecker reports new versions. RepoProject brings these jobs together in one simple
+eget fetches release programs, nvchecker reports new versions. colliecourier brings these jobs together in one simple
 window, so there's one app to install and learn instead of several tools and their commands.
 
 ## Status
@@ -23,8 +23,8 @@ If you try it elsewhere, please say how it went in a GitHub issue, whether it wo
 ## Installing it as a package
 
 ```sh
-devtools/build_rpm.sh                               # builds dist/repoproject-<version>.noarch.rpm from the last commit
-sudo dnf install dist/repoproject-*.noarch.rpm      # then it's in the menu, and `repoproject` runs it
+devtools/build_rpm.sh                                # builds dist/colliecourier-<version>.noarch.rpm from the last commit
+sudo dnf install dist/colliecourier-*.noarch.rpm     # then it's in the menu, and `colliecourier` runs it
 ```
 
 Installed, it uses the system's menu entry and icon. Running it from this folder still works alongside.
@@ -32,41 +32,41 @@ Installed, it uses the system's menu entry and icon. Running it from this folder
 ## Running it
 
 ```sh
-~/claudework/RepoProject/run.sh
+~/claudework/colliecourier/run.sh
 ```
 
 Needs only what Fedora KDE already has: Python 3, PySide6 (`python3-pyside6`) and Kirigami. Your tracked repos are
-saved in `~/.config/repoproject/repos.toml`.
+saved in `~/.config/colliecourier/repos.toml`.
 
 Other ways to run it:
 
 ```sh
-~/claudework/RepoProject/run.sh --check   # check every repo for updates now, without the window
+~/claudework/colliecourier/run.sh --check   # check every repo for updates now, without the window
 ```
 
 **What it adds outside this folder** (all removable):
 
-- `~/.local/share/applications/repoproject.desktop`: the menu entry (written when the app starts).
-- `~/.config/systemd/user/repoproject-check.{timer,service}`: background checks, only while automatic checks are on
+- `~/.local/share/applications/colliecourier.desktop`: the menu entry (written when the app starts).
+- `~/.config/systemd/user/colliecourier-check.{timer,service}`: background checks, only while automatic checks are on
   (Settings). Turning them off removes the timer. To remove it by hand:
-  `systemctl --user disable --now repoproject-check.timer`.
-- `~/.local/state/repoproject/checks.json`: the last check's results. `~/.cache/repoproject/icons/`: repo icons.
+  `systemctl --user disable --now colliecourier-check.timer`.
+- `~/.local/state/colliecourier/checks.json`: the last check's results. `~/.cache/colliecourier/icons/`: repo icons.
 - Only when you install or update something: AppImages in `~/Applications` (or beside the one you had), with a menu
-  entry `~/.local/share/applications/repoproject-<repo>.desktop`; programs unpacked in
-  `~/.local/share/repoproject/programs/`, with a link in `~/.local/bin`; RPMs through dnf (downloaded first to
-  `~/.cache/repoproject/downloads/`, then deleted); projects you install by cloning, in `~/src`.
+  entry `~/.local/share/applications/colliecourier-<repo>.desktop`; programs unpacked in
+  `~/.local/share/colliecourier/programs/`, with a link in `~/.local/bin`; RPMs through dnf (downloaded first to
+  `~/.cache/colliecourier/downloads/`, then deleted); projects you install by cloning, in `~/src`.
 
 To start over as if newly installed (the welcome screen shows again), run it with `--reset`. Your settings file is
 renamed to a dated backup next to it, not deleted:
 
 ```sh
-~/claudework/RepoProject/run.sh --reset
+~/claudework/colliecourier/run.sh --reset
 ```
 
 ## Tests
 
 ```sh
-cd ~/claudework/RepoProject && python3 -m unittest discover -s tests -t .
+cd ~/claudework/colliecourier && python3 -m unittest discover -s tests -t .
 ```
 
 They don't use the network: GitHub and GitLab answers are saved in `tests/fixtures/`, and downloads come from a
@@ -94,17 +94,17 @@ python3 -I devtools/check_rpm.py             # bottom's real .rpm up to dnf, whi
 
 | File                       | What it does                                                                   |
 | -------------------------- | ------------------------------------------------------------------------------ |
-| `repoproject/config.py`    | The settings file: global settings and tracked repos                           |
-| `repoproject/sources.py`   | Talking to GitHub and GitLab: addresses, releases, branches                    |
-| `repoproject/assets.py`    | Build files: which kind, whether it suits this PC, remembering your pick       |
-| `repoproject/scan.py`      | Scanning: finding clones, RPMs and AppImages; matching them to tracked repos     |
-| `repoproject/icons.py`     | Repo icons: from this computer, the project's site, or the default (D13)          |
-| `repoproject/checker.py`   | Checking every repo for updates; results kept apart from settings                 |
-| `repoproject/integration.py` | Menu entry, notifications, taskbar badge, background timer, one copy at a time |
-| `repoproject/updater.py`   | Updating: pulling and cloning, downloads checked and put in place, dnf          |
-| `repoproject/backend.py`   | Connects the window to the above; runs network work in the background          |
-| `repoproject/updating.py`  | The backend's Update and Install buttons and install scripts (part of it)      |
-| `repoproject/qml/`         | The window: list page, repo page, Add dialog                                   |
+| `colliecourier/config.py`    | The settings file: global settings and tracked repos                           |
+| `colliecourier/sources.py`   | Talking to GitHub and GitLab: addresses, releases, branches                    |
+| `colliecourier/assets.py`    | Build files: which kind, whether it suits this PC, remembering your pick       |
+| `colliecourier/scan.py`      | Scanning: finding clones, RPMs and AppImages; matching them to tracked repos     |
+| `colliecourier/icons.py`     | Repo icons: from this computer, the project's site, or the default (D13)          |
+| `colliecourier/checker.py`   | Checking every repo for updates; results kept apart from settings                 |
+| `colliecourier/integration.py` | Menu entry, notifications, taskbar badge, background timer, one copy at a time |
+| `colliecourier/updater.py`   | Updating: pulling and cloning, downloads checked and put in place, dnf          |
+| `colliecourier/backend.py`   | Connects the window to the above; runs network work in the background          |
+| `colliecourier/updating.py`  | The backend's Update and Install buttons and install scripts (part of it)      |
+| `colliecourier/qml/`         | The window: list page, repo page, Add dialog                                   |
 
 ## Files
 

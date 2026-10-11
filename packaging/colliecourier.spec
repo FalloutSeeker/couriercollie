@@ -1,10 +1,10 @@
-# RepoProject's own RPM. Built from a git snapshot by devtools/build_rpm.sh.
-Name:           repoproject
+# colliecourier's own RPM. Built from a git snapshot by devtools/build_rpm.sh.
+Name:           colliecourier
 Version:        %{app_version}
 Release:        1%{?dist}
 Summary:        Keep track of software from GitHub and GitLab, and update it
 License:        LicenseRef-Not-Yet-Chosen
-URL:            https://github.com/FalloutSeeker/RepoProject
+URL:            https://github.com/FalloutSeeker/colliecourier
 Source0:        %{name}-%{version}.tar.gz
 BuildArch:      noarch
 
@@ -38,26 +38,26 @@ updates them with a click.
 
 %install
 install -d %{buildroot}%{python3_sitelib}
-cp -a repoproject %{buildroot}%{python3_sitelib}/
-find %{buildroot}%{python3_sitelib}/repoproject -name __pycache__ -prune -exec rm -rf {} +
-install -Dm755 /dev/stdin %{buildroot}%{_bindir}/repoproject <<'LAUNCHER'
+cp -a colliecourier %{buildroot}%{python3_sitelib}/
+find %{buildroot}%{python3_sitelib}/colliecourier -name __pycache__ -prune -exec rm -rf {} +
+install -Dm755 /dev/stdin %{buildroot}%{_bindir}/colliecourier <<'LAUNCHER'
 #!/bin/sh
-# -I: only the installed app, never a "repoproject" folder in the current one.
-exec /usr/bin/python3 -I -m repoproject "$@"
+# -I: only the installed app, never a "colliecourier" folder in the current one.
+exec /usr/bin/python3 -I -m colliecourier "$@"
 LAUNCHER
-install -Dm644 data/repoproject.desktop %{buildroot}%{_datadir}/applications/repoproject.desktop
-install -Dm644 data/repoproject.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/repoproject.svg
+install -Dm644 data/colliecourier.desktop %{buildroot}%{_datadir}/applications/colliecourier.desktop
+install -Dm644 data/colliecourier.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/colliecourier.svg
 
 %check
-desktop-file-validate %{buildroot}%{_datadir}/applications/repoproject.desktop
+desktop-file-validate %{buildroot}%{_datadir}/applications/colliecourier.desktop
 
 %files
 %doc README.md
-%{_bindir}/repoproject
-%{python3_sitelib}/repoproject/
-%{_datadir}/applications/repoproject.desktop
-%{_datadir}/icons/hicolor/scalable/apps/repoproject.svg
+%{_bindir}/colliecourier
+%{python3_sitelib}/colliecourier/
+%{_datadir}/applications/colliecourier.desktop
+%{_datadir}/icons/hicolor/scalable/apps/colliecourier.svg
 
 %changelog
-* Sun Oct 11 2026 RepoProject - %{app_version}-1
+* Sun Oct 11 2026 colliecourier - %{app_version}-1
 - Snapshot build
