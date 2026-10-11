@@ -1,7 +1,8 @@
 """Scanning this computer for software that came from GitHub or GitLab (DESIGN.md §1).
 
 Three steps:
-1. Find things on disk: git clones, RPMs installed from a downloaded file, AppImages. No network.
+1. Find things on disk: git clones, AppImages, packages installed from a downloaded file (RPM, Debian), and
+   Flatpak bundles. No network.
 2. Check each find with its site (`identify`): which project it is now (sites redirect renamed and moved projects),
    or why it can't be tracked. Finds already on the list are matched without asking the site.
 3. Merge into the list (`merge`): a repo already on the list (added by hand, installed from the app, or found before)
@@ -21,6 +22,8 @@ from . import assets, flatpaks, packages, sources, updater
 from .config import FOLLOW_BRANCH, SOURCE_SCANNED, Config, TrackedRepo
 from .sources import RepoRef, SourceError
 
+# How deep into a scan folder to look: enough for ~/code/someone/project/subproject, without crawling a whole home
+# folder's worth of nested files.
 MAX_DEPTH = 6
 # Folders not worth looking in: dependencies, build output, caches. Hidden folders (".cache", ".local", …) are skipped
 # too.
@@ -118,19 +121,13 @@ def find_git_clones(root: Path, max_depth: int = MAX_DEPTH) -> list[Found]:
 def parse_rpm_list(text: str) -> list[Found]:
     """Parse `dnf repoquery --installed --qf '%{name}|%{version}|%{from_repo}|%{url}\\n'`: keep RPMs installed from
     a downloaded file whose homepage is a project page."""
-    found = []
+    kept = []
     for line in text.splitlines():
         parts = line.split("|")
-        if len(parts) != 4 or parts[2] not in RPM_FROM_FILE:
-            continue
-        name, version, _repo, url = parts
-        try:
-            ref = sources.parse_url(url)
-        except ValueError:
-            continue
-        found.append(Found(id=ref.id, name=name, url=ref.web_url, host="", path=f"RPM package “{name}”",
-                           kind=assets.KIND_RPM, version=version))
-    return found
+        if len(parts) == 4 and parts[2] in RPM_FROM_FILE:
+            name, version, _repo, url = parts
+            kept.append(f"{name}|{version}|{url}")
+    return _from_homepages(assets.KIND_RPM, "\n".join(kept))
 
 
 def _run_out(*args: str) -> str | None:
@@ -273,14 +270,14 @@ def find_appimages(dirs: Iterable[str]) -> list[Found]:
     return found
 
 
-def find_all(folders: Iterable[str] = DEFAULT_SCAN_FOLDERS, rpms: Callable[[], list[Found]] = find_packages,
+def find_all(folders: Iterable[str] = DEFAULT_SCAN_FOLDERS, system_packages: Callable[[], list[Found]] = find_packages,
              bundles: Callable[[], list[Found]] = find_flatpak_bundles,
              max_depth: int = MAX_DEPTH) -> list[Found]:
     """Everything on this computer, with each project listed once (extra places go in `other_paths`)."""
     roots = scan_roots(folders)
     clones, appimage_files = walk(roots, max_depth)
     hidden = [d for d in HIDDEN_APPIMAGE_DIRS if any(_inside(Path(d).expanduser().resolve(), r) for r in roots)]
-    items = (clones + rpms() + [f for p in appimage_files if (f := _appimage(p))] + find_appimages(hidden)
+    items = (clones + system_packages() + [f for p in appimage_files if (f := _appimage(p))] + find_appimages(hidden)
              + bundles())
     for item in items:
         if item.kind in packages.LABELS or item.kind == assets.KIND_FLATPAK:

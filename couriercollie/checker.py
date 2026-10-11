@@ -31,6 +31,7 @@ FAILED = "failed"
 RATE_LIMITED = "rate-limited"
 UNREACHABLE = "unreachable"  # the site didn't answer (no connection): says nothing about the repo
 
+# A few repos are asked about at once: much quicker than one by one, without hammering a site.
 CHECKS_AT_ONCE = 4
 
 
@@ -41,7 +42,8 @@ class Result:
     newest: str = ""  # the newest version seen (a tag, or a branch's newest commit)
     checked_at: str = ""
     retry_after: str = ""  # when a rate limit ends (ISO time), if that's why it wasn't checked
-    # This is the previous check's result, kept because this time the site's hourly limit stopped the check.
+    # This is the previous check's result, kept because this time the site couldn't be asked (its hourly limit, or no
+    # answer): an update found before is still an update.
     not_rechecked: bool = False
 
 
@@ -51,9 +53,6 @@ class State:
     results: dict[str, Result] = field(default_factory=dict)
     # The newest version already announced for each repo, so a notification is only sent for something new.
     notified: dict[str, str] = field(default_factory=dict)
-
-    def updates(self) -> list[str]:
-        return [repo_id for repo_id, r in self.results.items() if r.status == UPDATE]
 
 
 def state_path() -> Path:
@@ -87,6 +86,10 @@ def save_state(state: State, path: Path | None = None) -> None:
 
 def now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _stamp() -> str:
+    return now().isoformat(timespec="seconds")
 
 
 def due(settings: Settings, state: State, at: datetime | None = None) -> bool:
@@ -145,7 +148,7 @@ def _check_branch(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
     try:
         c = sources.compare(ref, repo.host, yours, head)
     except sources.RateLimited:
-        raise
+        raise  # not "couldn't compare": check_repo marks it, so the rest of GitHub's repos aren't asked
     except SourceError:
         return Result(OTHER, f"Couldn’t compare your version with {branch}", head)
     if c.relation == sources.BEHIND:
@@ -178,12 +181,12 @@ def check_repo(repo: TrackedRepo, github_limited: threading.Event | None = None)
             github_limited.set()
         until = f" (until {e.reset_at.astimezone():%H:%M})" if e.reset_at else ""
         return Result(RATE_LIMITED, f"Not checked: {ref.domain}’s hourly limit was reached{until}",
-                      retry_after=e.reset_at.isoformat() if e.reset_at else "", checked_at=now().isoformat())
+                      retry_after=e.reset_at.isoformat() if e.reset_at else "", checked_at=_stamp())
     except sources.Unreachable as e:
-        return Result(UNREACHABLE, f"Couldn’t check: {e}", checked_at=now().isoformat())
+        return Result(UNREACHABLE, f"Couldn’t check: {e}", checked_at=_stamp())
     except SourceError as e:
-        return Result(FAILED, f"Couldn’t check: {e}", checked_at=now().isoformat())
-    result.checked_at = now().isoformat(timespec="seconds")
+        return Result(FAILED, f"Couldn’t check: {e}", checked_at=_stamp())
+    result.checked_at = _stamp()
     return result
 
 
@@ -231,7 +234,7 @@ def check_all(repos: list[TrackedRepo], previous: State | None = None) -> tuple[
     # within the hour instead of waiting a whole interval.
     answered = not results or any(r.status not in (RATE_LIMITED, UNREACHABLE) and not r.not_rechecked
                                   for r in results.values())
-    state = State(last_run=now().isoformat(timespec="seconds") if answered else previous.last_run, results=results,
+    state = State(last_run=_stamp() if answered else previous.last_run, results=results,
                   notified={k: v for k, v in previous.notified.items() if k in results})
     fresh = []
     for repo_id, r in results.items():

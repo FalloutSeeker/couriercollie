@@ -182,7 +182,7 @@ class CheckAllTest(unittest.TestCase):
         self.fakes.releases["gitlab.com/a/four"] = [release("v3")]
         state, fresh = checker.check_all(self.repos, state)
         self.assertEqual(fresh, ["gitlab.com/a/four"])
-        self.assertEqual(len(state.updates()), 4)
+        self.assertEqual(sum(r.status == checker.UPDATE for r in state.results.values()), 4)
 
 
 class RecheckTest(unittest.TestCase):
