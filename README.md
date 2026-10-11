@@ -20,6 +20,15 @@ installed with dnf. Stage 6 (GitHub sign-in, packaging, GNOME) and stage 7 (rele
 on other distros, but those (and GNOME) still need thorough testing, and package handling is Fedora's (dnf) for now.
 If you try it elsewhere, please say how it went in a GitHub issue, whether it worked or not.
 
+## Installing it as a package
+
+```sh
+devtools/build_rpm.sh                               # builds dist/repoproject-<version>.noarch.rpm from the last commit
+sudo dnf install dist/repoproject-*.noarch.rpm      # then it's in the menu, and `repoproject` runs it
+```
+
+Installed, it uses the system's menu entry and icon. Running it from this folder still works alongside.
+
 ## Running it
 
 ```sh

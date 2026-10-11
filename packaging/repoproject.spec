@@ -42,7 +42,8 @@ cp -a repoproject %{buildroot}%{python3_sitelib}/
 find %{buildroot}%{python3_sitelib}/repoproject -name __pycache__ -prune -exec rm -rf {} +
 install -Dm755 /dev/stdin %{buildroot}%{_bindir}/repoproject <<'LAUNCHER'
 #!/bin/sh
-exec /usr/bin/python3 -m repoproject "$@"
+# -I: only the installed app, never a "repoproject" folder in the current one.
+exec /usr/bin/python3 -I -m repoproject "$@"
 LAUNCHER
 install -Dm644 data/repoproject.desktop %{buildroot}%{_datadir}/applications/repoproject.desktop
 install -Dm644 data/repoproject.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/repoproject.svg

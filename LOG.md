@@ -4,6 +4,9 @@ Newest first.
 
 ## 2026-10-11
 
+- Stage 6, packaging: an app icon, and the app's own RPM (`devtools/build_rpm.sh`). Installed, it runs as
+  `repoproject`, uses the system's menu entry and icon, and the background timer points at it. Tested by unpacking the
+  RPM into a temporary folder and opening the window from there.
 - Stage 6, other distros: `.rpm` files are offered only where dnf is; `.deb` and Arch packages say "not supported
   yet" where apt or pacman is (or which distro they're for). Arch packages were mistaken for program archives.
 - Following a branch other than the one your clone is on: instead of "Your version is newer than X", the page says

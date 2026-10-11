@@ -67,7 +67,8 @@ Each update removes the version it replaced once the new one is in place (no Und
 - **Sign in to GitHub** (DESIGN.md §8). With it, checks send each repo's last ETag (`If-None-Match`), and an
   unchanged answer (304) doesn't count against the limit when signed in (GitHub's docs). Signed out, a 304 still
   counts (tried 2026-10-11) but has no body, so it's still worth sending.
-- App icon, KDE menu entry, and packaging the app itself as an RPM so it installs like anything else.
+- Done (2026-10-11): an app icon (`data/repoproject.svg`), the menu entry, and the app's own RPM
+  (`packaging/repoproject.spec`, built by `devtools/build_rpm.sh`; tested unpacked, not yet installed with dnf).
 - **GNOME support** (checked 2026-10-11 by running the window with GNOME settings; the list, dragging and menus work):
   - Done: KDE's control style only if it's installed (`kf6-qqc2-desktop-style`), else Qt's Fusion (the window
     works in it, tested).
