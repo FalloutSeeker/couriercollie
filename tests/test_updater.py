@@ -220,18 +220,22 @@ class InstallScriptTest(unittest.TestCase):
     def test_runs_as_its_first_line_says_from_its_folder_and_stays_open(self):
         script = Path(self.path, "install.sh")
         script.write_text("#!/usr/bin/env bash\necho hi\n")
+        # A Konsole of its own, so this doesn't depend on which terminal this computer has.
+        bin_dir = Path(self.path, "bin")
+        bin_dir.mkdir()
+        (bin_dir / "konsole").write_text("#!/bin/sh\n")
+        (bin_dir / "konsole").chmod(0o755)
+        saved = os.environ["PATH"]
+        os.environ["PATH"] = f"{bin_dir}:{saved}"
+        self.addCleanup(os.environ.__setitem__, "PATH", saved)
         program, args = updater.terminal_command(self.path, "install.sh")
-        if Path(program).name == "konsole":
-            self.assertEqual(args, ["--workdir", self.path, "--hold", "-e", "/usr/bin/env", "bash", "./install.sh"])
+        self.assertEqual(Path(program).name, "konsole")
+        self.assertEqual(args, ["--workdir", self.path, "--hold", "-e", "/usr/bin/env", "bash", "./install.sh"])
         script.chmod(0o755)
         self.assertEqual(updater._interpreter(script), ["./install.sh"])
         script.chmod(0o644)
         script.write_text("echo no first line\n")
         self.assertEqual(updater._interpreter(script), ["sh", "./install.sh"])
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class UpdateClickedTest(UpstreamCase):
@@ -434,3 +438,7 @@ class CloneTest(UpstreamCase):
         self.assertFalse(backend.details(self.id)["canUpdate"])
         backend, _ = self.backend(follow="releases", kind="appimage")
         self.assertFalse(backend.details(self.id)["installClones"])
+
+
+if __name__ == "__main__":
+    unittest.main()

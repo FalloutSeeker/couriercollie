@@ -38,6 +38,20 @@ Installed, it uses the system's menu entry and icon. Running it from this folder
 Needs only what Fedora KDE already has: Python 3, PySide6 (`python3-pyside6`) and Kirigami. Your tracked repos are
 saved in `~/.config/colliecourier/repos.toml`.
 
+On other distros, install these first (names checked 2026-10-11 on Ubuntu 26.04, Arch and openSUSE Tumbleweed;
+Python 3.13 or newer):
+
+| Needed for | Fedora | Ubuntu / Debian | Arch | openSUSE |
+| --- | --- | --- | --- | --- |
+| The window | `python3-pyside6` | `python3-pyside6.qtquick python3-pyside6.qtwidgets python3-pyside6.qtdbus python3-pyside6.qtnetwork python3-pyside6.qtsvg` | `pyside6` | `python313-pyside6` |
+| KDE's window parts | `kf6-kirigami` | `qml6-module-org-kde-kirigami qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts` | `kirigami` | `kf6-kirigami-imports` |
+| KDE's look (optional) | `kf6-qqc2-desktop-style` | `qml6-module-org-kde-desktop` | `qqc2-desktop-style` | `kf6-qqc2-desktop-style` |
+| Icons | `breeze-icon-theme` | `kf6-breeze-icon-theme` | `breeze-icons` | `kf6-breeze-icons` |
+| Notifications | `libnotify` | `libnotify-bin` | `libnotify` | `libnotify-tools` |
+| Clones | `git-core` | `git` | `git` | `git-core` |
+| Updates that ask for your password | `polkit` | `pkexec` | `polkit` | `polkit` |
+| Keeping the GitHub sign-in | `libsecret` | `libsecret-tools` | `libsecret` | `secret-tool` |
+
 Other ways to run it:
 
 ```sh

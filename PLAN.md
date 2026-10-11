@@ -75,7 +75,9 @@ Each update removes the version it replaced once the new one is in place (no Und
   - Done: Breeze fills in icons the current theme lacks (Adwaita has no `handle-sort`, `overflow-menu`,
     `update-low`, `emblem-mounted`, `application-x-rpm`, …), so none show blank; with no theme at all, Breeze is it
     (breeze-dark in dark mode).
-  - The RPM requires `kf6-kirigami`, `kf6-qqc2-desktop-style`, `breeze-icon-theme` and `libnotify` (notify-send).
+  - Done: the RPM requires `kf6-kirigami`, `breeze-icon-theme`, `libnotify` and the rest, and recommends
+    `kf6-qqc2-desktop-style` (the window works without it). Installed with dnf on a fresh Fedora 44 (a container):
+    dependencies resolve, and the app starts.
   - Follow GNOME's dark mode: KDE's style takes colors from KDE settings, so on GNOME it likely stays light. Needs a
     real GNOME session to confirm.
   - Known and fine: no taskbar badge on GNOME's dock (Dash to Dock shows it); it looks like a KDE app.
@@ -92,7 +94,8 @@ Each update removes the version it replaced once the new one is in place (no Und
     downloaded file, so the app could install and update them. (Installed Flatpaks stay Flatpak's to update.)
   - Packages besides the RPM: an AUR package, maybe a `.deb`. Not a Flatpak of the app itself: its sandbox blocks
     scanning folders, running git, dnf and pkexec, `~/.local/bin` and the systemd timer.
-  - The libraries' package names per distro (PySide6, Kirigami, KDE's control style), for the README.
+  - Done: the libraries' package names per distro, in the README (looked up in Ubuntu 26.04, Arch and openSUSE
+    Tumbleweed containers). The tests pass on openSUSE's Python 3.13.
 
 ## Stage 7: Release (once the app is complete)
 
