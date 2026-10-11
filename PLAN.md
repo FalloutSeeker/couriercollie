@@ -82,6 +82,12 @@ Plus **Undo last update** for AppImages and programs while the old version is st
   like anything else you track. Your version is the version that's running, so it starts as Up to date.
 - Added **once**: if you stop tracking it, it doesn't come back on a later start. If it's already tracked (added by
   hand or found by a scan), it isn't added twice.
+- **Send Feedback…** at the very bottom of the Settings window (not in the toolbar). It opens a pre-filled "New
+  issue" page on GitHub in the browser; nothing is posted by the app, so there's no server and no token.
+  - First a small dialog shows what's included, editable: app version, Fedora version, desktop (KDE/GNOME), Qt and
+    Kirigami versions. Your tracked-repo list only if you tick it (off by default). Then **Open in Browser**.
+  - The repo gets one issue template (`.github/ISSUE_TEMPLATE/feedback.yml`) that labels these `feedback`.
+  - Sending needs a GitHub account, in the browser. The app's own GitHub sign-in (stage 6) stays read-only.
 - Added (2026-10-11) at your request.
 
 ## Later, not planned yet
