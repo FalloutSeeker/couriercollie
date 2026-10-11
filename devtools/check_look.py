@@ -17,6 +17,9 @@ from pathlib import Path
 README = "readme" in sys.argv[1:]
 DARK = "dark" in sys.argv[1:] or README
 work = Path(tempfile.mkdtemp())
+if README:
+    # A home folder of its own, so paths on the screenshot read "~/…", not a temporary folder's.
+    os.environ["HOME"] = str(work / "home")
 if DARK:
     # KDE's style reads its colours from kdeglobals: a copy with Breeze Dark's, in a folder of its own.
     config = work / "config"
@@ -46,12 +49,20 @@ git("add", ".", cwd=clone)
 git("commit", "-q", "-m", "first", cwd=clone)
 git("remote", "add", "origin", "https://gitgud.io/aeroshell/atp/aerothemeplasma.git", cwd=clone)
 yours = git("rev-parse", "HEAD", cwd=clone)
+# LocalSend's AppImage, found on this computer (its version is read from the file's name).
+appimage = Path(os.environ["HOME"]) / "Applications" / "LocalSend-1.17.0-linux-x86-64.AppImage"
+appimage.parent.mkdir(parents=True, exist_ok=True)
+appimage.write_bytes(b"\x7fELF" + b"\0" * 4 + b"AI\x02")
 NEWEST = "9" * 40
 
 REPOS = [
     # id, name, extra settings
     ("github.com/localsend/localsend", "LocalSend", 'follow = "releases"\nasset_pattern = "LocalSend-*-linux-x86-64.AppImage"'
-     '\nkind = "AppImage"\ninstalled = "v1.17.0"\ndescription = "An open-source cross-platform alternative to AirDrop"'),
+     f'\nkind = "AppImage"\ninstalled = "v1.17.0"\nsource = "scanned"\nlocal_path = "{appimage}"'
+     '\ndescription = "An open-source cross-platform alternative to AirDrop"'),
+    # An AppImage added by hand: where yours is isn't known, so Install puts a new copy in place.
+    ("github.com/neovim/neovim", "Neovim", 'follow = "releases"\nasset_pattern = "nvim-linux-x86_64.appimage"'
+     '\nkind = "AppImage"\ninstalled = "v0.11.3"\ndescription = "Vim-fork focused on extensibility and usability"'),
     ("github.com/BurntSushi/ripgrep", "ripgrep", 'follow = "releases"\nasset_pattern = "ripgrep-*-x86_64-unknown-linux-musl.tar.gz"'
      '\nkind = "Program"\ninstalled = "14.1.1"\ndescription = "ripgrep recursively searches directories for a regex pattern"'),
     ("github.com/zed-industries/zed", "Zed", 'follow = "releases"\nasset_pattern = "zed-linux-x86_64.tar.gz"\nkind = "Program"'
@@ -102,6 +113,8 @@ RELEASES = {
     "github.com/BurntSushi/ripgrep": [release("14.1.1", ["ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz",
                                                          "ripgrep-14.1.1-aarch64-unknown-linux-gnu.tar.gz",
                                                          "ripgrep_14.1.1-1_amd64.deb"])],
+    "github.com/neovim/neovim": [release(t, ["nvim-linux-x86_64.appimage", "nvim-linux-arm64.appimage",
+                                             "nvim-win64.zip"]) for t in ("v0.11.4", "v0.11.3")],
     "github.com/zed-industries/zed": [release("v0.160.4", ["zed-linux-x86_64.tar.gz", "zed-linux-aarch64.tar.gz",
                                                            "Zed-aarch64.dmg"])],
     "github.com/ImranR98/Obtainium": [release("v1.2.0", ["app-arm64-v8a-release.apk", "app-x86_64-release.apk"]),
@@ -130,6 +143,7 @@ def checked():
     results = {
         "github.com/localsend/localsend": checker.Result(checker.UPDATE, "Update available: v1.18.2", "v1.18.2"),
         "github.com/BurntSushi/ripgrep": checker.Result(checker.UP_TO_DATE, "Up to date", "14.1.1"),
+        "github.com/neovim/neovim": checker.Result(checker.UPDATE, "Update available: v0.11.4", "v0.11.4"),
         "github.com/zed-industries/zed": checker.Result(checker.NOT_INSTALLED_YET, "Not installed · newest v0.160.4",
                                                         "v0.160.4"),
         "gitgud.io/aeroshell/atp/aerothemeplasma": checker.Result(checker.UPDATE, "3 new commits on main", NEWEST),
@@ -138,7 +152,7 @@ def checked():
                                                   "and that the project is public."),
     }
     b._checks = checker.State(last_run=checker.now().isoformat(timespec="seconds"), results=results)
-    b.checksChanged.emit()
+    b._save_checks()  # as a real check does: the app reloads the results file when it changes
     b.reposChanged.emit()
 
 
@@ -191,6 +205,7 @@ h.run([
     (500, shot("1-list")),
     *page("github.com/localsend/localsend", "2-update"),
     *page("github.com/BurntSushi/ripgrep", "3-current"),
+    *page("github.com/neovim/neovim", "3b-new-copy"),
     *page("github.com/zed-industries/zed", "4-not-installed"),
     *page("gitgud.io/aeroshell/atp/aerothemeplasma", "5-clone-behind"),
     (0, lambda: h.click("showScript:install.sh")),

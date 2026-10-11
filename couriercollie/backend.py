@@ -21,7 +21,7 @@ from PySide6.QtWidgets import QApplication
 from . import assets, checker, config, flatpaks, github_login, icons, integration, packages, scan, sources, updater
 from .account import Account
 from .updating import (Updating, _can_clone, _can_update, _head, _is_appimage, _is_clone, _is_flatpak, _is_package,
-                       _is_program, _needs_password, _newest_version)
+                       _is_program, _needs_password, _new_copy, _newest_version)
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, Config, ConfigError, TrackedRepo
 from .sources import RepoRef, SourceError
 
@@ -396,7 +396,8 @@ class Backend(QObject, Updating, Account):
             "followText": follow_text,
             "scanned": r.source == config.SOURCE_SCANNED,
             "shownPath": updater.shown(r.local_path),  # as shown: ~ for your home folder
-            "canUpdate": _can_update(r),
+            # Not for a copy of yours added by hand: one click in the list shouldn't quietly install a second copy.
+            "canUpdate": _can_update(r) and not _new_copy(r),
             "updateNeedsPassword": _needs_password(r),
             "updating": r.id in self._updating,
             **self._check_dict(r.id),
@@ -1210,6 +1211,8 @@ class Backend(QObject, Updating, Account):
             "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing and not follow_disk,
             "followDiskBranch": follow_disk,
             "isClone": bool(repo) and _is_clone(repo),
+            # Install, for an AppImage or program you have but couriercollie doesn't know where (added by hand).
+            "newCopy": bool(repo) and _new_copy(repo),
             # Install clones the project into clonesFolder.
             "installClones": bool(repo) and _can_clone(repo),
             "clonesFolder": updater.shown(updater.clones_dir()),

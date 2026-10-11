@@ -61,6 +61,14 @@ def _is_flatpak(repo: TrackedRepo) -> bool:
             and flatpaks.from_place(repo.local_path)[1] != "system")
 
 
+def _new_copy(repo: TrackedRepo) -> bool:
+    """An AppImage or program you have, added by hand: where your copy is isn't known, so Install puts a new one in
+    place (and updates that from then on) rather than replacing yours. A package is different: the package manager
+    finds and replaces it."""
+    return ((_is_appimage(repo) or _is_program(repo)) and repo.source != config.SOURCE_SCANNED
+            and repo.installed not in ("", NOT_INSTALLED))
+
+
 def _package_name(repo: TrackedRepo) -> str:
     """The name of the package you have, once it's on this computer: its place reads 'RPM package “name”'."""
     found = packages.from_place(repo.local_path) if repo.source == config.SOURCE_SCANNED else None

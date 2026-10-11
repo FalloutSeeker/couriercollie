@@ -23,8 +23,10 @@ Kirigami.ScrollablePage {
                                                 && details.installed !== "-"
     // Update pulls a clone's new commits or moves it to the newest release; for an AppImage it downloads the newest,
     // or installs it if you don't have it yet.
-    readonly property bool installing: (details.isDownload === true || details.installClones === true)
-                                       && details.statusKind === "notInstalled"
+    // Install rather than Update: you don't have it, or couriercollie doesn't know where your copy is (newCopy).
+    readonly property bool installing: details.newCopy === true
+                                       || ((details.isDownload === true || details.installClones === true)
+                                           && details.statusKind === "notInstalled")
     // A clone on another branch than the one followed: Follow <its branch> is offered.
     readonly property bool canFollowDisk: ready && (details.followDiskBranch || "") !== "" && !details.updating
     readonly property bool canUpdate: ready && details.canUpdate === true && !details.updating
@@ -528,7 +530,10 @@ Kirigami.ScrollablePage {
 
                 Hint {
                     visible: page.canUpdate && page.installing
-                    text: page.details.installClones
+                    text: (page.details.newCopy
+                           ? "couriercollie doesn\u2019t know where your copy is (it was added by hand), so this installs a new one, and updates that from then on. A scan finds the copy you have, so Update replaces it instead. "
+                           : "")
+                          + (page.details.installClones
                           ? (page.followsReleases ? `Clones the project at ${page.details.newestText} into a folder in ${page.details.clonesFolder}.`
                                                   : `Clones the project\u2019s ${page.currentBranch} branch into a folder in ${page.details.clonesFolder}.`)
                           : page.details.isPackage
@@ -537,7 +542,7 @@ Kirigami.ScrollablePage {
                           ? `Downloads the newest release\u2019s ${page.repo.assetPattern} and installs it with Flatpak, for you only.`
                           : page.details.isProgram
                           ? `Downloads the newest release\u2019s ${page.repo.assetPattern}, unpacks it into ${page.details.programsFolder}, and puts a link to its program in ${page.details.binFolder}, so it runs as a command.`
-                          : `Downloads the newest release\u2019s ${page.repo.assetPattern || "file"} into ${page.details.installFolder}, and adds it to the menu.`
+                          : `Downloads the newest release\u2019s ${page.repo.assetPattern || "file"} into ${page.details.installFolder}, and adds it to the menu.`)
                 }
 
                 QQC2.Label {

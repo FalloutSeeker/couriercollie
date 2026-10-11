@@ -172,10 +172,6 @@ class InstallClickedTest(AppImageCase):
         self.assertEqual(config.load(self.path).repos[0].installed, "-")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 def _archive(kind: str, files: dict[str, tuple[bytes, int]]) -> bytes:
     """A .tar.gz or .zip holding `files` ({path: (content, mode)})."""
     import io
@@ -414,3 +410,31 @@ class RpmTest(AppImageCase):
         backend.updateRepo("github.com/a/tool")
         self.assertIn("not “other” that you have", backend.details("github.com/a/tool")["updateNote"])
         self.assertFalse(self.asked.exists())  # dnf was never asked
+
+
+class NewCopyTest(unittest.TestCase):
+    """An AppImage you have, added by hand: where your copy is isn't known, so the page offers Install (a new copy),
+    and the list's one-click Update isn't offered, so a click can't quietly add a second copy."""
+
+    def test_install_not_update(self):
+        import tempfile
+
+        from couriercollie.backend import Backend
+
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "repos.toml"
+            config.save(config.Config(repos=[config.TrackedRepo(
+                id="github.com/a/app", name="App", url="", host="github", asset_pattern="App-*-x86_64.AppImage",
+                kind="AppImage", installed="v1")]), path)
+            backend = Backend(path)
+            self.addCleanup(backend.shutdown)
+            self.assertTrue(backend.details("github.com/a/app")["newCopy"])
+            self.assertFalse(backend.repo("github.com/a/app")["canUpdate"])
+            repo = backend._config.find("github.com/a/app")
+            repo.source, repo.local_path = "scanned", str(Path(d) / "App-1-x86_64.AppImage")  # found: Update it is
+            self.assertFalse(backend.details("github.com/a/app")["newCopy"])
+            self.assertTrue(backend.repo("github.com/a/app")["canUpdate"])
+
+
+if __name__ == "__main__":
+    unittest.main()

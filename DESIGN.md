@@ -101,6 +101,11 @@ Only when you click Update, or Install for something you don't have yet (D4).
 | Git clone | Pulls the followed branch (fast-forward only), or moves to the newest release's tag | Only if the system owns it |
 | Not installed, branch only | Install clones it into `~/src` | No |
 
+**An AppImage or program added by hand** that you have: where your copy is isn't known, so the button reads
+**Install**, and it puts a new copy in place (updated from then on). A scan finds your copy, so Update replaces that
+instead. The list's one-click Update isn't offered for these. Packages don't have this problem: the package manager
+finds the installed one.
+
 Every download:
 
 1. Goes to a hidden `.part` file, with progress shown.
