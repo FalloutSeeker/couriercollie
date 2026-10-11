@@ -227,6 +227,31 @@ class BackendTest(unittest.TestCase):
         self.backend.checkNow()
         self.assertNotIn(LOCALSEND, self.backend._details)  # something newer: reloaded when next opened
 
+    def test_a_check_learns_what_the_package_manager_installed(self):
+        # Even for a repo whose page was never opened: no Update, here or in the list.
+        from couriercollie import checker
+
+        managed = {LOCALSEND: "dnf"}
+
+        def check_all(repos, previous):  # what the real one does with what find_managed found
+            for r in repos:
+                r.managed_by = managed.get(r.id, "")
+            return checker.State(results={LOCALSEND: checker.releases_result(
+                [sources.Release("v2", "v2", None, False, "", "")], "v1.0", managed.get(LOCALSEND, ""))}), []
+
+        saved = checker.check_all
+        checker.check_all = check_all
+        self.addCleanup(setattr, checker, "check_all", saved)
+        self.backend._config.find(LOCALSEND).installed = "v1.0"
+        self.backend.checkNow()
+        row = self.backend.repo(LOCALSEND)
+        self.assertEqual((row["checkText"], row["updateAvailable"], row["canUpdate"]),
+                         ("Installed with dnf", False, False))
+        self.assertEqual(self.backend._config.find(LOCALSEND).managed_by, "dnf")
+        managed.clear()  # removed with dnf: couriercollie's to update again
+        self.backend.checkNow()
+        self.assertEqual(self.backend._config.find(LOCALSEND).managed_by, "")
+
     def test_branch_with_no_shared_history(self):
         # Added by hand on "main"; "dev" was started from scratch.
         self.relations["b" * 40] = sources.DIVERGED
@@ -475,9 +500,17 @@ class ScannedClonePageTest(unittest.TestCase):
         saved = backend_module._managed_elsewhere
         backend_module._managed_elsewhere = lambda ids: ("Your package manager also keeps this up to date.", "dnf", "1.0")
         self.addCleanup(setattr, backend_module, "_managed_elsewhere", saved)
-        self.backend.loadDetails("gitgud.io/aeroshell/smod", True)
-        self.assertEqual(self.backend.details("gitgud.io/aeroshell/smod")["managedElsewhere"],
-                         "Your package manager also keeps this up to date.")
+        smod = "gitgud.io/aeroshell/smod"
+        self.backend.loadDetails(smod, True)
+        d = self.backend.details(smod)
+        self.assertEqual(d["managedElsewhere"], "Your package manager also keeps this up to date.")
+        # Even with a version of its own read from disk and new commits upstream: shown only, never updated here.
+        self.assertEqual((d["managedBy"], d["statusKind"], d["headline"], d["versionText"]),
+                         ("dnf", "managed", "Installed with dnf", "1.0"))
+        self.assertEqual((d["canUpdate"], d["updateAvailable"], d["installClones"]), (False, False, False))
+        row = self.backend.repo(smod)
+        self.assertEqual((row["canUpdate"], row["updateAvailable"], row["checkText"]),
+                         (False, False, "Installed with dnf"))
 
     def test_reopening_the_page_asks_nothing(self):
         # Loaded the first time it's opened; after that only Refresh (or a check that found something newer) reloads.

@@ -19,5 +19,5 @@ The first version: everything is new.
 - **Works beyond Fedora KDE:** Qt's Fusion style where KDE's is missing, and its own icons. Packages for Fedora,
   openSUSE, Ubuntu/Debian and Arch, which install everything they need.
 - **Repo icons:** the project's own picture when it's certain, else a letter on a colour of its own.
-- **Repo pages say when something else updates the project:** installed from your distro's repositories or from
-  Flathub. Only a note; nothing is stopped.
+- **Never updates what your package manager installed:** a project installed from your distro's repositories or
+  from Flathub shows its version only, with a warning. Your package manager (or Flatpak) keeps it up to date.

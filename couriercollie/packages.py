@@ -119,10 +119,6 @@ def files_of(kind: str, name: str) -> list[str]:
 # ---------------------------------------------------------------------------------------------------------------------
 # Software the package manager already keeps up to date
 
-# How each package manager is told to update everything, as said to you.
-UPGRADE = {"dnf": "dnf upgrade", "zypper": "zypper update", "apt": "apt upgrade", "pacman": "pacman -Syu"}
-
-
 def _out(*args: str) -> str:
     try:
         result = _run(*args)
@@ -167,15 +163,17 @@ def offered_by_a_repository(name: str, run=_out) -> bool:
     return False
 
 
-def managed_by_system(repo_ids: list[str], run=_out) -> tuple[str, str, str] | None:
+def managed_by_system(repo_ids: list[str], run=_out, homepages: list[tuple[str, str]] | None = None
+                      ) -> tuple[str, str, str] | None:
     """(package manager, package, its version) if the project behind these addresses is installed as a package that
     a repository you have enabled offers: the package manager keeps it up to date. Matched by the package's homepage
-    (sources.same_project), never by a similar name."""
+    (sources.same_project), never by a similar name. `homepages`: installed_homepages(), if already read."""
     from . import sources
 
     # Several packages can share a project's homepage (dolphin, dolphin-libs): the one named like the project first.
     names = {i.rsplit("/", 1)[-1].lower() for i in repo_ids}
-    matches = sorted((name for name, homepage in installed_homepages(run) if sources.same_project(homepage, repo_ids)),
+    homepages = installed_homepages(run) if homepages is None else homepages
+    matches = sorted((name for name, homepage in homepages if sources.same_project(homepage, repo_ids)),
                      key=lambda name: name.lower() not in names)
     for name in matches:
         if offered_by_a_repository(name, run):

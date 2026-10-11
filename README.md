@@ -75,6 +75,8 @@ Settings has how often to check (or never), notifications, scan folders and GitH
 - It only asks for your password when an update changes system files: installing a package (your package
   manager asks), or updating a git clone owned by the system, such as one in `/opt`.
 - A project's install script is shown to you before it runs.
+- Anything your package manager installed (from your distro's repositories, or from Flathub) is never updated here.
+  couriercollie only shows its version; your package manager keeps it up to date.
 
 **Does it run all the time?** No, but automatic checks don't need the window. With them on, a small background
 timer runs a quick check now and then, and exits, even after you close the window. Turn automatic checks off in

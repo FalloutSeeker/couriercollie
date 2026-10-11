@@ -36,6 +36,8 @@ The choices behind couriercollie, and why. Numbered so the code can point to the
 - Downloads are checked against the project's published checksum; you're told when there isn't one.
 - The old version stays until the new one is in place, so a failed update leaves a working copy.
 - What runs as root is named by full path, works on a copy only root can change, and never runs a clone's hooks.
+- What your package manager or Flatpak installed is never updated here, only shown: two updaters would fight over
+  the same files.
 
 ## D7. Staying within GitHub's limits
 

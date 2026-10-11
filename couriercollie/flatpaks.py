@@ -85,7 +85,7 @@ def homepage(app_id: str, where: str = "") -> str:
     return _homepages[key]
 
 
-def _installed_apps() -> list[tuple[str, str, bool]]:
+def installed_apps() -> list[tuple[str, str, bool]]:
     """(app ID, installation, whether its origin has an address to update from) for every installed app. An app
     installed from a bundle file has an origin without one."""
     apps = _flatpak("list", "--app", "--columns=application,origin,installation")
@@ -108,16 +108,17 @@ def _installed_apps() -> list[tuple[str, str, bool]]:
 
 def from_bundles() -> list[tuple[str, str]]:
     """(app ID, installation) of apps installed from a bundle file: their origin has no address to update from."""
-    return [(app_id, where) for app_id, where, updatable in _installed_apps() if not updatable]
+    return [(app_id, where) for app_id, where, updatable in installed_apps() if not updatable]
 
 
-def managed_by_flatpak(repo_ids: list[str]) -> tuple[str, str] | None:
+def managed_by_flatpak(repo_ids: list[str], apps: list[tuple[str, str, bool]] | None = None
+                       ) -> tuple[str, str] | None:
     """(app ID, its version) if the project behind these addresses is installed as a Flatpak from a repository
     (Flathub, etc.), which Flatpak keeps up to date. Matched by the app's homepage (sources.same_project), never by a
-    similar name."""
+    similar name. `apps`: installed_apps(), if already read."""
     from . import sources
 
-    for app_id, where, updatable in _installed_apps():
+    for app_id, where, updatable in installed_apps() if apps is None else apps:
         if updatable and sources.same_project(homepage(app_id, where), repo_ids):
             return app_id, installed_version(app_id)[0]
     return None

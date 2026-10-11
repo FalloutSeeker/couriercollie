@@ -16,11 +16,14 @@ Kirigami.ScrollablePage {
     readonly property bool followsReleases: repo.follow === "releases"
     readonly property string currentBranch: ((details.branches || []).find(b => b.selected) || {}).name || ""
     readonly property bool ready: details.state === "ready"
+    // Installed by the package manager or Flatpak: only its version is shown. Nothing here installs, updates or sets
+    // its version: two updaters would fight over the same files.
+    readonly property bool managed: (details.managedBy || "") !== ""
     // A scanned repo's version is read from disk, so it isn't set by hand.
-    // Not for what the package manager (or Flatpak) installed: its version is theirs to change.
-    readonly property bool canMarkUpToDate: ready && !details.versionFromDisk && !details.updating && details.status !== ""
-                                            && details.status !== "Up to date" && details.statusKind !== "managed"
-    readonly property bool canMarkNotInstalled: ready && !details.versionFromDisk && !details.updating && details.versionText !== ""
+    readonly property bool canMarkUpToDate: ready && !managed && !details.versionFromDisk && !details.updating
+                                            && details.status !== "" && details.status !== "Up to date"
+    readonly property bool canMarkNotInstalled: ready && !managed && !details.versionFromDisk && !details.updating
+                                                && details.versionText !== ""
                                                 && details.installed !== "-"
     // Update pulls a clone's new commits or moves it to the newest release; for an AppImage it downloads the newest,
     // or installs it if you don't have it yet.
@@ -29,7 +32,7 @@ Kirigami.ScrollablePage {
                                        || ((details.isDownload === true || details.installClones === true)
                                            && details.statusKind === "notInstalled")
     // A clone on another branch than the one followed: Follow <its branch> is offered.
-    readonly property bool canFollowDisk: ready && (details.followDiskBranch || "") !== "" && !details.updating
+    readonly property bool canFollowDisk: ready && !managed && (details.followDiskBranch || "") !== "" && !details.updating
     readonly property bool canUpdate: ready && details.canUpdate === true && !details.updating
                                       && (details.updateAvailable === true || installing)
 
@@ -262,13 +265,13 @@ Kirigami.ScrollablePage {
             }
         }
 
-        // Something else (the package manager, Flatpak) also updates this project. Only said, never stopped.
+        // The package manager (or Flatpak) installed this project: it's theirs to update, so nothing here does.
         Kirigami.InlineMessage {
             objectName: "managedElsewhere"
             Layout.fillWidth: true
             Layout.maximumWidth: Kirigami.Units.gridUnit * 34
             visible: page.ready && (page.details.managedElsewhere || "") !== ""
-            type: Kirigami.MessageType.Information
+            type: Kirigami.MessageType.Warning
             text: page.details.managedElsewhere || ""
         }
 
@@ -675,7 +678,7 @@ Kirigami.ScrollablePage {
                 QQC2.Label {
                     Layout.fillWidth: true
                     text: page.repo.scanned ? page.repo.shownPath
-                        : page.details.statusKind === "managed" ? "Your version is the one your package manager installed."
+                        : page.managed ? "Your version is the one your package manager installed."
                         : page.followsReleases ? "You set your version: with the buttons above, or Set as My Version on a release."
                         : "You set your version, with the buttons above."
                     font: Kirigami.Theme.smallFont
@@ -687,7 +690,7 @@ Kirigami.ScrollablePage {
             QQC2.Label {
                 Layout.alignment: Qt.AlignTop
                 Layout.topMargin: Kirigami.Units.smallSpacing
-                visible: (page.details.installScripts || []).length > 0
+                visible: !page.managed && (page.details.installScripts || []).length > 0
                 text: "Install script"
                 opacity: 0.7
             }
@@ -695,7 +698,7 @@ Kirigami.ScrollablePage {
             // Never run on its own, or after an update: shown first, then run in a terminal you can watch (D6).
             ColumnLayout {
                 Layout.fillWidth: true
-                visible: (page.details.installScripts || []).length > 0
+                visible: !page.managed && (page.details.installScripts || []).length > 0
                 spacing: Kirigami.Units.smallSpacing
 
                 Flow {
@@ -936,7 +939,7 @@ Kirigami.ScrollablePage {
                     QQC2.Button {
                         objectName: "mine:" + release.modelData.tag
                         // A scanned repo's version is what's on disk, so it isn't set by hand.
-                        visible: !release.modelData.isInstalled && !page.details.versionFromDisk
+                        visible: !release.modelData.isInstalled && !page.details.versionFromDisk && !page.managed
                         text: "Set as My Version"
                         icon.name: "tag"
                         onClicked: backend.setInstalled(page.repoId, release.modelData.tag)

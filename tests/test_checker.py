@@ -3,6 +3,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import tests
 from couriercollie import checker, sources
 from couriercollie.config import Settings, TrackedRepo
 from tests.test_scan import make_clone
@@ -127,6 +128,37 @@ class CheckAllTest(unittest.TestCase):
         self.repos = [repo(f"github.com/a/{n}", installed="v1") for n in ("one", "two", "three")]
         self.repos.append(repo("gitlab.com/a/four", host="gitlab", installed="v1"))
 
+    def test_what_the_package_manager_installed_is_never_an_update(self):
+        saved = checker.find_managed
+        checker.find_managed = lambda repos: {"github.com/a/two": "dnf"}
+        self.addCleanup(setattr, checker, "find_managed", saved)
+        state, fresh = checker.check_all(self.repos)
+        self.assertEqual(state.results["github.com/a/two"].text, "Installed with dnf")
+        self.assertNotIn("github.com/a/two", fresh)  # nothing announced
+        self.assertEqual([r.managed_by for r in self.repos], ["", "dnf", "", ""])
+
+    def test_find_managed_reads_the_installed_packages_once(self):
+        from couriercollie import assets, flatpaks, packages
+
+        reads = []
+        stand_ins = {"installed_homepages": lambda *a: reads.append(1) or [("two", "https://github.com/a/two")],
+                     "offered_by_a_repository": lambda name, run=None: True,
+                     "installed_version": lambda kind, name: ("2.0", True)}
+        for name, fake in stand_ins.items():
+            self.addCleanup(setattr, packages, name, getattr(packages, name))
+            setattr(packages, name, fake)
+        self.addCleanup(setattr, flatpaks, "installed_apps", flatpaks.installed_apps)
+        flatpaks.installed_apps = lambda: [("org.example.Three", "user", True)]
+        self.addCleanup(setattr, flatpaks, "homepage", flatpaks.homepage)
+        flatpaks.homepage = lambda app_id, where="": "https://github.com/a/three"
+        self.addCleanup(setattr, flatpaks, "installed_version", flatpaks.installed_version)
+        flatpaks.installed_version = lambda app_id: ("3.0", True)
+        self.addCleanup(setattr, assets, "PACKAGE_TOOLS", assets.PACKAGE_TOOLS)
+        assets.PACKAGE_TOOLS = {"dnf"}
+        found = tests.find_managed(self.repos)
+        self.assertEqual(found, {"github.com/a/two": "dnf", "github.com/a/three": "Flatpak"})
+        self.assertEqual(reads, [1])
+
     def test_rate_limit_stops_further_github_requests(self):
         checker.CHECKS_AT_ONCE, saved = 1, checker.CHECKS_AT_ONCE  # one at a time, so the order is known
         self.addCleanup(setattr, checker, "CHECKS_AT_ONCE", saved)
@@ -183,6 +215,19 @@ class CheckAllTest(unittest.TestCase):
         state, fresh = checker.check_all(self.repos, state)
         self.assertEqual(fresh, ["gitlab.com/a/four"])
         self.assertEqual(sum(r.status == checker.UPDATE for r in state.results.values()), 4)
+
+
+class ManagedTest(unittest.TestCase):
+    """Installed by the package manager or Flatpak: never an update here, whatever your version."""
+
+    def test_releases(self):
+        for yours in ("", "-", "v1", "v2"):
+            r = checker.releases_result([release("v2"), release("v1")], yours, managed_by="dnf")
+            self.assertEqual((r.status, r.text), (checker.OTHER, "Installed with dnf"), yours)
+
+    def test_branch(self):
+        r = checker.branch_result("main", "h" * 40, "x" * 40, None, managed_by="Flatpak")
+        self.assertEqual((r.status, r.text), (checker.OTHER, "Installed with Flatpak"))
 
 
 class RecheckTest(unittest.TestCase):

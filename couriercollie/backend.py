@@ -237,18 +237,15 @@ def _scan_note(f: scan.Found, problem: str, similar: TrackedRepo | None) -> str:
 
 
 def _managed_elsewhere(repo_ids: list[str]) -> tuple[str, str, str]:
-    """If the project is also installed in a way something else keeps up to date (a package from a repository you
-    have enabled, or a Flatpak from a Flatpak repository): (a note for its page, what keeps it updated, the installed
-    version). Nothing is stopped: updating it here as well is up to you, but it's good to know."""
+    """If the project is installed in a way something else keeps up to date (a package from a repository you have
+    enabled, or a Flatpak from a Flatpak repository): (a note for its page, what keeps it updated, the installed
+    version). couriercollie then never updates it (_can_update): two updaters would fight over the same files."""
     if found := packages.managed_by_system(repo_ids):
-        tool, name, version = found
-        return (f"Your package manager also keeps this up to date: it\u2019s installed as the package \u201c{name}\u201d "
-                f"from a repository you have enabled, so {packages.UPGRADE[tool]} updates it. Updating it here as well "
-                "can mix the two versions.", tool, version)
+        tool, _name, version = found
+        return "Your package manager also keeps this up to date.", tool, version
     if found := flatpaks.managed_by_flatpak(repo_ids):
-        app_id, version = found
-        return (f"Flatpak also keeps this up to date: it\u2019s installed as \u201c{app_id}\u201d from a Flatpak "
-                "repository. Updating it here as well adds a second copy.", "Flatpak", version)
+        _app_id, version = found
+        return "Flatpak also keeps this up to date.", "Flatpak", version
     return "", "", ""
 
 
@@ -483,6 +480,14 @@ class Backend(QObject, Updating, Account):
             else:
                 self._checks, fresh = result
                 self._save_checks()
+                # What the package manager or Flatpak installed, as the check found (checker.find_managed).
+                managed = {r.id: r.managed_by for r in repos}
+                changed = [r for r in self._config.repos if r.id in managed and r.managed_by != managed[r.id]]
+                for r in changed:
+                    r.managed_by = managed[r.id]
+                    self._details.pop(r.id, None)
+                if changed:
+                    self._save()
                 self._announce(fresh)
                 # A check is a fresh look at everything: the last updates' notes ("Pulled 1 new commit.") go.
                 for repo_id in [i for i in self._update_notes if i not in self._updating]:
@@ -1216,15 +1221,15 @@ class Backend(QObject, Updating, Account):
             # A file was picked, but the newest release doesn't have it (renamed or dropped by the project).
             "yourFileMissing": bool(pattern) and latest is not None and not latest["hasSelected"],
             "branchError": d.branch_error,
-            # Not Install for what the package manager already installed: that would add a second copy.
-            "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing and not follow_disk
-                         and not (repo.managed_by and repo.installed in ("", NOT_INSTALLED)),
+            "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing and not follow_disk,
             "followDiskBranch": follow_disk,
             "isClone": bool(repo) and _is_clone(repo),
             # Install, for an AppImage or program you have but couriercollie doesn't know where (added by hand).
             "newCopy": bool(repo) and _new_copy(repo),
             # Install clones the project into clonesFolder.
-            "installClones": bool(repo) and _can_clone(repo) and not repo.managed_by,
+            "installClones": bool(repo) and _can_clone(repo),
+            # Installed by the package manager or Flatpak: shown only, never updated here.
+            "managedBy": repo.managed_by if repo else "",
             "clonesFolder": updater.shown(updater.clones_dir()),
             "updateNeedsPassword": bool(repo) and _needs_password(repo),
             "isPackage": bool(repo) and _is_package(repo),
@@ -1278,7 +1283,7 @@ class Backend(QObject, Updating, Account):
             if not newest:
                 return {}
             yours_text, newest_text = f"commit {installed[:7]}", f"commit {newest[:7]}"
-            if installed and installed not in (NOT_INSTALLED, newest):
+            if installed and installed not in (NOT_INSTALLED, newest) and not repo.managed_by:
                 return {"versionText": yours_text, "installed": installed, "newestText": newest_text,
                         **self._branch_status(repo, d, branch, yours_text)}
             newer_text, update_headline = f"Newer commits on {branch}", f"New commits on {branch}"
@@ -1289,7 +1294,7 @@ class Backend(QObject, Updating, Account):
             # A clone that isn't at a release tag: its commit.
             newest_text, yours_text = newest, _version_text(installed)
             newer_text, update_headline = f"Newer version available: {newest}", "Update available"
-        if installed in ("", NOT_INSTALLED) and repo.managed_by:
+        if repo.managed_by:
             text, status, kind, headline = d.managed_version or "Installed", \
                 f"{repo.managed_by} installed it, and keeps it up to date. The newest here is {newest_text}.", \
                 STATUS_MANAGED, f"Installed with {repo.managed_by}"

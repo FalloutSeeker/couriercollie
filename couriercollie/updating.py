@@ -85,7 +85,10 @@ def _can_clone(repo: TrackedRepo) -> bool:
 def _can_update(repo: TrackedRepo) -> bool:
     """Whether Update (or Install) can do anything for this repo: a git clone found by a scan (pulled, or moved to
     the newest release's tag), a release's AppImage, program archive or package (downloaded, checked and put in
-    place), or a project to clone."""
+    place), or a project to clone. Never for what the package manager or Flatpak installed (repo.managed_by): they
+    keep it up to date, and two updaters would fight over the same files."""
+    if repo.managed_by:
+        return False
     return (_is_clone(repo) or _is_appimage(repo) or _is_program(repo) or _is_package(repo) or _is_flatpak(repo)
             or _can_clone(repo))
 

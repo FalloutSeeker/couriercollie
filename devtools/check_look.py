@@ -72,6 +72,9 @@ REPOS = [
      '\ndescription = "An alternative shell for KDE Plasma that aims to replicate the look and feel of Windows 7."'),
     ("github.com/ImranR98/Obtainium", "Obtainium", 'follow = "releases"\nkind = "versions"\ninstalled = "v1.1.0"'
      '\ndescription = "Get Android app updates straight from the source"\ncategory = "Tools"'),
+    # Installed by the package manager, with a version set by hand too: shown only, never updated here.
+    ("github.com/KDE/dolphin", "Dolphin", 'follow = "releases"\ninstalled = "v26.04.0"'
+     '\ndescription = "File manager by KDE"'),
     ("github.com/example/gone", "Gone Project", 'follow = "releases"\ninstalled = "v1"'),
     ("github.com/example/notes", "Notes", 'follow = "branch"\nbranch = "main"\ninstalled = "-"'),
 ]
@@ -91,6 +94,7 @@ h = harness.start(copy_settings_from=settings, settings={"firstLaunchDone": Fals
 b = h.backend
 
 from couriercollie import account, checker, github_login, sources  # noqa: E402
+from couriercollie import backend as backend_module  # noqa: E402
 
 DATE = datetime(2026, 9, 30, tzinfo=timezone.utc)
 
@@ -120,6 +124,7 @@ RELEASES = {
     "github.com/ImranR98/Obtainium": [release("v1.2.0", ["app-arm64-v8a-release.apk", "app-x86_64-release.apk"]),
                                       release("v1.1.0", ["app-arm64-v8a-release.apk"])],
     "gitgud.io/aeroshell/atp/aerothemeplasma": [],
+    "github.com/KDE/dolphin": [release("v26.08.2", []), release("v26.08.1", [])],
     "github.com/example/notes": [],
 }
 
@@ -137,6 +142,9 @@ sources.compare = lambda ref, host, yours, head: sources.Comparison(sources.BEHI
     sources.Commit("7" * 40, "Update translations"),
     sources.Commit("6" * 40, "Make the start menu open faster")])
 account.password_store = lambda: "KDE Wallet"
+# Not this computer's package manager: only Dolphin is "installed with dnf".
+backend_module._managed_elsewhere = lambda ids: (("Your package manager also keeps this up to date.", "dnf", "26.08.1")
+                                                 if "github.com/KDE/dolphin" in ids else ("", "", ""))
 
 
 def checked():
@@ -212,6 +220,7 @@ h.run([
     (600, shot("5b-script")),
     (0, lambda: h.call("scriptDialog", "close")),
     *page("github.com/ImranR98/Obtainium", "6-versions-only"),
+    *page("github.com/KDE/dolphin", "6b-package-manager"),
     *page("github.com/example/gone", "7-error"),
     *page("github.com/example/notes", "8-branch-not-installed"),
     (0, lambda: h.win.closeRepo()),

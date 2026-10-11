@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import assets, scan, sources
+from . import assets, flatpaks, packages, scan, sources
 from .config import FOLLOW_BRANCH, NOT_INSTALLED, SOURCE_SCANNED, Settings, TrackedRepo
 from .sources import RepoRef, SourceError
 
@@ -124,11 +124,12 @@ CHECK_RELEASES = 5
 
 def releases_result(shown: list[sources.Release], yours: str, managed_by: str = "") -> Result:
     """The result for a repo following releases, from the releases it shows (newest first) and your version.
-    `managed_by`: what else installed it and keeps it updated ("dnf"), when you haven't set a version of your own."""
+    `managed_by`: what installed it and keeps it updated ("dnf"), if that's the package manager or Flatpak: then
+    it's never an update here."""
     if not shown:
         return Result(NO_RELEASES, "No releases yet")
     newest = shown[0].tag
-    if (not yours or yours == NOT_INSTALLED) and managed_by:
+    if managed_by:
         return Result(OTHER, f"Installed with {managed_by}", newest)
     if not yours or yours == NOT_INSTALLED:
         return Result(NOT_INSTALLED_YET, f"Not installed · newest {newest}", newest)
@@ -141,7 +142,7 @@ def branch_result(branch: str, head: str, yours: str, c: sources.Comparison | No
                   managed_by: str = "") -> Result:
     """The result for a repo following a branch, from its newest commit, your version, how they compare (None: they
     couldn't be compared), for a clone the branch it's on, and what else installed it (as for releases_result)."""
-    if (not yours or yours == NOT_INSTALLED) and managed_by:
+    if managed_by:
         return Result(OTHER, f"Installed with {managed_by}", head)
     if not yours or yours == NOT_INSTALLED:
         return Result(NOT_INSTALLED_YET, f"Not installed · following {branch}", head)
@@ -229,10 +230,28 @@ def recheck_against(old: Result, yours: str, by_branch: bool, branch: str = "") 
 # Everything
 
 
+def find_managed(repos: list[TrackedRepo]) -> dict[str, str]:
+    """What installed each repo's project, for those the package manager or Flatpak installed and so keep up to date:
+    "dnf", "Flatpak", etc. Those are never updates here. The installed packages and Flatpaks are read once for all."""
+    homepages, apps = packages.installed_homepages(), flatpaks.installed_apps()
+    found = {}
+    for r in repos:
+        ids = [r.id, *r.aliases]
+        if system := packages.managed_by_system(ids, homepages=homepages):
+            found[r.id] = system[0]
+        elif flatpaks.managed_by_flatpak(ids, apps=apps):
+            found[r.id] = "Flatpak"
+    return found
+
+
 def check_all(repos: list[TrackedRepo], previous: State | None = None) -> tuple[State, list[str]]:
     """Check every repo, a few at a time. Returns the new state, and the repos with an update that hasn't been
-    announced before (for a notification). Repos that couldn't be checked keep their previous result's version."""
+    announced before (for a notification). Repos that couldn't be checked keep their previous result's version.
+    Each repo's managed_by is brought up to date first (find_managed), even for repos whose page was never opened."""
     previous = previous or State()
+    managed = find_managed(repos)
+    for r in repos:
+        r.managed_by = managed.get(r.id, "")
     github_limited = threading.Event()
     with ThreadPoolExecutor(max_workers=CHECKS_AT_ONCE) as pool:
         results = dict(zip((r.id for r in repos), pool.map(lambda r: check_repo(r, github_limited), repos)))
