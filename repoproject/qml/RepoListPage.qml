@@ -228,6 +228,7 @@ Kirigami.ScrollablePage {
 
         required property ListView view
         required property var what
+        required property Item bar  // the row it drags: shown under the pointer while dragging
 
         source: "handle-sort"
         implicitWidth: Kirigami.Units.iconSizes.smallMedium
@@ -246,7 +247,7 @@ Kirigami.ScrollablePage {
             hoverEnabled: true
             preventStealing: true
             cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-            onPressed: mouse => handle.view.startDrag(handle.what, yInList(mouse))
+            onPressed: mouse => handle.view.startDrag(handle.what, yInList(mouse), handle.bar)
             onPositionChanged: mouse => {
                 if (pressed)
                     handle.view.moveDrag(yInList(mouse));
@@ -296,6 +297,10 @@ Kirigami.ScrollablePage {
         property var dragged: null
         property real dragY: 0
         property var drop: null
+        // A picture of the dragged row, which follows the pointer, held where it was grabbed.
+        property var picture: null
+        property real grabOffset: 0
+        property real barHeight: 0
 
         // The repo just after row i in the same category, or "" if row i is the category's last.
         function nextRepo(i) {
@@ -338,9 +343,16 @@ Kirigami.ScrollablePage {
             return { category: "", before: before, lineY: before ? headingY(before) : contentHeight + originY };
         }
 
-        function startDrag(what, y) {
+        function startDrag(what, y, bar) {
             dragged = what;
+            picture = null;
+            grabOffset = y - bar.y;
+            barHeight = bar.height;
             moveDrag(y);
+            bar.grabToImage(result => {
+                if (dragged === what)
+                    picture = result;
+            });
         }
 
         function moveDrag(y) {
@@ -352,6 +364,7 @@ Kirigami.ScrollablePage {
             const what = dragged, where = drop;
             dragged = null;
             drop = null;
+            picture = null;
             if (!commit || !what || !where)
                 return;
             // Later, so the rows aren't rebuilt while the handle that was let go is still handling it.
@@ -363,7 +376,7 @@ Kirigami.ScrollablePage {
 
         model: backend.rows
         // The rows are rebuilt when the list changes (e.g. a check finishes), which drops a drag in progress.
-        onModelChanged: dragged = drop = null
+        onModelChanged: dragged = drop = picture = null
 
         delegate: Loader {
             id: row
@@ -372,13 +385,22 @@ Kirigami.ScrollablePage {
 
             width: ListView.view.width
             sourceComponent: modelData.kind === "category" ? headingRow : repoRow
-            // What's being dragged is dimmed: a repo, or a category with its repos.
+            // What's being dragged is dimmed, once its picture is taken: a repo, or a category with its repos.
             opacity: {
                 const d = list.dragged;
-                if (!d)
+                if (!d || !list.picture)
                     return 1;
                 const mine = d.kind === "repo" ? modelData.id === d.id : modelData.category === d.category;
                 return mine ? 0.4 : 1;
+            }
+
+            // The list's own background, so the picture taken of a row for dragging isn't see-through.
+            Rectangle {
+                z: -1
+                anchors.fill: parent
+                Kirigami.Theme.colorSet: Kirigami.Theme.View
+                Kirigami.Theme.inherit: false
+                color: Kirigami.Theme.backgroundColor
             }
 
             Component {
@@ -429,6 +451,7 @@ Kirigami.ScrollablePage {
                             objectName: "dragCategory:" + row.modelData.category
                             visible: row.modelData.category !== ""
                             view: list
+                            bar: row
                             what: ({ kind: "category", id: "", category: row.modelData.category,
                                      label: row.modelData.label })
                         }
@@ -526,6 +549,7 @@ Kirigami.ScrollablePage {
                         DragHandle {
                             objectName: "dragRepo:" + row.modelData.id
                             view: list
+                            bar: row
                             what: ({ kind: "repo", id: row.modelData.id, category: row.modelData.category,
                                      label: row.modelData.name })
                         }
@@ -618,9 +642,9 @@ Kirigami.ScrollablePage {
                 }
         }
 
-        // Where a dragged repo or category would go.
+        // Where a dragged repo or category would go; above the dragged row, which often covers that spot.
         Rectangle {
-            z: 10
+            z: 12
             visible: list.drop !== null && list.drop.lineY >= 0
             y: list.drop ? list.drop.lineY - height / 2 : 0
             width: list.width
@@ -628,26 +652,28 @@ Kirigami.ScrollablePage {
             color: Kirigami.Theme.highlightColor
         }
 
-        // A label that follows the pointer while dragging.
-        Rectangle {
+        // The dragged row itself follows the pointer.
+        Kirigami.ShadowedRectangle {
+            objectName: "dragPicture"
             z: 11
-            visible: list.dragged !== null
-            x: Kirigami.Units.gridUnit * 2
-            y: list.dragY - height / 2
-            width: Math.min(dragLabel.implicitWidth + Kirigami.Units.largeSpacing * 2, list.width - x * 2)
-            height: dragLabel.implicitHeight + Kirigami.Units.smallSpacing * 2
-            radius: Kirigami.Units.cornerRadius
+            Kirigami.Theme.colorSet: Kirigami.Theme.View
+            Kirigami.Theme.inherit: false
+            visible: list.picture !== null
+            y: list.dragY - list.grabOffset
+            width: list.width
+            height: list.barHeight
             color: Kirigami.Theme.backgroundColor
+            border.width: 2
             border.color: Kirigami.Theme.highlightColor
+            shadow.size: Kirigami.Units.gridUnit
+            shadow.yOffset: Kirigami.Units.smallSpacing / 2
+            shadow.color: Qt.rgba(0, 0, 0, 0.3)
 
-            QQC2.Label {
-                id: dragLabel
-
-                anchors.centerIn: parent
-                width: parent.width - Kirigami.Units.largeSpacing * 2
-                text: list.dragged ? list.dragged.label : ""
-                font.bold: true
-                elide: Text.ElideRight
+            // Inside the outline, so the outline shows on every theme.
+            Image {
+                anchors.fill: parent
+                anchors.margins: parent.border.width
+                source: list.picture ? list.picture.url : ""
             }
         }
 

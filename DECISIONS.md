@@ -177,7 +177,8 @@ Your own categories for sorting the list, e.g. "Themes" and "Tools".
 
 - **New Category…** (right of the filters) adds one at the bottom. Names are unique, ignoring upper/lower case.
 - **Drag** a repo by its handle onto a category's heading (to the top of it) or above/below another repo. Drag a
-  category by its handle to move it, with its repos. A line shows where it will land.
+  category by its handle to move it, with its repos. The row itself follows the pointer (its place stays faded),
+  and a line shows where it will land.
 - **⋮ on each heading** (or right-click it) has **Rename** and **Delete Category…**. Rename turns the name into a text
   box in place (Enter saves, Esc cancels); double-clicking the name does the same. A name that's taken says so and
   stays open. Delete sits in the menu rather than alone on the heading, so it isn't one stray click away.

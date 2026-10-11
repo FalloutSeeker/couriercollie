@@ -136,6 +136,7 @@ class Harness:
         QTest.mousePress(window, Qt.LeftButton, Qt.NoModifier, QPoint(x, y))
         for i in range(1, 11):
             QTest.mouseMove(window, QPoint(x, y + (to_y - y) * i // 10), 10)
+        QTest.qWait(200)  # a few frames, as while a real hand drags
         if before_letting_go:
             before_letting_go()
         QTest.mouseRelease(window, Qt.LeftButton, Qt.NoModifier, QPoint(x, to_y))

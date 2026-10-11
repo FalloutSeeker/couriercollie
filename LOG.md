@@ -9,6 +9,9 @@ Newest first.
   older file keeps its order by name. New click check: `devtools/check_categories.py`.
   - Found while testing: a New Category toolbar button pushed Check Now into the overflow menu, so it sits at the
     right of the filters instead.
+- While dragging, the whole row (or category heading) follows the pointer, instead of a small label with its name.
+  - Found while testing: a heading's picture came out black where it's see-through, so rows now have the list's
+    background behind them.
 - Renaming categories: ⋮ menu on each heading (also on right-click) with Rename and Delete Category…; Rename edits the
   name in place, as does double-clicking it. Checked under Breeze Light and Breeze Dark as well as Aero: nothing
   in the window uses fixed colors, and every icon it names exists in Breeze, which other icon themes fall back to.
