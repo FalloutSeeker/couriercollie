@@ -35,13 +35,27 @@ Download the package for your distro from [Releases](https://github.com/FalloutS
 
 Your package manager installs everything else it needs. Then open **couriercollie** from your app menu.
 
-**Or run it straight from the source** (Fedora KDE already has everything it needs):
+**Or run it from the source**, on any distro, once PySide6 and Kirigami are installed:
 
 ```sh
 git clone https://github.com/FalloutSeeker/couriercollie
 cd couriercollie
 ./run.sh
 ```
+
+<details>
+<summary>Installing PySide6 and Kirigami</summary>
+
+| Distro | Command |
+| --- | --- |
+| Fedora | `sudo dnf install python3-pyside6 kf6-kirigami` |
+| openSUSE | `sudo zypper install python3-pyside6 kf6-kirigami-imports` |
+| Ubuntu, Debian | `sudo apt install python3-pyside6.qtquick python3-pyside6.qtwidgets python3-pyside6.qtdbus python3-pyside6.qtnetwork qml6-module-org-kde-kirigami qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts` |
+| Arch | `sudo pacman -S pyside6 kirigami` |
+
+Kirigami is KDE's toolkit for app windows: one library, not the rest of KDE.
+
+</details>
 
 ## Use it
 
