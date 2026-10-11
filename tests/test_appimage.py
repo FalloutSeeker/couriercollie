@@ -375,3 +375,21 @@ class RpmTest(AppImageCase):
         repo = config.load(path).repos[0]
         self.assertEqual((repo.installed, repo.local_path), ("v2.0", "RPM package “tool”"))
         self.assertIn("Installed v2.0 with dnf", backend.details("github.com/a/tool")["updateNote"])
+
+    def test_a_scanned_rpm_must_stay_the_same_package(self):
+        from repoproject.backend import Backend
+
+        path = Path(self.dir.name) / "repos.toml"
+        config.save(config.Config(repos=[config.TrackedRepo(
+            id="github.com/a/tool", name="Tool", url="", host="github", asset_pattern="tool-*-1.x86_64.rpm",
+            kind="RPM", source="scanned", local_path="RPM package “other”", installed="v1.0")]), path)
+        backend = Backend(path)
+        self.addCleanup(backend.shutdown)
+        backend._run = lambda work, done: done(*InstallClickedTest._attempt(work))
+        release = Release("v2.0", "v2.0", None, False, "", "", [self.asset()])
+        saved = sources.releases
+        sources.releases = lambda ref, host: [release]
+        self.addCleanup(setattr, sources, "releases", saved)
+        backend.updateRepo("github.com/a/tool")
+        self.assertIn("not “other” that you have", backend.details("github.com/a/tool")["updateNote"])
+        self.assertFalse(self.asked.exists())  # dnf was never asked

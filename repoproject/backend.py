@@ -1109,7 +1109,6 @@ class Backend(QObject):
             "updateNeedsPassword": bool(repo) and (_is_rpm(repo) or (_is_clone(repo) and updater.needs_password(repo.local_path))),
             "isRpm": bool(repo) and _is_rpm(repo),
             "updatePhase": self._phases.get(repo_id, ""),
-            "isAppImage": bool(repo) and _is_appimage(repo),
             "isProgram": bool(repo) and _is_program(repo),
             "isDownload": bool(repo) and (_is_appimage(repo) or _is_program(repo) or _is_rpm(repo)),
             "programChoices": self._program_choices.get(repo_id, []),
