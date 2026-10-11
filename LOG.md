@@ -4,6 +4,15 @@ Newest first.
 
 ## 2026-10-11
 
+- Safety pass, asked for after the sign-in:
+  - RPM installs: root now installs a copy in a folder only root can write to, checked again against the verified
+    file. Before, something running as you could swap the file between the checks and the password prompt.
+  - Everything run as root is named by full path (`/usr/bin/pkexec`, `/usr/bin/git`, `/usr/bin/dnf`), with only the
+    system's folders searched, and a system clone's git hooks don't run. A fake `git` in `~/.local/bin` could
+    otherwise have run as root.
+  - The GitHub login is sent only over https, only if it looks like one (so an error can't quote it), and a
+    turned-down login is retried without it once. The sign-in button only ever opens github.com.
+  - AppImage menu entries can't be given extra lines by a name or file name.
 - Stage 6, GitHub sign-in (optional): on the welcome screen and in Settings, "GitHub Account (optional)", with one
   line on why. Sign in with a code at github.com/login/device (kept in KDE Wallet), or use the GitHub CLI's login.
   Read-only, sent only to api.github.com, never along a redirect. Release lists are asked for with their ETag:
