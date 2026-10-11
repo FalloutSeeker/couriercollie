@@ -92,11 +92,26 @@ Kirigami.ScrollablePage {
 
                     Layout.fillWidth: true
 
-                    QQC2.Label {
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        text: folderRow.modelData.label
-                        textFormat: Text.PlainText
-                        elide: Text.ElideMiddle
+                        spacing: 0
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: folderRow.modelData.label
+                            textFormat: Text.PlainText
+                            elide: Text.ElideMiddle
+                        }
+
+                        QQC2.Label {
+                            objectName: "folderProblem:" + folderRow.modelData.path
+                            Layout.fillWidth: true
+                            visible: text !== ""
+                            text: folderRow.modelData.problem
+                            font: Kirigami.Theme.smallFont
+                            color: Kirigami.Theme.neutralTextColor
+                            wrapMode: Text.Wrap
+                        }
                     }
 
                     Tag {

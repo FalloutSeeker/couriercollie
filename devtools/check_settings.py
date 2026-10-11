@@ -1,5 +1,5 @@
 """Check the welcome screen's scanning text and the Settings window's folder list: defaults marked, removing a
-folder, Restore Defaults. No network.
+folder, folders a scan would skip, Restore Defaults. No network.
 
     python3 -I devtools/check_settings.py
 """
@@ -30,6 +30,11 @@ h.run([
     (300, lambda: h.check("remove a folder", folders() == ["~", "/opt", "/usr/local"])),
     (0, lambda: b.addScanFolder("file:///mnt/My%20Drive")),
     (300, lambda: h.check("add a folder (spaces decoded)", folders()[-1] == "/mnt/My Drive")),
+    (0, lambda: b.addScanFolder("/root")),  # yours can't be opened: scans skip it, and Settings says why
+    (300, lambda: h.check("a folder you can't open says scans skip it",
+                          h.find("folderProblem:/root", h.window("Settings")) is not None)),
+    (0, lambda: h.check("…as does one that isn't there", h.find("folderProblem:/mnt/My Drive", h.window("Settings"))
+                        is not None)),
     (0, lambda: h.shot("settings-2-changed", h.window("Settings"))),
     (0, lambda: h.check("Restore Defaults shown once changed", h.find("restoreFolders", h.window("Settings")) is not None)),
     (0, lambda: h.click("restoreFolders", h.window("Settings"))),

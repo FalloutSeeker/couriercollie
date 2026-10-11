@@ -170,6 +170,15 @@ def _match_tag(repo: TrackedRepo, d: Details) -> bool:
     return bool(tag)
 
 
+def _folder_problem(folder: str) -> str:
+    """Why a scan would skip this folder, or "". A scan runs as you and never asks for a password, so a folder you
+    can't open is skipped; this says so rather than leaving it to look empty."""
+    path = Path(folder).expanduser()
+    if path.is_dir():
+        return "" if os.access(path, os.R_OK | os.X_OK) else "You can\u2019t open this folder, so scans skip it."
+    return "Not a folder, so scans skip it." if path.exists() else "Not found, so scans skip it."
+
+
 def _join_folders(folders: list[str]) -> str:
     """"~", "/opt", "/usr/local" -> "the home folder, /opt, and /usr/local"."""
     names = ["the home folder" if f == "~" else f for f in folders]
@@ -743,7 +752,7 @@ class Backend(QObject):
             "scanning": s.scanning,
             "scanFolders": [
                 {"path": f, "label": "Home folder (~)" if f == "~" else f,
-                 "isDefault": f in config.DEFAULT_SCAN_FOLDERS}
+                 "isDefault": f in config.DEFAULT_SCAN_FOLDERS, "problem": _folder_problem(f)}
                 for f in s.scan_folders
             ],
             "scanFoldersAreDefault": s.scan_folders == config.DEFAULT_SCAN_FOLDERS,

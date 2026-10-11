@@ -80,6 +80,20 @@ class SettingsTest(unittest.TestCase):
         self.backend.resetScanFolders()
         self.assertTrue(self.backend.settings["scanFoldersAreDefault"])
 
+    @unittest.skipIf(os.geteuid() == 0, "root can open any folder")
+    def test_folders_a_scan_would_skip_say_why(self):
+        root = Path(self.dir.name)
+        locked, afile = root / "locked", root / "a-file"
+        locked.mkdir(mode=0o000)
+        afile.write_text("")
+        for folder in (locked, afile, root / "gone", root):
+            self.backend.addScanFolder(str(folder))
+        problems = {f["path"]: f["problem"] for f in self.backend.settings["scanFolders"]}
+        self.assertEqual(problems[str(locked)], "You can\u2019t open this folder, so scans skip it.")
+        self.assertEqual(problems[str(afile)], "Not a folder, so scans skip it.")
+        self.assertEqual(problems[str(root / "gone")], "Not found, so scans skip it.")
+        self.assertEqual(problems[str(root)], "")
+
     def test_older_settings_files_get_the_default_folders(self):
         self.path.write_text("[settings]\nscanning = true\n")
         self.assertEqual(config.load(self.path).settings.scan_folders, ["~", "/opt", "/usr/local", "/srv"])

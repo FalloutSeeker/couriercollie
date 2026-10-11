@@ -22,7 +22,9 @@ Nothing is ticked to start with. You tick the ones to track, or use **Select all
 **Where it looks.** Folders to scan, by default the home folder, `/opt`, `/usr/local` and `/srv`: where software
 installed by hand usually lives. Each is marked "Default" in Settings, where folders can be added (e.g. a second
 drive) or removed. Subfolders are included up to 6 levels deep, except hidden ones and dependency or build folders
-(`node_modules`, `build`, …), so a scan stays fast.
+(`node_modules`, `build`, …), so a scan stays fast. A scan runs as you and never asks for a password: a folder you
+can't open is skipped. Settings says so under that folder (or that it isn't there), and the scan's results list the
+folders it didn't look in.
 
 | Kind                         | Where it looks                                          | How it finds the source                      |
 | ---------------------------- | ------------------------------------------------------- | -------------------------------------------- |

@@ -4,6 +4,8 @@ Newest first.
 
 ## 2026-10-11
 
+- Scan folders a scan would skip say why in Settings ("You can't open this folder", "Not found"), and the scan's
+  results list them. Scans never ask for a password; unreadable folders were skipped silently before.
 - Install for projects added by hand that follow a branch (or releases with nothing to download for this computer):
   clones them into `~/src`, after which they're clones like ones a scan found. Install scripts are offered right away.
 - A check where no site answered (no connection yet after waking up) no longer counts as the last check, so the next

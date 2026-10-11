@@ -101,6 +101,17 @@ Kirigami.Dialog {
             text: backend.scanError
         }
 
+        // Folders the scan couldn't look in: it runs as you, without asking for a password.
+        Kirigami.InlineMessage {
+            readonly property var skipped: backend.settings.scanFolders.filter(f => f.problem !== "").map(f => f.path)
+
+            objectName: "skippedFolders"
+            Layout.fillWidth: true
+            visible: backend.scanState === "done" && skipped.length > 0
+            type: Kirigami.MessageType.Warning
+            text: `Not looked in: ${skipped.join(", ")}. A folder you can\u2019t open is skipped (scans never ask for a password); Settings says why for each.`
+        }
+
         Kirigami.InlineMessage {
             Layout.fillWidth: true
             visible: backend.scanState === "done" && backend.scanUpdated.length > 0
