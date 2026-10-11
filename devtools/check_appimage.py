@@ -1,5 +1,5 @@
 """Installing and updating a real AppImage (LocalSend, ~63 MB from GitHub), with a simulated mouse: Install, the
-download's progress, the checksum, the menu entry, then Update from an older copy (which is kept, to undo).
+download's progress, the checksum, the menu entry, then Update from an older copy (which is then removed).
 Everything goes into temporary folders: your ~/Applications, menu and settings aren't touched.
 
     python3 -I devtools/check_appimage.py
@@ -59,18 +59,9 @@ def updated():
     new = Path(repo.local_path)
     h.check("updated in place of the older one", new.parent == state["older"].parent and new.is_file()
             and not state["older"].exists())
-    h.check("the older one is kept, to undo", (updater.kept_dir(ID) / state["older"].name).is_file())
+    h.check("the older one is removed", not any(state["older"].parent.glob("LocalSend-1.18.0*")))
     h.check("the menu entry starts the new one", updater.menu_entry_for(new) and not updater.menu_entry_for(state["older"]))
     h.check("up to date", details()["statusKind"] == "current", details()["statusKind"])
-
-
-def undone():
-    repo = b._config.find(ID)
-    h.check("the older one is back in place", Path(repo.local_path) == state["older"] and state["older"].is_file())
-    h.check("…as your version", repo.installed == "v1.18.0" and details()["statusKind"] == "update")
-    h.check("…with the menu entry", updater.menu_entry_for(state["older"]))
-    h.check("the newer one is kept", any(updater.kept_dir(ID).glob("LocalSend-*")))
-    h.check("Undo gone (nothing more to undo)", h.find("undoUpdate") is None)
 
 
 def mid_download():
@@ -104,10 +95,4 @@ h.run([
     h.until(lambda: not details()["updating"], 600000),
     (500, updated),
     (0, lambda: h.shot("appimage-3-updated")),
-    (0, lambda: h.check("Undo offered, back to v1.18.0", h.find("undoUpdate") is not None
-                        and details()["previousVersion"] == "v1.18.0")),
-    (0, lambda: h.click("undoUpdate")),
-    h.until(lambda: not details()["updating"], 60000),
-    (500, undone),
-    (0, lambda: h.shot("appimage-4-undone")),
 ])

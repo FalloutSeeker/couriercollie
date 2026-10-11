@@ -22,7 +22,6 @@ SOURCE_SCANNED = "scanned"
 # The choices offered in the window (DESIGN.md §6, §7).
 # In hours: daily, every 7 days, every 14 days, monthly (4 weeks).
 CHECK_INTERVALS_HOURS = (24, 168, 336, 672)
-DELETE_AFTER_DAYS = (7, 30, 90)
 # Scanned by default (DECISIONS.md, D12). Kept in sync with scan.DEFAULT_SCAN_FOLDERS (a test checks).
 DEFAULT_SCAN_FOLDERS = ["~", "/opt", "/usr/local", "/srv"]
 
@@ -35,8 +34,6 @@ class Settings:
     toasts: bool = True
     scanning: bool = False
     scan_folders: list[str] = field(default_factory=lambda: list(DEFAULT_SCAN_FOLDERS))
-    delete_old: bool = False
-    delete_old_days: int = 30
 
 
 @dataclass
@@ -71,10 +68,6 @@ class TrackedRepo:
     category: str = ""
     # For a release archive with several programs in it: the one to run (its file name). Empty: worked out.
     program: str = ""
-    # What the last update replaced, kept so it can be undone: the old AppImage (in the kept folder) or the program
-    # the link pointed at, and its version. Empty when there's nothing to undo.
-    previous: str = ""
-    previous_version: str = ""
 
 
 @dataclass

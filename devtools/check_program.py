@@ -1,6 +1,6 @@
 """Installing and updating a real program from a release archive (ripgrep, ~2 MB from GitHub), with a simulated
 mouse: Install, the checksum, the link in ~/.local/bin (and that the command runs), then Update from an older copy,
-which is kept. Everything goes into temporary folders: your ~/.local/bin and settings aren't touched.
+which is then removed. Everything goes into temporary folders: your ~/.local/bin and settings aren't touched.
 
     python3 -I devtools/check_program.py
 """
@@ -67,7 +67,7 @@ def updated():
     h.check("the link now points at the new version", updater.program_version(link) == details()["newestText"],
             updater.program_version(link))
     h.check("…and runs", runs(link).startswith("ripgrep "))
-    h.check("the older version is kept, to undo", state["older"].is_dir())
+    h.check("the older version is removed", not state["older"].exists())
     h.check("up to date", details()["statusKind"] == "current")
 
 
@@ -87,10 +87,4 @@ h.run([
     h.until(lambda: not details()["updating"], 300000),
     (500, updated),
     (0, lambda: h.shot("program-2-updated")),
-    (0, lambda: h.click("undoUpdate")),
-    h.until(lambda: not details()["updating"], 60000),
-    (500, lambda: h.check("Undo: the link is back on the older version",
-                          updater.program_version(state["link"]) == "13.0.0" and runs(state["link"]).startswith("ripgrep "))),
-    (0, lambda: h.check("…which is your version, with Update offered again",
-                        b._config.find(ID).installed == "13.0.0" and h.find("text:Update") is not None)),
 ])

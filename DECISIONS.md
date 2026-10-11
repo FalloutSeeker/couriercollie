@@ -63,7 +63,7 @@ Later option: the "custom dnf" idea, a local package repo the app fills, so `dnf
 
 - Never run anything as root without you clicking and entering your password.
 - Verify downloads against the checksum file when the project publishes one; warn when it doesn't.
-- Keep the previous version until the new one is installed, so an update can be undone.
+- Keep the previous version until the new one is in place, so a failed update leaves a working copy.
 - Never run a project's own install script automatically.
 
 **Status:** decided 2026-10-10.
@@ -118,19 +118,14 @@ up in the KDE launcher. Nothing in system folders except through dnf.
 
 **Status:** decided 2026-10-10 (keep the working name for now).
 
-## D11. Deleting old versions
+## D11. Old versions
 
-Global setting, **off by default** (old versions kept forever). Offered on first launch and in Settings. When on: delete
-after 7 / 30 / 90 days.
+Not kept. An update removes the version it replaced, once the new one is in place (D6). There's no Undo, and so no
+setting to delete old versions after a while: nothing piles up. RPMs: dnf replaces the old version itself. Git clones:
+the old versions are the repo's own history, which isn't touched.
 
-- **Deletes:** what the app kept for undoing an update: the previous AppImage or program file, and old downloads in
-  `~/.cache/repoproject`. These are all in your own folders, so no password is needed.
-- **Never touches:** anything that would need admin rights. If something ever does, the app skips it rather than
-  asking for a password. (Old RPM versions don't pile up anyway: dnf replaces them on update.)
-- **Git clones:** the old versions are the repo's own history, which isn't deleted.
-- Once an old version is deleted, that update can't be undone. The setting says so.
-
-**Status:** decided 2026-10-10 (made off-by-default the same day).
+**Status:** decided 2026-10-10; changed 2026-10-11: Undo and the "delete old versions after…" setting were dropped as
+unnecessary, so old versions are removed straight away.
 
 ## D12. Scanning the computer
 

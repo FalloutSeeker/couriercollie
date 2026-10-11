@@ -62,43 +62,42 @@ class AppImageCase(unittest.TestCase):
 
 
 class InstallTest(AppImageCase):
-    def test_update_swaps_in_the_new_file_and_keeps_the_old(self):
+    def test_update_swaps_in_the_new_file_then_removes_the_old(self):
         old = self.folder / "App-1.0-x86_64.AppImage"
         old.write_bytes(b"old version")
         seen = []
-        new, verified, kept = updater.install_appimage("github.com/a/app", self.asset(), [], self.folder, old,
-                                                       progress=lambda done, total: seen.append((done, total)))
+        new, verified = updater.install_appimage(self.asset(), [], self.folder, old,
+                                                 progress=lambda done, total: seen.append((done, total)))
         self.assertEqual((new, verified), (self.folder / NAME, True))
         self.assertEqual(new.read_bytes(), APP)
         self.assertTrue(os.access(new, os.X_OK))
-        self.assertFalse(old.exists())
-        self.assertEqual(kept.read_bytes(), b"old version")  # kept, to undo
+        self.assertFalse(old.exists())  # removed once the new one was in place
         self.assertEqual(seen[-1], (len(APP), len(APP)))
         self.assertEqual([p.name for p in self.folder.iterdir()], [NAME])  # no half-downloaded file left
 
     def test_a_checksum_file_in_the_release_is_used_when_the_site_gives_none(self):
         others = [self.asset("SHA256SUMS", digest="")]
-        self.assertTrue(updater.install_appimage("a/b/c", self.asset(digest=""), others, self.folder, None)[1])
+        self.assertTrue(updater.install_appimage(self.asset(digest=""), others, self.folder, None)[1])
 
     def test_a_download_that_doesnt_match_its_checksum_is_thrown_away(self):
         old = self.folder / "App-1.0-x86_64.AppImage"
         old.write_bytes(b"old version")
         others = [self.asset("App-2.0-x86_64.AppImage.sha256", digest="", path="wrong.sha256")]
         with self.assertRaisesRegex(updater.UpdateError, "doesn’t match the checksum"):
-            updater.install_appimage("a/b/c", self.asset(digest=""), others, self.folder, old)
+            updater.install_appimage(self.asset(digest=""), others, self.folder, old)
         self.assertEqual([p.name for p in self.folder.iterdir()], [old.name])  # yours untouched, nothing left over
 
     def test_something_thats_not_an_appimage_isnt_installed(self):
         with self.assertRaisesRegex(updater.UpdateError, "isn’t an AppImage"):
-            updater.install_appimage("a/b/c", self.asset(NAME, "", "not-an-app.AppImage"), [], self.folder, None)
+            updater.install_appimage(self.asset(NAME, "", "not-an-app.AppImage"), [], self.folder, None)
         self.assertEqual(list(self.folder.iterdir()), [])
 
     def test_no_published_checksum_is_said_not_hidden(self):
-        self.assertFalse(updater.install_appimage("a/b/c", self.asset(digest=""), [], self.folder, None)[1])
+        self.assertFalse(updater.install_appimage(self.asset(digest=""), [], self.folder, None)[1])
 
     def test_never_a_path_from_the_site(self):
-        new, _, _ = updater.install_appimage("a/b/c", Asset("../../evil/" + NAME, self.url + NAME, len(APP),
-                                                             f"sha256:{SHA}"), [], self.folder, None)
+        new, _ = updater.install_appimage(Asset("../../evil/" + NAME, self.url + NAME, len(APP), f"sha256:{SHA}"),
+                                          [], self.folder, None)
         self.assertEqual(new, self.folder / NAME)
 
     def test_menu_entries_follow_the_new_file(self):
@@ -213,21 +212,25 @@ class ProgramTest(AppImageCase):
         return updater.install_program("github.com/a/tool", tag, Asset(name, self.url + name, len(data),
                                        f"sha256:{hashlib.sha256(data).hexdigest()}"), [], wanted, list(hints))
 
-    def test_installs_with_a_link_and_updates_keeping_the_old_version(self):
+    def test_installs_with_a_link_then_updates_removing_the_old_version(self):
         from repoproject import scan
 
-        link, verified, before = self.install("v1.0", "tool-1.0.tar.gz")
-        self.assertEqual((link, verified, before), (updater.bin_dir() / "tool", True, None))
+        link, verified, replaced = self.install("v1.0", "tool-1.0.tar.gz")
+        self.assertEqual((link, verified, replaced), (updater.bin_dir() / "tool", True, False))
         self.assertEqual(link.read_bytes(), ELF + b"1.0")  # the link starts the program
         self.assertTrue((link.resolve().parent / "lib/libtool.so.1").is_file())  # with the files next to it
         self.assertEqual(scan.version_on_disk(str(link)), ("v1.0", True))
-        link, _, before = self.install("v2.0", "tool-2.0.zip")
+        link, _, replaced = self.install("v2.0", "tool-2.0.zip")
+        self.assertTrue(replaced)
         self.assertEqual(link.read_bytes(), ELF + b"2.0")
         self.assertTrue(os.access(link, os.X_OK))  # a zip keeps the program runnable
         self.assertEqual(updater.program_version(link), "v2.0")
-        self.assertTrue(before.is_file() and before.read_bytes() == ELF + b"1.0")  # kept, to undo
-        leftovers = [p.name for p in (updater.programs_dir() / "github.com_a_tool").iterdir()]
-        self.assertEqual(sorted(leftovers), ["v1.0", "v2.0"])  # nothing half-done left behind
+        folders = [p.name for p in (updater.programs_dir() / "github.com_a_tool").iterdir()]
+        self.assertEqual(folders, ["v2.0"])  # the old version removed, nothing half-done left behind
+        # The same version again (e.g. reinstalling a broken one): still exactly one, working.
+        self.install("v2.0", "tool-2.0.tar.gz")
+        self.assertEqual(link.read_bytes(), ELF + b"2.0")
+        self.assertEqual([p.name for p in (updater.programs_dir() / "github.com_a_tool").iterdir()], ["v2.0"])
 
     def test_never_replaces_a_command_it_didnt_put_there(self):
         updater.bin_dir().mkdir(parents=True)
@@ -250,18 +253,6 @@ class ProgramTest(AppImageCase):
             with self.assertRaisesRegex(updater.UpdateError, "outside|unsafe"):
                 self.install("v1", name)
         self.assertFalse(any(Path(self.dir.name).rglob("escaped")))
-
-    def test_undo_points_the_link_back(self):
-        self.install("v1.0", "tool-1.0.tar.gz")
-        link, _, before = self.install("v2.0", "tool-2.0.tar.gz")
-        updater.undo_program("github.com/a/tool", link, before)
-        self.assertEqual((link.read_bytes(), updater.program_version(link)), (ELF + b"1.0", "v1.0"))
-        self.assertTrue((updater.programs_dir() / "github.com_a_tool" / "v2.0").is_dir())  # newer one kept
-        # A link that isn't RepoProject's any more is left alone.
-        link.unlink()
-        link.write_text("someone else's")
-        with self.assertRaisesRegex(updater.UpdateError, "isn\u2019t RepoProject\u2019s link"):
-            updater.undo_program("github.com/a/tool", link, before)
 
     def test_no_program_inside(self):
         _Files.files["docs.tar.gz"] = _archive("tar", {"docs/README": (b"text", 0o644)})
@@ -384,48 +375,3 @@ class RpmTest(AppImageCase):
         repo = config.load(path).repos[0]
         self.assertEqual((repo.installed, repo.local_path), ("v2.0", "RPM package “tool”"))
         self.assertIn("Installed v2.0 with dnf", backend.details("github.com/a/tool")["updateNote"])
-
-
-
-class UndoTest(AppImageCase):
-    def test_an_appimage_goes_back_and_the_newer_one_is_kept(self):
-        menu = updater.menu_dir()
-        menu.mkdir(parents=True)
-        old = self.folder / "App-1.0-x86_64.AppImage"
-        old.write_bytes(b"old version")
-        (menu / "app.desktop").write_text(f"[Desktop Entry]\nExec={old}\n")
-        new, _, kept = updater.install_appimage("github.com/a/app", self.asset(), [], self.folder, old)
-        back = updater.undo_appimage("github.com/a/app", new, kept)
-        self.assertEqual((back, back.read_bytes()), (old, b"old version"))
-        self.assertEqual((updater.kept_dir("github.com/a/app") / NAME).read_bytes(), APP)  # newer one kept
-        self.assertIn(f"Exec={old}", (menu / "app.desktop").read_text())  # the menu follows
-        with self.assertRaisesRegex(updater.UpdateError, "isn\u2019t kept any more"):
-            updater.undo_appimage("github.com/a/app", back, kept)
-
-    def test_clicked(self):
-        from repoproject.backend import Backend
-
-        old = self.folder / "App-1.0-x86_64.AppImage"
-        old.write_bytes(b"old version")
-        path = Path(self.dir.name) / "repos.toml"
-        rid = "github.com/a/app"
-        config.save(config.Config(repos=[config.TrackedRepo(
-            id=rid, name="App", url="", host="github", asset_pattern="App-*-x86_64.AppImage", kind="AppImage",
-            source="scanned", local_path=str(old), installed="v1.0")]), path)
-        backend = Backend(path)
-        self.addCleanup(backend.shutdown)
-        backend._run = lambda work, done: done(*InstallClickedTest._attempt(work))
-        release = Release("v2.0", "v2.0", None, False, "", "", [self.asset()])
-        saved = sources.releases
-        sources.releases = lambda ref, host: [release]
-        self.addCleanup(setattr, sources, "releases", saved)
-        backend.updateRepo(rid)
-        d = backend.details(rid)
-        self.assertEqual((d["canUndo"], d["previousVersion"]), (True, "v1.0"))
-        backend.undoUpdate(rid)
-        repo = config.load(path).repos[0]
-        self.assertEqual((repo.installed, repo.local_path, repo.previous), ("v1.0", str(old), ""))
-        self.assertEqual(old.read_bytes(), b"old version")
-        d = backend.details(rid)
-        self.assertFalse(d["canUndo"])
-        self.assertIn("Back to v1.0", d["updateNote"])

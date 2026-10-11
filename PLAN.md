@@ -60,11 +60,10 @@ Built kind by kind, simplest first:
    version.
 4. **RPMs** (done): download, verify, install through dnf, which asks for your password.
 
-Plus **Undo last update** (done) for AppImages and programs while the old version is still kept.
+Each update removes the version it replaced once the new one is in place (no Undo; D11).
 
 ## Stage 6: Finishing
 
-- **Delete old versions after…** setting and the cleanup that runs with each check.
 - **Sign in to GitHub** (DESIGN.md §8).
 - App icon, KDE menu entry, and packaging the app itself as an RPM so it installs like anything else.
 - **GNOME support** (checked 2026-10-11 by running the window with GNOME settings; the list, dragging and menus work):
@@ -92,7 +91,7 @@ Plus **Undo last update** (done) for AppImages and programs while the old versio
   - The repo gets one issue template (`.github/ISSUE_TEMPLATE/feedback.yml`) that labels these `feedback`.
   - Sending needs a GitHub account, in the browser. The app's own GitHub sign-in (stage 6) stays read-only.
 - **Restore to Defaults** in the Settings window: every setting back to how it was on a fresh start (automatic
-  checks, notifications, scanning and its folders, deleting old versions). Tracked repos and categories are kept.
+  checks, notifications, scanning and its folders). Tracked repos and categories are kept.
   Asks first.
 - **User documentation** (a short guide in the README, or Help in the app). Include how the scan decides an RPM is
   one dnf won't update, in plain words:

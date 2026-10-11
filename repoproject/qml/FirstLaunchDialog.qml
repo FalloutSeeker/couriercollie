@@ -16,9 +16,7 @@ Kirigami.Dialog {
             firstLaunchDone: true,
             autoCheck: autoYes.checked,
             checkIntervalHours: backend.checkIntervals[intervalBox.currentIndex],
-            scanning: scanBox.checked,
-            deleteOld: deleteBox.checked,
-            deleteOldDays: backend.deleteAfterDays[daysBox.currentIndex]
+            scanning: scanBox.checked
         });
         dialog.close();
         dialog.finished(scanBox.checked);
@@ -109,33 +107,6 @@ Kirigami.Dialog {
             text: scanBox.checked
                 ? `Looks in ${backend.settings.scanFoldersText} for git clones and downloaded apps, and for RPMs installed from downloaded files. These folders are scanned by default; more can be added in Settings. Only the repos you choose are tracked, and others can still be added by hand. Only what your package manager can\u2019t update is listed. Anything dnf or Flatpak updates is left out: an RPM is only included if it was installed from a downloaded file and no repository you have enabled (Fedora, RPM Fusion, COPR\u2026) offers it.`
                 : "Off: tracking is manual. You add repos yourself, and for each one set which version you have, or mark it as up to date."
-            wrapMode: Text.Wrap
-            opacity: 0.7
-        }
-
-        // ---- Old versions ----
-
-        RowLayout {
-            QQC2.CheckBox {
-                id: deleteBox
-
-                text: "Delete old versions after"
-                checked: false
-            }
-
-            QQC2.ComboBox {
-                id: daysBox
-
-                enabled: deleteBox.checked
-                model: backend.deleteAfterDays.map(d => `${d} days`)
-                currentIndex: backend.deleteAfterDays.indexOf(30)
-            }
-        }
-
-        QQC2.Label {
-            Layout.fillWidth: true
-            Layout.leftMargin: Kirigami.Units.gridUnit * 1.5
-            text: "Kept versions let you undo an update."
             wrapMode: Text.Wrap
             opacity: 0.7
         }

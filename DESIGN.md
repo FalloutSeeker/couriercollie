@@ -152,9 +152,8 @@ release's file next to the one you have; **Install** (when you don't have it) pu
   (`<file>.sha256`, `SHA256SUMS`, `checksums.txt`, …). A mismatch throws the download away. With no published
   checksum it's still installed, and the page says so in a warning (D6). It must also really be an AppImage
   (the "AI" mark in its header), or it's thrown away.
-- Then it's made runnable and swapped in under the release's own file name. The old file moves to
-  `~/.local/share/repoproject/kept/<repo>/`, so the update can be undone (D11 deletes kept versions later, if
-  turned on).
+- Then it's made runnable and swapped in under the release's own file name. The old file is removed only once the
+  new one is in place (D6), so nothing piles up.
 - **Menu entries:** yours that started the old file (e.g. from AppImageLauncher or Gear Lever) are pointed at the
   new one. If none starts it, the app adds one (`~/.local/share/applications/repoproject-<repo>.desktop`) with the
   AppImage's own icon.
@@ -170,7 +169,6 @@ your password, which the page says beforehand):
 - Then `dnf install -y <file>` runs as root through polkit: one password prompt per update. Cancelling it changes
   nothing. dnf's own error is shown if it fails (e.g. a missing dependency). The download is deleted either way.
 - From then on the version is read from the installed package (`rpm -q`), like an RPM a scan found.
-- No Undo for RPMs: dnf keeps no copy of the old version to go back to.
 
 **Programs (built 2026-10-11).** For repos that follow a release archive (`.tar.gz`, `.tgz`, `.tar.xz`, `.tar.bz2`,
 `.tar.zst`, `.zip`) with a ready-made program inside, e.g. ripgrep or LocalSend's tarball.
@@ -181,35 +179,24 @@ your password, which the page says beforehand):
 - **The program** is the archive's Linux executable (not libraries); if there are several, the one named like the
   project; otherwise the page lists them to choose from, and the choice is kept for later updates.
 - A **link** in `~/.local/bin` (where Fedora's terminal looks for commands) starts it, e.g. `rg`. Updating unpacks
-  the new version beside the old, then switches the link in one step; the old version's folder stays, to undo.
+  the new version beside the old, switches the link in one step, then removes the old version's folder.
 - A command in `~/.local/bin` that RepoProject didn't put there is **never replaced**: the update stops and says so.
 - No menu entry: these are mostly command-line tools. The page shows the command under Tracking.
-
-**Undo Last Update (built 2026-10-11).** For AppImages and programs, while the version an update replaced is kept:
-the status box offers "Undo Last Update (back to v1.18.0)". An AppImage's kept file goes back where yours was (the
-newer file is kept in its place, and menu entries follow); a program's link points back at the older version's
-folder. Nothing is deleted. Your version is then the older one, so Update is offered again (it downloads the newer
-one again). What was replaced is saved with the repo, so Undo works after a restart; it's forgotten when you choose
-a different file or switch what the repo follows. Not for clones or RPMs.
 
 **Install scripts.** A clone's `install.sh`, `install` or `setup.sh` (never `uninstall.sh`) gets a "Show and Run…"
 button under Tracking. The script is shown in full first; Run in Terminal opens Konsole in the clone's folder, as
 you, kept open afterwards so its output can be read. The script asks for a password itself if it needs one. Update
 never runs it.
 
-**Old versions** (DECISIONS.md, D11): the previous version is kept so an update can be undone. Deleting old versions
-after a set time is **off by default** (kept forever). It's a global setting, offered on first launch and in
-Settings. Only files in your own folders are deleted. Anything that would need admin rights is skipped, never prompted
-for.
+**Old versions** aren't kept (D11): each update removes the version it replaced, once the new one is in place.
 
 ### 6. First launch
 
-A short setup screen asks three things and says all of them can be changed later in Settings:
+A short setup screen asks two things and says both can be changed later in Settings:
 
 1. **Check for updates automatically?** If yes, pick how often. If no, checks only happen when you click Check now.
 2. **Scan this computer for repos?** Off by default. If turned on, a scan runs when you click Done, and the scan
    results let you tick specific repos or **Select all**.
-3. **Delete old versions automatically?** Off by default. If turned on, pick after how long: 7 / 30 / 90 days.
 
 Toasts are on by default whenever automatic checks are on, and can be turned off in Settings.
 
@@ -220,7 +207,6 @@ All global; there are no per-repo settings.
 - **Automatic checks**: on/off, and the interval.
 - **Toast notifications**: on/off. Off leaves only the taskbar badge and the ⬆ icons in the app.
 - **Scanning**: on/off. On shows the Scan button in the main window.
-- **Delete old versions**: on/off, and after how long (7 / 30 / 90 days).
 - **GitHub account** (optional): Sign in / Sign out, with the explanation below.
 
 ### 8. Signing in to GitHub (optional)
@@ -272,9 +258,6 @@ Signing in is never required. The Settings section explains why someone would do
 │                                                               │
 │  [ ] Scan this computer for repos I've already installed      │
 │      You'll choose which ones to track.                       │
-│                                                               │
-│  [ ] Delete old versions after [ 30 days ▾ ]                  │
-│      Kept versions let you undo an update.                    │
 │                                                               │
 │  You can change all of this later in Settings.                │
 │                                                       [Done]  │
@@ -355,8 +338,8 @@ Signing in is never required. The Settings section explains why someone would do
   when the app is open or pinned to the taskbar. To check when building: whether the badge stays visible after the
   checker exits while the window is closed.
 - **The window** is a separate program that reads the same settings file. Closing it doesn't stop checks.
-- **Downloads** are kept in `~/.cache/repoproject` so a failed update can roll back to the previous file, and are
-  cleaned up after the "delete old versions" period.
+- **Downloads** go to a hidden `.part` file beside where they'll end up (RPMs: `~/.cache/repoproject/downloads`),
+  and are removed once installed or if anything goes wrong.
 
 Tools (DECISIONS.md, D1): Python, with Qt and KDE's Kirigami for the window so it looks native on KDE. Both are
 already installed on this machine.

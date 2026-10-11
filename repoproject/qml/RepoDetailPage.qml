@@ -402,7 +402,6 @@ Kirigami.ScrollablePage {
 
                     QQC2.Label {
                         text: page.details.updatePhase === "installing" ? "Installing with dnf\u2026"
-                            : page.details.updatePhase === "undoing" ? "Going back to the previous version\u2026"
                             : page.details.isDownload ? (page.details.progress >= 0
                                   ? `Downloading\u2026 ${Math.round(page.details.progress * 100)}%` : "Downloading\u2026")
                             : page.followsReleases ? "Moving to the new release\u2026" : "Pulling the new commits\u2026"
@@ -460,7 +459,6 @@ Kirigami.ScrollablePage {
 
                 RowLayout {
                     visible: page.canUpdate || page.canMarkUpToDate || page.canMarkNotInstalled
-                             || page.details.canUndo === true
 
                     // Only from this click: nothing is ever updated on its own (DECISIONS.md, D4).
                     QQC2.Button {
@@ -470,16 +468,6 @@ Kirigami.ScrollablePage {
                         text: (page.installing ? "Install" : "Update") + (page.details.updateNeedsPassword ? "\u2026" : "")
                         icon.name: page.installing ? "download" : "system-software-update"
                         onClicked: backend.updateRepo(page.repoId)
-                    }
-
-                    // Back to what the last update replaced, while it's kept.
-                    QQC2.Button {
-                        objectName: "undoUpdate"
-                        visible: page.details.canUndo === true
-                        flat: true
-                        text: `Undo Last Update (back to ${page.details.previousVersion})`
-                        icon.name: "edit-undo"
-                        onClicked: backend.undoUpdate(page.repoId)
                     }
 
                     QQC2.Button {

@@ -24,17 +24,15 @@ class SettingsTest(unittest.TestCase):
 
     def test_first_launch_answers_are_saved(self):
         self.backend.updateSettings({"firstLaunchDone": True, "autoCheck": True, "checkIntervalHours": 24,
-                                     "scanning": True, "deleteOld": True, "deleteOldDays": 90})
+                                     "scanning": True})
         s = config.load(self.path).settings
-        self.assertEqual((s.first_launch_done, s.auto_check, s.check_interval_hours, s.scanning, s.delete_old,
-                          s.delete_old_days), (True, True, 24, True, True, 90))
+        self.assertEqual((s.first_launch_done, s.auto_check, s.check_interval_hours, s.scanning), (True, True, 24, True))
         # A fresh start reads them back, so the first-launch screen doesn't come back.
         self.assertTrue(Backend(self.path).settings["firstLaunchDone"])
 
     def test_numbers_from_the_window_may_be_floats(self):
-        self.backend.updateSettings({"checkIntervalHours": 168.0, "deleteOldDays": 7.0})
+        self.backend.updateSettings({"checkIntervalHours": 168.0})
         self.assertEqual(self.backend.settings["checkIntervalHours"], 168)
-        self.assertEqual(self.backend.settings["deleteOldDays"], 7)
 
     def test_interval_choices(self):
         # Daily, every 7 days, every 14 days, monthly (4 weeks). Daily is the default.
@@ -57,10 +55,9 @@ class SettingsTest(unittest.TestCase):
         self.assertIsNone(config.reset(self.path))
 
     def test_values_outside_the_choices_are_ignored(self):
-        self.backend.updateSettings({"checkIntervalHours": 5, "deleteOldDays": 1, "autoCheck": "yes", "bogus": 1})
-        self.backend.updateSettings({"checkIntervalHours": "abc", "deleteOldDays": None})
+        self.backend.updateSettings({"checkIntervalHours": 5, "autoCheck": "yes", "bogus": 1})
+        self.backend.updateSettings({"checkIntervalHours": "abc"})
         self.assertEqual(self.backend.settings["checkIntervalHours"], 24)
-        self.assertEqual(self.backend.settings["deleteOldDays"], 30)
         self.assertFalse(self.backend.settings["autoCheck"])
 
     def test_scan_folders_default(self):

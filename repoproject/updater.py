@@ -3,10 +3,10 @@
 RPMs: the new .rpm is downloaded, checked, and installed by dnf, which asks for your password.
 
 Programs (an archive with a ready-made program inside): each version is unpacked into its own folder, and a link in
-~/.local/bin starts it; updating switches the link, and the old version stays, to undo.
+~/.local/bin starts it; updating switches the link, then removes the old version.
 
 AppImages: the new file is downloaded next to yours, checked against the project's published checksum (and that it
-really is an AppImage), then swapped in; the old one is kept, to undo the update.
+really is an AppImage), then swapped in; the old one is removed once the new one is in place.
 
 Git clones: the new commits on the followed branch are pulled, fast-forward only, so nothing of yours is merged,
 rebased or thrown away. A project's install script is never run here; it's shown to you first, and runs in a terminal
@@ -233,7 +233,7 @@ def terminal_command(path: str, name: str) -> tuple[str, list[str]]:
 
 # ---------------------------------------------------------------------------------------------------------------------
 # AppImages: downloaded next to the one you have (or into ~/Applications, DECISIONS.md D8), checked, then swapped in.
-# The old file is kept (D6, D11) so the update can be undone.
+# The old file is removed only once the new one is in place (D6).
 
 # Nothing this big is downloaded: a mistake, or not an app.
 DOWNLOAD_MAX_BYTES = 4 * 1024 ** 3
@@ -249,11 +249,6 @@ def _data_home() -> Path:
 def apps_dir() -> Path:
     """Where AppImages the app installs go (D8)."""
     return Path(os.environ.get("REPOPROJECT_APPS") or Path.home() / "Applications")
-
-
-def kept_dir(repo_id: str) -> Path:
-    """Where the version before an update is kept, to undo it."""
-    return _data_home() / "repoproject" / "kept" / repo_id.replace("/", "_")
 
 
 def menu_dir() -> Path:
@@ -339,35 +334,40 @@ def is_appimage(path: Path) -> bool:
     return head[:4] == b"\x7fELF" and head[8:10] == b"AI" and head[10:11] in (b"\x01", b"\x02")
 
 
-def install_appimage(repo_id: str, asset, others: list, folder: Path, old: Path | None,
-                     progress=None, get_text=fetch_text) -> tuple[Path, bool, Path | None]:
+def _download_checked(asset, part: Path, others: list, progress, get_text) -> bool:
+    """Downloads `asset` to `part` and checks it against the checksum the project published. Returns whether there
+    was one to check against. A download that doesn't match is deleted, and that's the end of it."""
+    got = download(asset.url, part, asset.size, progress)
+    expected = expected_sha256(asset, others, get_text)
+    if expected and got != expected:
+        part.unlink(missing_ok=True)
+        raise UpdateError("The download doesn\u2019t match the checksum the project published, so it was thrown away. "
+                          "Try again later; if it keeps happening, the file on the site may have been tampered with.")
+    return bool(expected)
+
+
+def install_appimage(asset, others: list, folder: Path, old: Path | None,
+                     progress=None, get_text=fetch_text) -> tuple[Path, bool]:
     """Downloads `asset` (a release's AppImage) into `folder`, checks it, and puts it in place of `old` (if any),
-    which is moved to kept_dir. Returns (the new file, whether it was checked against a published checksum, where
-    the old one is kept)."""
+    which is then removed. Returns (the new file, whether it was checked against a published checksum)."""
     folder.mkdir(parents=True, exist_ok=True)
     if not os.access(folder, os.W_OK):
         raise UpdateError(f"{folder} belongs to another user (often the system), so the new version can’t be put "
                           "there from here.")
     name = Path(asset.name).name  # never a path from the site
     part = folder / f".{name}.part"
-    got = download(asset.url, part, asset.size, progress)
-    expected = expected_sha256(asset, others, get_text)
-    if expected and got != expected:
+    try:
+        verified = _download_checked(asset, part, others, progress, get_text)
+        if not is_appimage(part):
+            raise UpdateError(f"{name} isn\u2019t an AppImage, so it wasn\u2019t installed.")
+        part.chmod(0o755)
+        new = folder / name
+        os.replace(part, new)
+        if old and old != new:
+            old.unlink(missing_ok=True)  # only now: until here, the old one still works
+        return new, verified
+    finally:
         part.unlink(missing_ok=True)
-        raise UpdateError("The download doesn’t match the checksum the project published, so it was thrown away. "
-                          "Try again later; if it keeps happening, the file on the site may have been tampered with.")
-    if not is_appimage(part):
-        part.unlink(missing_ok=True)
-        raise UpdateError(f"{name} isn’t an AppImage, so it wasn’t installed.")
-    part.chmod(0o755)
-    kept = None
-    if old and old.is_file():
-        keep = kept_dir(repo_id)
-        keep.mkdir(parents=True, exist_ok=True)
-        kept = keep / old.name
-        shutil.move(str(old), kept)
-    os.replace(part, folder / name)
-    return folder / name, bool(expected), kept
 
 
 def _desktop_quote(path: Path) -> str:
@@ -425,7 +425,7 @@ def menu_entry_for(app: Path) -> bool:
 # ---------------------------------------------------------------------------------------------------------------------
 # Programs: a release's archive (.tar.gz, .zip, …) with a ready-made program inside. Each version is unpacked whole
 # (some programs need the files next to them) into its own folder, and a link in ~/.local/bin starts the program
-# (D8). Updating unpacks the new version beside the old, then switches the link; the old folder is kept, to undo.
+# (D8). Updating unpacks the new version beside the old, switches the link, then removes the old folder.
 
 # Unpacked, an archive may not be bigger than this (an archive can unpack to far more than it downloads).
 UNPACKED_MAX_BYTES = 4 * 1024 ** 3
@@ -517,22 +517,18 @@ def choose_program(folder: Path, wanted: str, hints: list[str]) -> Path:
 
 
 def install_program(repo_id: str, tag: str, asset, others: list, wanted: str = "", hints: list[str] = (),
-                    progress=None, get_text=fetch_text) -> tuple[Path, bool, Path | None]:
-    """Downloads a release's archive, checks it, unpacks it into its own folder, and points the program's link in
-    bin_dir() at it. Returns (the link, whether the download was checked against a published checksum, the version
-    the link pointed at before, if any). Never replaces a command in bin_dir() that it didn't put there."""
+                    progress=None, get_text=fetch_text) -> tuple[Path, bool, bool]:
+    """Downloads a release's archive, checks it, unpacks it into its own folder, points the program's link in
+    bin_dir() at it, and removes the version it pointed at before. Returns (the link, whether the download was checked
+    against a published checksum, whether it replaced a version). Never replaces a command in bin_dir() that it
+    didn't put there."""
     home = programs_dir() / _folder_name(repo_id)
     home.mkdir(parents=True, exist_ok=True)
     part = home / f".{_folder_name(Path(asset.name).name)}.part"
     unpacking = home / f".{_folder_name(tag)}.unpacking"
     shutil.rmtree(unpacking, ignore_errors=True)
     try:
-        got = download(asset.url, part, asset.size, progress)
-        expected = expected_sha256(asset, others, get_text)
-        if expected and got != expected:
-            raise UpdateError("The download doesn’t match the checksum the project published, so it was thrown "
-                              "away. Try again later; if it keeps happening, the file on the site may have been "
-                              "tampered with.")
+        verified = _download_checked(asset, part, others, progress, get_text)
         _unpack(part, unpacking)
         program = choose_program(unpacking, wanted, list(hints))
         link = bin_dir() / program.name
@@ -541,21 +537,23 @@ def install_program(repo_id: str, tag: str, asset, others: list, wanted: str = "
             raise UpdateError(f"{link} already exists and wasn’t put there by RepoProject, so it wasn’t "
                               "replaced. Move it away (or uninstall what it belongs to), then try again.")
         version = home / _folder_name(tag)
-        if version.exists() and before and before.is_relative_to(version.resolve()):
-            # The same version again (e.g. a broken one reinstalled): move the current one aside first.
+        # The folder the link uses now. If it's this same version (a reinstall), it's moved aside first.
+        old = home / before.relative_to(home.resolve()).parts[0] if before else None
+        if version.exists():
             aside = home / f".{_folder_name(tag)}.old"
             shutil.rmtree(aside, ignore_errors=True)
             os.replace(version, aside)
-            before = aside / before.relative_to(version.resolve())
-        elif version.exists():
-            shutil.rmtree(version)
+            if old == version:
+                old = aside
         os.replace(unpacking, version)
         bin_dir().mkdir(parents=True, exist_ok=True)
         new_link = bin_dir() / f".{program.name}.repoproject"
         new_link.unlink(missing_ok=True)
         new_link.symlink_to(version / program.relative_to(unpacking))
         os.replace(new_link, link)  # in one step: the command always works, old or new
-        return link, bool(expected), before
+        for gone in {old, home / f".{_folder_name(tag)}.old"} - {None, version}:
+            shutil.rmtree(gone, ignore_errors=True)  # only now: until here, the old version still ran
+        return link, verified, before is not None
     finally:
         part.unlink(missing_ok=True)
         shutil.rmtree(unpacking, ignore_errors=True)
@@ -607,12 +605,7 @@ def install_rpm(asset, others: list, package: str = "", progress=None, installin
     name = Path(asset.name).name
     part, file = folder / f".{name}.part", folder / name
     try:
-        got = download(asset.url, part, asset.size, progress)
-        expected = expected_sha256(asset, others, get_text)
-        if expected and got != expected:
-            raise UpdateError("The download doesn’t match the checksum the project published, so it was thrown "
-                              "away. Try again later; if it keeps happening, the file on the site may have been "
-                              "tampered with.")
+        verified = _download_checked(asset, part, others, progress, get_text)
         with part.open("rb") as f:
             if f.read(4) != RPM_MAGIC:
                 raise UpdateError(f"{name} isn’t an RPM, so it wasn’t installed.")
@@ -636,41 +629,7 @@ def install_rpm(asset, others: list, package: str = "", progress=None, installin
             raise UpdateError("The password wasn’t given, so nothing was installed.")
         if result.returncode != 0:
             raise UpdateError(f"dnf couldn’t install it: {_last_line(result)}")
-        return rpm_name, version, bool(expected)
+        return rpm_name, version, verified
     finally:
         part.unlink(missing_ok=True)
         file.unlink(missing_ok=True)
-
-
-# ---------------------------------------------------------------------------------------------------------------------
-# Undo: back to what the last update replaced, while it's still kept.
-
-
-def undo_appimage(repo_id: str, current: Path, previous: Path) -> Path:
-    """Puts the kept `previous` AppImage back where `current` is, and keeps `current` in its place (nothing is
-    deleted). Menu entries follow. Returns where the previous one is now."""
-    if not previous.is_file():
-        raise UpdateError("The previous version isn\u2019t kept any more, so there\u2019s nothing to go back to.")
-    target = current.parent / previous.name
-    if target.exists() and target != current:
-        raise UpdateError(f"{target} is in the way, so the previous version wasn\u2019t put back.")
-    if current.is_file():
-        keep = kept_dir(repo_id)
-        keep.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(current), keep / current.name)
-    shutil.move(str(previous), target)
-    repoint_menu_entries(current, target)
-    return target
-
-
-def undo_program(repo_id: str, link: Path, previous: Path) -> None:
-    """Points the program's link back at the version it started before the last update. Both versions stay."""
-    home = (programs_dir() / _folder_name(repo_id)).resolve()
-    if not previous.is_file() or not previous.resolve().is_relative_to(home):
-        raise UpdateError("The previous version isn\u2019t kept any more, so there\u2019s nothing to go back to.")
-    if not (link.is_symlink() and link.resolve().is_relative_to(home)):
-        raise UpdateError(f"{link} isn\u2019t RepoProject\u2019s link any more, so it wasn\u2019t changed.")
-    new_link = link.with_name(f".{link.name}.repoproject")
-    new_link.unlink(missing_ok=True)
-    new_link.symlink_to(previous)
-    os.replace(new_link, link)

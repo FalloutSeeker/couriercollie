@@ -45,7 +45,6 @@ class ConfigTest(unittest.TestCase):
         # DECISIONS.md D5, D11, D12: automatic checks, scanning and cleanup are all off until the user turns them on.
         self.assertFalse(s.auto_check)
         self.assertFalse(s.scanning)
-        self.assertFalse(s.delete_old)
         self.assertTrue(s.toasts)
         self.assertFalse(s.first_launch_done)
 

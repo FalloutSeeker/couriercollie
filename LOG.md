@@ -10,6 +10,10 @@ Newest first.
   Konsole in the clone's folder. Tested against real git repos made for the tests; your own clones weren't touched.
   - Also: a branch whose newest commit is your version is no longer asked about (it's the same, no request).
   - The scanned-repo window check now waits for each comparison to come back, rather than a fixed time.
+- Dropped Undo Last Update and the "delete old versions after…" setting, as unnecessary: an update now removes the
+  version it replaced once the new one is in place, so nothing piles up (D11 changed). Removed from Settings and the
+  welcome screen too. The download-and-check code shared by AppImages, programs and RPMs is now one function; an
+  AppImage update no longer leaves a half-written `.part` file behind if something fails after the download.
 - Stage 5 finished with Undo Last Update for AppImages and programs: back to the kept version (AppImage file moved
   back with its menu entry; a program's link pointed back), nothing deleted, kept across restarts. Tested in unit
   tests and at the end of the real LocalSend and ripgrep window checks.

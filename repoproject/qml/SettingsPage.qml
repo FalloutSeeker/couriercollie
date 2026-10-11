@@ -147,35 +147,6 @@ Kirigami.ScrollablePage {
             wrapMode: Text.Wrap
             opacity: 0.7
         }
-
-        // ---- Old versions ----
-
-        Kirigami.Separator {
-            Kirigami.FormData.isSection: true
-            Kirigami.FormData.label: "Old Versions"
-        }
-
-        QQC2.Switch {
-            Kirigami.FormData.label: "Clean up:"
-            text: "Delete old versions automatically"
-            checked: page.s.deleteOld
-            onToggled: backend.updateSettings({ deleteOld: checked })
-        }
-
-        QQC2.ComboBox {
-            Kirigami.FormData.label: "Delete after:"
-            enabled: page.s.deleteOld
-            model: backend.deleteAfterDays.map(d => `${d} days`)
-            currentIndex: backend.deleteAfterDays.indexOf(page.s.deleteOldDays)
-            onActivated: index => backend.updateSettings({ deleteOldDays: backend.deleteAfterDays[index] })
-        }
-
-        QQC2.Label {
-            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
-            text: "Kept versions let you undo an update. Once deleted, that update can’t be undone. Files that would need your password to delete are always left alone."
-            wrapMode: Text.Wrap
-            opacity: 0.7
-        }
     }
 
     FolderDialog {
