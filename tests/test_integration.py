@@ -186,8 +186,7 @@ class CheckNowTest(unittest.TestCase):
         self.assertEqual(self.backend.checks["updates"], 1)
         self.assertTrue(self.backend.checks["lastChecked"])
         app_row = self.backend.repo("github.com/a/app")
-        self.assertEqual((app_row["checkStatus"], app_row["checkText"], app_row["updateAvailable"]),
-                         (checker.UPDATE, "Update available: v2", True))
+        self.assertEqual((app_row["checkText"], app_row["updateAvailable"]), ("Update available: v2", True))
         self.assertFalse(self.backend.repo("github.com/a/other")["updateAvailable"])
         # Kept for next time, next to the settings file.
         self.assertEqual(Backend(self.path).checks["updates"], 1)

@@ -1,4 +1,4 @@
-"""Updating what's tracked (stage 5). Only ever runs because you clicked Update (DECISIONS.md, D4, D6).
+"""Updating what's tracked. Only ever runs because you clicked Update (DECISIONS.md, D4, D6).
 
 Packages (an .rpm, .deb or Arch package): the new one is downloaded, checked, and installed by the package manager
 (dnf, zypper, apt or pacman), which asks for your password.

@@ -18,7 +18,7 @@ def report():
     c = b.checks
     for r in b._config.repos:
         row = b.repo(r.id)
-        print(f"  {r.name:12} {row['checkStatus']:13} {row['checkText']}")
+        print(f"  {r.name:12} {row['checkText']}")
         # The icon, or for a repo Update can handle (a scanned clone), the Update button in its place.
         shown = h.find("updateIcon:" + r.id) is not None or h.find("updateButton:" + r.id) is not None
         h.check(f"{r.name}: update icon only for updates", shown == row["updateAvailable"])

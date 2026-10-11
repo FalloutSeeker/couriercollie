@@ -290,9 +290,9 @@ class BackendTest(unittest.TestCase):
     def test_filter_and_counts(self):
         self.assertEqual(self.backend.counts, {"all": 2, "github": 1, "gitlab": 1})
         # In the settings file's order, which dragging changes.
-        self.assertEqual([r["name"] for r in self.backend.repos], ["LocalSend", "AeroThemePlasma"])
+        self.assertEqual([r["name"] for r in self.backend.rows if r["kind"] == "repo"], ["LocalSend", "AeroThemePlasma"])
         self.backend.filter = "gitlab"
-        self.assertEqual([r["name"] for r in self.backend.repos], ["AeroThemePlasma"])
+        self.assertEqual([r["name"] for r in self.backend.rows if r["kind"] == "repo"], ["AeroThemePlasma"])
         self.backend.filter = "nonsense"
         self.assertEqual(self.backend.filter, "gitlab")
 

@@ -17,10 +17,10 @@ from PySide6.QtCore import Property, QFileSystemWatcher, QObject, QProcess, Qt, 
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
-from . import assets, checker, config, icons, integration, packages, scan, sources, updater
+from . import assets, checker, config, github_login, icons, integration, packages, scan, sources, updater
 from .account import Account
-from .updating import (Updating, _can_clone, _can_update, _head, _is_appimage, _is_clone, _is_flatpak, _is_package, _is_program,
-                       _needs_password, _newest_version)
+from .updating import (Updating, _can_clone, _can_update, _head, _is_appimage, _is_clone, _is_flatpak, _is_package,
+                       _is_program, _needs_password, _newest_version)
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, Config, ConfigError, TrackedRepo
 from .sources import RepoRef, SourceError
 
@@ -210,6 +210,25 @@ def _on_disk(scanned: bool, local_path: str, releases: bool = False) -> tuple[tu
     return scan.version_on_disk(local_path, releases), scan.branch_on_disk(local_path)
 
 
+def _scan_note(f: scan.Found, problem: str, similar: TrackedRepo | None) -> str:
+    """The line under a scan find: why it can't be added, what it seems to duplicate, or what to expect of it."""
+    if similar:
+        return (f"Looks like \u201c{similar.name}\u201d, which you track from {similar.url}. Tick it to link the two; "
+                "it won\u2019t be added twice.")
+    if problem:
+        return problem
+    notes = []
+    if f.other_paths:
+        notes.append("Also in 1 other place." if len(f.other_paths) == 1 else
+                     f"Also in {len(f.other_paths)} other places.")
+    if f.needs_password:
+        # Only a clone that belongs to the system is updated as root (updater._as_root); someone else's isn't touched.
+        notes.append("Its folder belongs to the system, so updating it will ask for your password."
+                     if f.kind == assets.KIND_GIT and updater.needs_password(f.path) else
+                     "Its folder belongs to another user, so it can be tracked but not updated from here.")
+    return " ".join(notes)
+
+
 def _fetch_branches(ref: RepoRef) -> tuple[str, list[sources.Branch], str]:
     try:
         default, branches = sources.branches(ref)
@@ -322,8 +341,9 @@ class Backend(QObject, Updating, Account):
 
     @staticmethod
     def _error_text(error: Exception) -> str:
-        return str(error) if isinstance(error, (SourceError, ValueError, updater.UpdateError)) \
-            else f"Something went wrong: {error}"
+        """Our own errors are written for you, so they're shown as they are; anything else is a surprise, and says so."""
+        ours = (SourceError, ValueError, updater.UpdateError, github_login.LoginError)
+        return str(error) if isinstance(error, ours) else f"Something went wrong: {error}"
 
     def _repo_dict(self, r: TrackedRepo) -> dict:
         ref = RepoRef.from_id(r.id)
@@ -349,7 +369,6 @@ class Backend(QObject, Updating, Account):
             "icon": self._icon_source(r),
             "followText": follow_text,
             "scanned": r.source == config.SOURCE_SCANNED,
-            "localPath": r.local_path,
             "shownPath": updater.shown(r.local_path),  # as shown: ~ for your home folder
             "canUpdate": _can_update(r),
             "updateNeedsPassword": _needs_password(r),
@@ -367,7 +386,7 @@ class Backend(QObject, Updating, Account):
             return "file://" + r.icon.removeprefix("file:")
         return KIND_ICONS.get(r.kind, "package-x-generic")
 
-    # -- checking for updates (stage 4) ------------------------------------------------------------------------------
+    # -- checking for updates ----------------------------------------------------------------------------------------
 
     def _check_dict(self, repo_id: str) -> dict:
         result = self._checks.results.get(repo_id)
@@ -383,7 +402,6 @@ class Backend(QObject, Updating, Account):
         else:
             text, detail = (result.text if result else ""), ""
         return {
-            "checkStatus": result.status if result else "",
             "checkText": text,
             "checkDetail": detail,
             "updateAvailable": bool(result) and result.status == checker.UPDATE,
@@ -432,12 +450,8 @@ class Backend(QObject, Updating, Account):
                 self._check_error = self._error_text(error)
             else:
                 self._checks, fresh = result
-                try:
-                    checker.save_state(self._checks, self._state_path)
-                except OSError:
-                    pass  # the results still show; they're just not kept for next time
+                self._save_checks()
                 self._announce(fresh)
-                self._update_badge()
                 # A check is a fresh look at everything: the last updates' notes ("Pulled 1 new commit.") go.
                 for repo_id in [i for i in self._update_notes if i not in self._updating]:
                     self._update_notes.pop(repo_id)
@@ -521,7 +535,8 @@ class Backend(QObject, Updating, Account):
             return
         from PySide6.QtDBus import QDBusConnection, QDBusMessage
 
-        count = len([r for r in self._config.repos if self._check_dict(r.id)["updateAvailable"]])
+        count = sum(1 for r in self._config.repos
+                    if (result := self._checks.results.get(r.id)) and result.status == checker.UPDATE)
         message = QDBusMessage.createSignal(f"/io/github/{integration.APP_ID}", "com.canonical.Unity.LauncherEntry",
                                             "Update")
         message.setArguments([f"application://{integration.APP_ID}.desktop",
@@ -561,10 +576,6 @@ class Backend(QObject, Updating, Account):
         keep their order in the settings file, which dragging changes."""
         shown = [r for r in self._config.repos if self._filter == "all" or r.host == self._filter]
         return [(c, [r for r in shown if r.category == c]) for c in ["", *self._config.categories]]
-
-    @Property("QVariantList", notify=reposChanged)
-    def repos(self):
-        return [self._repo_dict(r) for _, repos in self._sections() for r in repos]
 
     @Property("QVariantList", notify=reposChanged)
     def rows(self):
@@ -756,9 +767,7 @@ class Backend(QObject, Updating, Account):
         path = urllib.parse.unquote(folder.removeprefix("file://"))
         if not path:
             return
-        home = str(Path.home())
-        if path == home or path.startswith(home + "/"):
-            path = "~" + path[len(home):]  # stays right if the home folder moves
+        path = updater.shown(path)  # "~/…": stays right if the home folder moves
         if path not in self._config.settings.scan_folders:
             self._config.settings.scan_folders.append(path)
             self._save()
@@ -931,23 +940,6 @@ class Backend(QObject, Updating, Account):
                 on_list.append(f)
                 continue
             similar = None if c.problem else scan.looks_like(self._config, f)
-            if similar:
-                note = (f"Looks like \u201c{similar.name}\u201d, which you track from {similar.url}. "
-                        "Tick it to link the two; it won’t be added twice.")
-            elif c.problem:
-                note = c.problem
-            else:
-                notes = []
-                if f.other_paths:
-                    notes.append("Also in 1 other place." if len(f.other_paths) == 1
-                                 else f"Also in {len(f.other_paths)} other places.")
-                if f.needs_password:
-                    # Only a clone that belongs to the system can be updated as root (updater._as_root).
-                    notes.append("Its folder belongs to the system, so updating it will ask for your password."
-                                 if f.kind == assets.KIND_GIT and updater.needs_password(f.path)
-                                 else "Its folder belongs to another user, so it can be tracked but not updated from "
-                                      "here.")
-                note = " ".join(notes)
             self._scan_finds[key] = f
             self._scan_items.append({
                 "key": key,
@@ -958,7 +950,7 @@ class Backend(QObject, Updating, Account):
                 "icon": KIND_ICONS.get(f.kind, "package-x-generic"),
                 "status": "problem" if c.problem else ("similar" if similar else "new"),
                 "similarTo": similar.id if similar else "",
-                "note": note,
+                "note": _scan_note(f, c.problem, similar),
             })
         if on_list:
             result = scan.merge(self._config, on_list)
@@ -1018,7 +1010,11 @@ class Backend(QObject, Updating, Account):
             head = next((b.sha for b in branches if b.name == (branch or default)), "")
             comparison = _compare(ref, host, yours, head) if follow == FOLLOW_BRANCH else None
             scripts = updater.install_scripts(local_path) if scanned and (Path(local_path) / ".git").exists() else []
-            return rels, default, branches, branch_error, on_disk, branch_on_disk, yours, head, comparison, scripts
+            return on_disk, Details(
+                state="ready", releases=rels, more_releases=len(rels) == PAGE_RELEASES, default_branch=default,
+                branches=branches, branch_error=branch_error, comparison=comparison, commits_base=yours,
+                commits_head=head, local_missing=bool(on_disk) and not on_disk[1], branch_on_disk=branch_on_disk,
+                install_scripts=scripts)
 
         def done(result, error):
             if not self._config.find(repo_id):
@@ -1026,14 +1022,7 @@ class Backend(QObject, Updating, Account):
             if error:
                 self._details[repo_id] = Details(state="error", error=self._error_text(error))
             else:
-                rels, default, branches, branch_error, on_disk, branch_on_disk, yours, head, comparison, scripts = result
-                self._details[repo_id] = Details(
-                    state="ready", releases=rels, more_releases=len(rels) == PAGE_RELEASES, default_branch=default,
-                    branches=branches, branch_error=branch_error,
-                    comparison=comparison, commits_base=yours, commits_head=head,
-                    local_missing=bool(on_disk) and not on_disk[1], branch_on_disk=branch_on_disk,
-                    install_scripts=scripts,
-                )
+                on_disk, self._details[repo_id] = result
                 if repo := self._config.find(repo_id):
                     # A scanned repo's version is whatever's on disk now (e.g. after a `git pull` outside the app).
                     from_disk = bool(on_disk and on_disk[0] and on_disk[0] != repo.installed)
@@ -1052,13 +1041,14 @@ class Backend(QObject, Updating, Account):
         """Your version for a scanned repo, read from disk again (no request): after switching what it follows, since
         a clone's version is then a commit or a release tag."""
         repo = self._config.find(repo_id)
-        scanned, local_path, releases = True, repo.local_path, repo.follow == FOLLOW_RELEASES
+        local_path, releases = repo.local_path, repo.follow == FOLLOW_RELEASES
 
-        def done(result, error):
+        def done(found, error):
             repo, d = self._config.find(repo_id), self._details.get(repo_id)
-            if error or not repo or not result[0] or not result[0][0]:
+            version = found[0] if found and not error else ""
+            if not repo or not version:
                 return
-            repo.installed = result[0][0]
+            repo.installed = version
             if d:
                 _match_tag(repo, d)
             self._version_changed(repo)
@@ -1066,7 +1056,7 @@ class Backend(QObject, Updating, Account):
             if repo.follow == FOLLOW_BRANCH:
                 self._refresh_whats_new(repo_id)
 
-        self._run(lambda: _on_disk(scanned, local_path, releases), done)
+        self._run(lambda: scan.version_on_disk(local_path, releases), done)
 
     @Slot(str)
     def loadOlderReleases(self, repo_id):
@@ -1269,8 +1259,7 @@ class Backend(QObject, Updating, Account):
         if c.relation == sources.SAME:
             return {"status": "Up to date", "updateAvailable": False, "statusKind": STATUS_CURRENT,
                     "headline": "Up to date"}
-        where = f"your clone is on {d.branch_on_disk}" if d.branch_on_disk and d.branch_on_disk != branch \
-            else f"your version ({yours_text}) isn\u2019t part of it"
+        where = f"your clone is on {disk}" if disk else f"your version ({yours_text}) isn\u2019t part of it"
         return {"status": f"Not comparable with {branch}: {where}.", "updateAvailable": False,
                 "statusKind": STATUS_PROBLEM, "headline": "Not comparable"}
 

@@ -1,9 +1,13 @@
-"""Starts the window, or (with --check) checks for updates without one.
+"""Starts the window, or (with --check) checks for updates without one. Installed, the command is `couriercollie`;
+from the project folder, `./run.sh`.
 
-    run.sh                  open the window (or bring the open one to the front)
-    run.sh --check          check every repo for updates now
-    run.sh --check --if-due only if automatic checks are on and the interval has passed (what the timer runs)
-    run.sh --reset          start over: the settings file is renamed to a dated backup
+    couriercollie                   open the window (or bring the open one to the front)
+    couriercollie --check           check every repo for updates now
+    couriercollie --check --if-due  only if automatic checks are on and the interval has passed (what the timer runs)
+    couriercollie --reset           start over: the settings file is renamed to a dated backup
+
+Modules are imported inside the functions that need them: the background timer runs `--check --if-due` every hour,
+and usually finds nothing due, so it shouldn't pay for loading Qt.
 """
 
 import os

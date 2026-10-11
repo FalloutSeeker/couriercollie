@@ -46,7 +46,8 @@ _ANY_ARCH = re.compile(r"(x86_64|x86-64|amd64|x64|aarch64|arm64|arm-64|armv7|arm
                        r"loong64|mips64el|mips64|mipsel|mips|sparc64)", re.I)
 
 
-# Package managers on this computer, found once: which package files can be installed here (packages.py).
+# Package managers on this computer: which package files can be installed here (packages.py). Looked up once, as
+# every file of every release on a page is classified.
 PACKAGE_TOOLS: set[str] | None = None
 
 

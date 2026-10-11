@@ -1,4 +1,4 @@
-"""Updating what's tracked (stage 5): the Update and Install buttons, and install scripts. Part of the Backend
+"""Updating what's tracked: the Update and Install buttons, and install scripts. Part of the Backend
 (backend.py), kept apart so each file stays readable; the work itself is in updater.py.
 
 Uses the Backend's settings (`_config`), page data (`_details`), check results (`_checks`), worker thread (`_run`)

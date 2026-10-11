@@ -262,3 +262,11 @@ class PasswordStoreTest(unittest.TestCase):
 
         names = set(account._STORES.values()) | {"your desktop’s password store", ""}
         self.assertIn(account.password_store(), names)  # whatever this desktop has (KDE Wallet here)
+
+
+class SignInErrorsTest(unittest.TestCase):
+    def test_shown_as_written(self):
+        from couriercollie.backend import Backend
+
+        self.assertEqual(Backend._error_text(github_login.LoginError("Signing in was declined on GitHub.")),
+                         "Signing in was declined on GitHub.")

@@ -1,4 +1,4 @@
-"""Checking every tracked repo for updates (PLAN.md stage 4).
+"""Checking every tracked repo for updates.
 
 Requests per check (DECISIONS.md, D7): one for a repo that follows releases; none for a branch (git ls-remote), plus
 one or two to compare when your commit isn't the branch's newest. Scanned repos read their version from disk.
