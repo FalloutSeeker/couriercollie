@@ -164,7 +164,7 @@ Kirigami.ScrollablePage {
                 QQC2.Button {
                     objectName: "restoreFolders"
                     visible: !page.s.scanFoldersAreDefault
-                    text: "Restore Defaults"
+                    text: "Reset Scan Folders"
                     icon.name: "edit-reset"
                     onClicked: backend.resetScanFolders()
                 }

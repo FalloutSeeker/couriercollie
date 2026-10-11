@@ -1,5 +1,5 @@
 """Check the welcome screen's scanning text and the Settings window's folder list: defaults marked, removing a
-folder, folders a scan would skip, Restore Defaults. No network.
+folder, folders a scan would skip, Reset Scan Folders. No network.
 
     python3 -I devtools/check_settings.py
 """
@@ -36,10 +36,10 @@ h.run([
     (0, lambda: h.check("…as does one that isn't there", h.find("folderProblem:/mnt/My Drive", h.window("Settings"))
                         is not None)),
     (0, lambda: h.shot("settings-2-changed", h.window("Settings"))),
-    (0, lambda: h.check("Restore Defaults shown once changed", h.find("restoreFolders", h.window("Settings")) is not None)),
+    (0, lambda: h.check("Reset Scan Folders shown once changed", h.find("restoreFolders", h.window("Settings")) is not None)),
     (0, lambda: h.click("restoreFolders", h.window("Settings"))),
     (300, lambda: h.check("restored", folders() == ["~", "/opt", "/usr/local", "/srv"])),
-    (0, lambda: h.check("Restore Defaults hidden at the defaults", h.find("restoreFolders", h.window("Settings")) is None)),
+    (0, lambda: h.check("Reset Scan Folders hidden at the defaults", h.find("restoreFolders", h.window("Settings")) is None)),
     # Rows come and go inside the form layout here; make sure that's stable.
     *[step for _ in range(3) for step in (
         (0, lambda: [h.click("removeFolder:" + f, h.window("Settings")) for f in ("/srv", "/usr/local", "/opt", "~")]),
