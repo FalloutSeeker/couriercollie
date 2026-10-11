@@ -4,6 +4,11 @@ Newest first.
 
 ## 2026-10-10
 
+- With scanning off, the welcome screen and Settings now say tracking is manual: you add repos yourself and set which
+  version you have, or mark it as up to date. With scanning on, they say versions are read from the computer.
+- Added a "Mark as up to date" button on the repo page, shown when your version isn't the newest.
+- The welcome screen now opens after the window's first frame is drawn. Opening it earlier logged a Kirigami "binding
+  loop" because the window had no size yet to centre it in.
 - Added "Your version" to each repo page: a release, or a commit when following a branch, or "Not installed". It starts
   at the newest version when a repo is added (or first loaded, for repos added earlier), and resets when you switch
   between releases and a branch, or switch branch. A status line says "Up to date" or "Newer version available: …".

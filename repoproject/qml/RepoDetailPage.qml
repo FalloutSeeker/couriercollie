@@ -162,6 +162,14 @@ Kirigami.ScrollablePage {
                 wrapMode: Text.Wrap
             }
 
+            QQC2.Button {
+                objectName: "markUpToDate"
+                visible: page.ready && page.details.status !== "" && page.details.status !== "Up to date"
+                text: "Mark as up to date"
+                icon.name: "dialog-ok-apply"
+                onClicked: backend.markUpToDate(page.repoId)
+            }
+
             QQC2.CheckBox {
                 Kirigami.FormData.label: "Pre-releases:"
                 visible: page.followsReleases

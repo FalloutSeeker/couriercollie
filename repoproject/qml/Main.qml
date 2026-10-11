@@ -52,9 +52,16 @@ Kirigami.ApplicationWindow {
     pageStack.initialPage: RepoListPage {}
 
     // First start: ask the setup questions. Skipped if the settings file is broken, since answers couldn't be saved.
-    Component.onCompleted: {
+    // Opened after the first frame is drawn: before that the window has no size yet, so the dialog can't be centred
+    // (Kirigami logs a "binding loop").
+    property bool firstFrameShown: false
+
+    onFrameSwapped: {
+        if (firstFrameShown)
+            return;
+        firstFrameShown = true;
         if (!backend.settings.firstLaunchDone && backend.configError === "")
-            Qt.callLater(firstLaunch.open);
+            firstLaunch.open();
     }
 
     FirstLaunchDialog {

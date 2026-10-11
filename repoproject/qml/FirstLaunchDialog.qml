@@ -102,7 +102,9 @@ Kirigami.Dialog {
         QQC2.Label {
             Layout.fillWidth: true
             Layout.leftMargin: Kirigami.Units.gridUnit * 1.5
-            text: "Looks for git clones and downloaded apps. You'll choose which ones to track."
+            text: scanBox.checked
+                ? "Looks for git clones and downloaded apps, and reads which version you have. You'll choose which ones to track."
+                : "Off: tracking is manual. You add repos yourself, and for each one set which version you have, or mark it as up to date."
             wrapMode: Text.Wrap
             opacity: 0.7
         }

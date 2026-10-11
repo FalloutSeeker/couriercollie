@@ -440,6 +440,19 @@ class Backend(QObject):
             status, update = "", False
         return {"versionOptions": options, "versionIndex": index, "status": status, "updateAvailable": update}
 
+    @Slot(str)
+    def markUpToDate(self, repo_id):
+        """Set your version to the newest one shown (the newest release, or the latest commit on the branch)."""
+        repo, d = self._config.find(repo_id), self._details.get(repo_id)
+        if not repo or not d or d.state != "ready":
+            return
+        if repo.follow == FOLLOW_BRANCH:
+            newest = _newest_version(repo, d)
+        else:
+            shown = [r for r in d.releases if repo.prereleases or not r.prerelease]
+            newest = shown[0].tag if shown else ""
+        self.setInstalled(repo_id, newest)
+
     @Slot(str, str)
     def setInstalled(self, repo_id, version):
         if (repo := self._config.find(repo_id)) and version and version != repo.installed:

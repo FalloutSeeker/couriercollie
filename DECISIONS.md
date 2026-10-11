@@ -129,7 +129,8 @@ after 7 / 30 / 90 days.
 ## D12. Scanning the computer
 
 Global setting, **off by default**, because it looks through your files. Offered on first launch and in Settings.
-While it's off, the Scan button is hidden. Scan results start with nothing ticked. You pick specific repos or click
+While it's off, the Scan button is hidden and tracking is manual: you add repos yourself and set which version
+you have, or mark it as up to date. Both places that offer the setting say so. Scan results start with nothing ticked. You pick specific repos or click
 **Select all**.
 
 **Status:** decided 2026-10-10.

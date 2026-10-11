@@ -86,6 +86,17 @@ class BackendTest(unittest.TestCase):
         self.assertEqual(d["versionOptions"][d["versionIndex"]]["value"], "v1.18.1")
         self.assertEqual(self.saved(LOCALSEND).installed, "v1.18.1")
 
+    def test_mark_up_to_date(self):
+        self.backend.setInstalled(LOCALSEND, "v1.18.1")
+        self.backend.markUpToDate(LOCALSEND)
+        self.assertEqual(self.saved(LOCALSEND).installed, "v1.18.2")
+        self.assertEqual(self.backend.details(LOCALSEND)["status"], "Up to date")
+        # Following a branch: the newest commit on it.
+        self.backend.setFollow(LOCALSEND, "branch")
+        self.backend.setInstalled(LOCALSEND, "c" * 40)
+        self.backend.markUpToDate(LOCALSEND)
+        self.assertEqual(self.saved(LOCALSEND).installed, "a" * 40)
+
     def test_not_installed(self):
         self.backend.setInstalled(LOCALSEND, "-")
         d = self.backend.details(LOCALSEND)
