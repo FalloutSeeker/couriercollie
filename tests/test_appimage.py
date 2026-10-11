@@ -43,7 +43,7 @@ class AppImageCase(unittest.TestCase):
         _Files.files = {NAME: APP, "SHA256SUMS": f"{'0' * 64}  other.AppImage\n{SHA}  {NAME}\n".encode(),
                         "not-an-app.AppImage": b"<html>sign in</html>", "wrong.sha256": f"{'1' * 64}\n".encode()}
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Files)
-        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True).start()
         self.url = f"http://127.0.0.1:{self.server.server_port}/"
         self.folder = root / "apps"
         self.folder.mkdir()
