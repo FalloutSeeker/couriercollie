@@ -69,7 +69,8 @@ def _clone_info(path: str) -> Found | None:
         return None  # a local folder or an address that isn't a project page
     return Found(
         id=ref.id, name=ref.name, url=ref.web_url, host="", path=path, kind=assets.KIND_GIT,
-        version=updater.git_out(path, "rev-parse", "HEAD"), branch=updater.git_out(path, "symbolic-ref", "--short", "-q", "HEAD"),
+        version=updater.git_out(path, "rev-parse", "HEAD"),
+        branch=updater.git_out(path, "symbolic-ref", "--short", "-q", "HEAD"),
     )
 
 
@@ -189,8 +190,8 @@ def find_debs(run=_run_out) -> list[Found]:
     names = [line.split("/", 1)[0] for line in (listed or "").splitlines() if line.rstrip().endswith(",local]")]
     if not names:
         return []
-    return _from_homepages(assets.KIND_DEB, run("dpkg-query", "--show", "--showformat=${Package}|${Version}|${Homepage}\n",
-                                                *names) or "")
+    homepages = run("dpkg-query", "--show", "--showformat=${Package}|${Version}|${Homepage}\n", *names)
+    return _from_homepages(assets.KIND_DEB, homepages or "")
 
 
 def find_zypper_rpms(run=_run_out) -> list[Found]:

@@ -341,7 +341,8 @@ class Backend(QObject, Updating, Account):
 
     @staticmethod
     def _error_text(error: Exception) -> str:
-        """Our own errors are written for you, so they're shown as they are; anything else is a surprise, and says so."""
+        """Our own errors are written for you, so they're shown as they are; anything else is a surprise, and says
+        so."""
         ours = (SourceError, ValueError, updater.UpdateError, github_login.LoginError)
         return str(error) if isinstance(error, ours) else f"Something went wrong: {error}"
 
@@ -416,7 +417,8 @@ class Backend(QObject, Updating, Account):
         """For the list's header: how many updates, when it last checked, when it checks next, and problems."""
         tracked = {r.id for r in self._config.repos}
         results = {k: v for k, v in self._checks.results.items() if k in tracked}
-        limited = [v for v in results.values() if v.status == checker.RATE_LIMITED or (v.not_rechecked and v.retry_after)]
+        limited = [v for v in results.values()
+                   if v.status == checker.RATE_LIMITED or (v.not_rechecked and v.retry_after)]
         reset = next((v.retry_after for v in limited if v.retry_after), "")
         s = self._config.settings
         return {
@@ -472,7 +474,8 @@ class Backend(QObject, Updating, Account):
         """Your version changed (set by hand, or read from disk): bring the last check's result for this repo in line
         straight away, using the newest version that check found. No request needed."""
         old = self._checks.results.get(repo.id)
-        if not old or not old.newest or old.status not in (checker.UPDATE, checker.UP_TO_DATE, checker.NOT_INSTALLED_YET):
+        if not old or not old.newest or \
+                old.status not in (checker.UPDATE, checker.UP_TO_DATE, checker.NOT_INSTALLED_YET):
             return
         new = checker.recheck_against(old, repo.installed, by_branch=repo.follow == FOLLOW_BRANCH,
                                       branch=repo.branch)
@@ -1122,8 +1125,10 @@ class Backend(QObject, Updating, Account):
         version = self._version_info(repo, d, shown) if repo and d.state == "ready" else {}
         c = self._current_comparison(repo, d) if repo else None
         behind = c is not None and c.relation == sources.BEHIND
-        follow_disk = d.branch_on_disk if (repo and _is_clone(repo) and repo.follow == FOLLOW_BRANCH and d.branch_on_disk
-                                           and d.branch_on_disk != current_branch) else ""
+        # A clone on another branch than the one followed: Follow <that branch> is offered instead of Update.
+        on_other_branch = bool(repo) and _is_clone(repo) and repo.follow == FOLLOW_BRANCH \
+            and d.branch_on_disk and d.branch_on_disk != current_branch
+        follow_disk = d.branch_on_disk if on_other_branch else ""
         return {
             "newCommits": [{"sha": x.sha[:7], "title": x.title} for x in c.commits[:5]] if behind else [],
             "newCommitsTotal": c.total if behind else 0,
@@ -1147,7 +1152,6 @@ class Backend(QObject, Updating, Account):
             # A file was picked, but the newest release doesn't have it (renamed or dropped by the project).
             "yourFileMissing": bool(pattern) and latest is not None and not latest["hasSelected"],
             "branchError": d.branch_error,
-            # Update can't pull a branch the clone isn't on (it would refuse): offered is following that one instead.
             "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing and not follow_disk,
             "followDiskBranch": follow_disk,
             "isClone": bool(repo) and _is_clone(repo),

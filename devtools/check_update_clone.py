@@ -1,6 +1,6 @@
 """Updating a git clone, with a simulated mouse: the Update button on the repo page and in the list, the result,
-showing then running an install script, and a clone that follows releases moving to the newest. Uses a temporary project repo and clone, and no network: the site's answers
-are faked, and the "terminal" is a plain shell that leaves a file behind, so nothing on this computer is touched.
+showing then running an install script, and a clone that follows releases moving to the newest. Uses a temporary
+project repo and clone, and no network: the site's answers are faked, and the "terminal" is a plain shell that leaves a file behind, so nothing on this computer is touched.
 
     python3 -I devtools/check_update_clone.py
 """

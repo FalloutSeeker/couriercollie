@@ -52,7 +52,8 @@ class TrackedRepo:
     branch: str = ""
     # Which release file to follow, with the version replaced by "*" (see assets.pattern_for).
     asset_pattern: str = ""
-    # What's being followed: "git" for a branch, or the chosen file's kind (assets.KIND_*). Empty until a file is picked.
+    # What's being followed: "git" for a branch, or the chosen file's kind (assets.KIND_*). Empty until a file is
+    # picked.
     kind: str = ""
     prereleases: bool = False
     # Your version: a release tag, or a commit when following a branch. NOT_INSTALLED if you don't have it. Empty until
@@ -125,7 +126,10 @@ def _from_dict(cls, data: dict):
     for f in fields(cls):
         if f.name not in data:
             continue
-        like = f.default if f.default is not MISSING else f.default_factory() if f.default_factory is not MISSING else ""
+        if f.default is not MISSING:
+            like = f.default
+        else:
+            like = f.default_factory() if f.default_factory is not MISSING else ""
         if _fits(data[f.name], like):
             values[f.name] = data[f.name]
     return cls(**values)

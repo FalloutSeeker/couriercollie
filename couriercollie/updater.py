@@ -9,9 +9,13 @@ Programs (an archive with a ready-made program inside): each version is unpacked
 AppImages: the new file is downloaded next to yours, checked against the project's published checksum (and that it
 really is an AppImage), then swapped in; the old one is removed once the new one is in place.
 
+Flatpak bundles: installed for you with flatpak (flatpaks.py), which never updates a bundle by itself.
+
 Git clones: a project you don't have yet is cloned into ~/src. The new commits on the followed branch are pulled,
-fast-forward only, so nothing of yours is merged, rebased or thrown away. A project's install script is never run here; it's shown to you first, and runs in a terminal
-window you can watch (and type your password into, if it asks).
+fast-forward only, so nothing of yours is merged, rebased or thrown away. A project's install script is never run
+here; it's shown to you first, and runs in a terminal window you can watch (and type your password into, if it asks).
+
+Whatever is downloaded is checked against the checksum the project published, when there is one, before it's used.
 """
 
 import contextlib
@@ -113,8 +117,8 @@ def _as_root(path: str) -> bool:
     if _owner(path) == os.geteuid():
         raise UpdateError(f"{shown(path)} is yours, but its permissions don\u2019t let it be changed, so it "
                           "wasn\u2019t.")
-    raise UpdateError(f"{shown(path)} belongs to another user, so it can\u2019t be updated from here. As that user, in a "
-                      f"terminal: cd {shlex.quote(path)} && git pull --ff-only")
+    raise UpdateError(f"{shown(path)} belongs to another user, so it can\u2019t be updated from here. As that user, "
+                      f"in a terminal: cd {shlex.quote(path)} && git pull --ff-only")
 
 
 def needs_password(path: str) -> bool:
@@ -399,8 +403,8 @@ def install_appimage(asset, others: list, folder: Path, old: Path | None,
     which is then removed. Returns (the new file, whether it was checked against a published checksum)."""
     folder.mkdir(parents=True, exist_ok=True)
     if not os.access(folder, os.W_OK):
-        raise UpdateError(f"{shown(folder)} belongs to another user (often the system), so the new version can’t be put "
-                          "there from here.")
+        raise UpdateError(f"{shown(folder)} belongs to another user (often the system), so the new version "
+                          "can\u2019t be put there from here.")
     name = Path(asset.name).name  # never a path from the site
     part = folder / f".{name}.part"
     try:
@@ -719,8 +723,8 @@ def install_flatpak(asset, others: list, app_id: str = "", progress=None, get_te
         if not found:
             raise UpdateError(f"{file.name} isn\u2019t a Flatpak bundle, so it wasn\u2019t installed.")
         if app_id and found != app_id:
-            raise UpdateError(f"The new file holds the app \u201c{found}\u201d, not \u201c{app_id}\u201d that you have, "
-                              "so it wasn\u2019t installed. The project may have renamed it.")
+            raise UpdateError(f"The new file holds the app \u201c{found}\u201d, not \u201c{app_id}\u201d that you "
+                              "have, so it wasn\u2019t installed. The project may have renamed it.")
         if arch != platform.machine():
             raise UpdateError(f"The new file is for {arch} computers, not this one, so it wasn\u2019t installed.")
         result = flatpaks.install(file)

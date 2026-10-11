@@ -160,20 +160,6 @@ def parse_url(text: str) -> RepoRef:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# HTTP
-
-
-def _reset_time(headers) -> datetime | None:
-    for name in ("x-ratelimit-reset", "ratelimit-reset"):
-        if value := headers.get(name):
-            try:
-                return datetime.fromtimestamp(int(value), tz=timezone.utc)
-            except ValueError:
-                pass
-    return None
-
-
-# ---------------------------------------------------------------------------------------------------------------------
 # The GitHub login (github_login.py): sent with requests to GitHub's API, and nowhere else
 
 GITHUB_API = "api.github.com"
@@ -215,6 +201,9 @@ def _drop_rejected_login() -> None:
         _token, login_rejected = "", True
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# Remembered release lists
+
 # Release lists are kept with their ETag, and asked for with it: an unchanged list comes back as "304 Not Modified",
 # with nothing to download, and (signed in) without counting against the hourly limit.
 
@@ -244,6 +233,20 @@ def _keep(url: str, etag: str, body) -> None:
         os.replace(tmp, path)
     except OSError:
         pass  # asked for in full next time
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# HTTP
+
+
+def _reset_time(headers) -> datetime | None:
+    for name in ("x-ratelimit-reset", "ratelimit-reset"):
+        if value := headers.get(name):
+            try:
+                return datetime.fromtimestamp(int(value), tz=timezone.utc)
+            except ValueError:
+                pass
+    return None
 
 
 def http_get_json(url: str, headers: dict | None = None, _without_login: bool = False):
@@ -454,9 +457,12 @@ class Comparison:
     commits: list[Commit] = field(default_factory=list)  # those commits, newest first (all, or the first page)
 
 
+def _first_line(text: str | None) -> str:
+    return text.splitlines()[0] if text else ""
+
+
 def parse_github_compare(data: dict) -> Comparison:
-    commits = [Commit(c["sha"], (c["commit"]["message"] or "").splitlines()[0] if c["commit"]["message"] else "")
-               for c in data.get("commits", [])]
+    commits = [Commit(c["sha"], _first_line(c["commit"].get("message"))) for c in data.get("commits", [])]
     # GitHub describes the branch relative to yours, so its "ahead" means you're behind.
     relation = {"identical": SAME, "ahead": BEHIND, "behind": AHEAD, "diverged": DIVERGED}.get(data.get("status"),
                                                                                               DIVERGED)
@@ -524,5 +530,6 @@ def branches(ref: RepoRef) -> tuple[str, list[Branch]]:
         if any(s in said.lower() for s in ("could not resolve", "unable to access", "could not connect",
                                            "failed to connect", "network is unreachable", "timed out")):
             raise Unreachable(f"Couldn\u2019t reach {ref.domain}. Check your internet connection.")
-        raise SourceError(f"Couldn\u2019t list branches from {ref.domain}: {said.splitlines()[-1] if said else 'unknown error'}")
+        last = said.splitlines()[-1] if said else "unknown error"
+        raise SourceError(f"Couldn\u2019t list branches from {ref.domain}: {last}")
     return parse_ls_remote(result.stdout)
