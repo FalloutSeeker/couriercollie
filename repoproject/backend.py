@@ -39,7 +39,8 @@ UNCATEGORIZED = "Uncategorized"
 
 @dataclass
 class Details:
-    """What we fetched about a repo. Kept in memory only; checking for updates (stage 4) will store what it needs."""
+    """What a repo's page fetched: kept in memory only, until the app closes (check results are kept in their own file,
+    checker.py)."""
 
     state: str = "loading"  # "loading", "ready" or "error"
     error: str = ""
