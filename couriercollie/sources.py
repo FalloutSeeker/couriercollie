@@ -146,6 +146,11 @@ def parse_url(text: str) -> RepoRef:
         domain, path = parsed.hostname.lower(), parsed.path
     domain = domain.lower().removeprefix("www.")
     path = path.strip("/")
+    # Addresses GitHub serves a project's files and API from: the project's own address is what's tracked.
+    if domain in ("raw.githubusercontent.com", "codeload.github.com"):
+        domain = "github.com"
+    elif domain == "api.github.com" and path.startswith("repos/"):
+        domain, path = "github.com", path.removeprefix("repos/")
     # GitLab puts sub-pages after "/-/"; GitHub's sub-pages come after owner/name.
     path = path.split("/-/", 1)[0]
     if path.endswith("/-"):

@@ -25,6 +25,10 @@ class ParseUrlTest(unittest.TestCase):
             "github.com/localsend/localsend",
             "  https://GitHub.com/localsend/localsend  ",
             "git@github.com:localsend/localsend.git",
+            # Where GitHub serves a project's files and API from.
+            "https://raw.githubusercontent.com/localsend/localsend/main/README.md",
+            "https://api.github.com/repos/localsend/localsend/releases",
+            "https://codeload.github.com/localsend/localsend/tar.gz/v1.0",
         ]:
             self.check(text, "github.com", "localsend/localsend")
 

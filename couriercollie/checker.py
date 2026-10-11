@@ -132,7 +132,7 @@ def releases_result(shown: list[sources.Release], yours: str, managed_by: str = 
         return Result(OTHER, f"Installed with {managed_by}", newest)
     if not yours or yours == NOT_INSTALLED:
         return Result(NOT_INSTALLED_YET, f"Not installed · newest {newest}", newest)
-    if assets.version_of(yours) == assets.version_of(newest) or yours == newest:
+    if assets.same_version(yours, newest):
         return Result(UP_TO_DATE, "Up to date", newest)
     return Result(UPDATE, f"Update available: {newest}", newest)
 
@@ -217,7 +217,7 @@ def recheck_against(old: Result, yours: str, by_branch: bool, branch: str = "") 
         what = f"following {branch}" if by_branch else f"newest {newest}"
         return dataclasses.replace(old, status=NOT_INSTALLED_YET, text=f"Not installed \u00b7 {what}",
                                    not_rechecked=False)
-    same = yours == newest or (not by_branch and assets.version_of(yours) == assets.version_of(newest))
+    same = yours == newest or (not by_branch and assets.same_version(yours, newest))
     if same:
         return dataclasses.replace(old, status=UP_TO_DATE, text="Up to date", not_rechecked=False)
     if not by_branch:

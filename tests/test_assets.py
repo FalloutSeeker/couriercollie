@@ -258,5 +258,18 @@ class ManagedElsewhereTest(unittest.TestCase):
         self.assertIsNone(flatpaks.managed_by_flatpak(["github.com/e/bundle"]))  # Flatpak never updates a bundle
 
 
+class VersionEdgeCasesTest(unittest.TestCase):
+    def test_tags_without_numbers_are_only_themselves(self):
+        self.assertTrue(assets.same_version("v1.2.3", "1.2.3"))
+        self.assertFalse(assets.same_version("nightly", "stable"))
+        self.assertTrue(assets.same_version("nightly", "nightly"))
+
+    def test_an_rpms_release_and_distro_can_change(self):
+        pattern = assets.pattern_for("app-1.2.3-1.fc44.x86_64.rpm", "v1.2.3")
+        self.assertTrue(assets.matches(pattern, "app-1.3.0-2.fc45.x86_64.rpm"))
+        self.assertFalse(assets.matches(pattern, "app-1.3.0-2.fc45.aarch64.rpm"))
+        self.assertFalse(assets.matches(pattern, "app-debuginfo-1.3.0-2.fc45.x86_64.rpm"))
+
+
 if __name__ == "__main__":
     unittest.main()

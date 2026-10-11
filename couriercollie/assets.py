@@ -153,6 +153,12 @@ def version_of(tag: str) -> str:
     return tag[m.start():] if m else ""
 
 
+def same_version(a: str, b: str) -> bool:
+    """Whether two versions are the same: "v1.2.3" and "1.2.3" are. Tags without a number ("nightly", "stable") are
+    only the same as themselves."""
+    return a == b or (bool(version_of(a)) and version_of(a) == version_of(b))
+
+
 # What "*" in a pattern matches: a version number. Starts with a digit; may contain dashes only before another
 # number or a pre-release word, so "1.2.0", "2024-01-05" and "2.0-rc1" match, but "CLI-1.2" or "1.2-debuginfo" don't.
 _VERSION = r"\d[0-9A-Za-z.+~_]*(?:-(?:\d|rc|beta|alpha|pre)[0-9A-Za-z.+~_]*)*"
@@ -161,9 +167,14 @@ _VERSION = r"\d[0-9A-Za-z.+~_]*(?:-(?:\d|rc|beta|alpha|pre)[0-9A-Za-z.+~_]*)*"
 def pattern_for(asset_name: str, tag: str) -> str:
     """The pattern that finds this same file in later releases: the name with its version replaced by "*"."""
     version = version_of(tag)
-    if version and version in asset_name:
-        return asset_name.replace(version, "*")
-    return asset_name
+    if not version or version not in asset_name:
+        return asset_name
+    pattern = asset_name.replace(version, "*")
+    # An RPM's name also carries the packager's release and distro ("app-1.2-1.fc44.x86_64.rpm"), which change
+    # between releases (2.fc45): that part is matched as freely as the version.
+    if pattern.endswith(".rpm"):
+        pattern = re.sub(r"^(.*\*-)\d.*(\.[A-Za-z0-9_]+\.rpm)$", r"\1*\2", pattern)
+    return pattern
 
 
 def matches(pattern: str, asset_name: str) -> bool:
