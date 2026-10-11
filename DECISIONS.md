@@ -1,195 +1,104 @@
 # Decisions
 
-Each one has a recommendation. **Status** is `open` until you pick, then `decided` with the date. LOG.md records how
-decisions changed along the way.
+The choices behind couriercollie, and why. Numbered so the code can point to them (e.g. `DECISIONS.md, D6`).
 
----
-
-## D1. What to build it with
-
-Python + PySide6 (Qt) + Kirigami (KDE's interface toolkit).
+## D1. Built with Python, PySide6 and Kirigami
 
 - Looks and behaves like other KDE apps (Discover, System Settings).
-- Python is the easiest of the options to read and change later.
-- Both `python3-pyside6` and `kf6-kirigami` are already installed here.
+- Python is easy to read and change; on Fedora KDE everything it needs is already installed.
 
-**Status:** decided 2026-10-10.
+## D2. GitHub and GitLab
 
-## D2. Which sites to support
+- GitHub, plus any GitLab site, including self-hosted ones (e.g. gitgud.io).
+- Other hosts (Codeberg, sourcehut, …) are told apart and refused with a clear message, not a confusing error.
 
-GitHub and GitLab (which includes gitgud.io, where the AeroThemePlasma repos are). Codeberg/Gitea maybe later.
+## D3. A release's file, or a branch
 
-**Status:** decided 2026-10-10. GitHub + GitLab, **plus a filter in the main list** to show All / GitHub / GitLab.
+- **Releases:** a release often ships several files (AppImage, `.rpm`, ARM and Intel builds). You pick one; the same
+  file is followed in every later release.
+- **Branches:** for projects without releases, you pick a branch and follow its new commits.
 
-## D3. What "multiple versions" in a repo means
+## D4. Nothing installs on its own
 
-- **a) Build files**: one release ships several files (RPM, AppImage, ARM, Intel…). You pick one to follow.
-- **b) Branches**: for repos without releases, e.g. AeroThemePlasma's `Plasma/6.7` and `master`. You pick one.
+- Updates only happen when you click Update. So the app never shows a password prompt you didn't ask for.
+- A clone is only pulled. Running a project's install script is a separate button, and the script is shown first.
 
-**Status:** decided 2026-10-10. Both a) and b). Grouping related repos together isn't planned (since
-2026-10-11, repos can be sorted into categories of your own: D14).
+## D5. One check schedule, quiet notifications
 
-## D4. How updates get installed
+- One global setting: automatic checks (daily, weekly, every two weeks or monthly) or none.
+  - **Why:** one pass over everything is simpler and lighter than a timer per repo.
+- A systemd user timer starts a short check and exits. Nothing stays running in between.
+- A notification only for updates not announced before, and only when the window isn't in front (KDE HIG).
 
-- **Nothing installs on its own.** You click the ⬆ icon next to a repo (or Update on its page). So the app never pops
-  up a password prompt you didn't ask for.
-- RPMs install with `dnf install ./file.rpm`, which asks for your password after you click.
-- Git clones only pull. Re-running a project's install script (AeroThemePlasma has one) is a separate button, and the
-  app shows you what it will run first.
+## D6. Safety
 
-Later option: the "custom dnf" idea, a local package repo the app fills, so `dnf upgrade` / Discover pick these up too.
+- Nothing runs as root without your click and your password.
+- Downloads are checked against the project's published checksum; you're told when there isn't one.
+- The old version stays until the new one is in place, so a failed update leaves a working copy.
+- What runs as root is named by full path, works on a copy only root can change, and never runs a clone's hooks.
 
-**Status:** decided 2026-10-10.
+## D7. Staying within GitHub's limits
 
-## D5. Checking and notifications
+GitHub allows 60 requests an hour without signing in, 5,000 with. Each person's copy has its own allowance; there's
+no server.
 
-- **One global setting**, asked on first launch, changeable in Settings: automatic checks **on** with an interval
-  (daily / every 7 days / every 14 days / monthly, where monthly = every 4 weeks; daily is the default), or **off** (only the Check now button).
-- **No per-repo intervals.** Simpler, and one pass over all repos uses less of the system than many separate timers.
-- Automatic checks run from a systemd user timer: the checker starts, checks everything, and exits. Nothing stays
-  running in between.
-- **When updates are found:** a toast (on by default). Clicking it opens the main window, where each repo with an
-  update has a ⬆ icon. The app's taskbar icon shows a badge with the number of updates.
-- **Toasts can be turned off**, leaving just the badge and the ⬆ icons.
-- **Only from the background** (KDE HIG, status changes): a toast is sent only when the main window isn't open or
-  in front. With the window in front, new updates show in the window itself.
-- **As built (stage 4):** the timer wakes hourly (and after login) and the checker decides if the interval has passed,
-  so the interval counts from the last check. Each update is announced once. The badge only shows while the app is
-  open: Plasma clears a badge when the app that set it closes.
+- **Branches via `git ls-remote`:** not counted against the limit at all.
+- **One small request per release repo per check** (the newest 5 releases, not all of them).
+- **"Has it changed?" requests (ETags):** an unchanged answer has nothing to download, and costs nothing when signed
+  in.
+- **Stop when told:** after a "limit reached" answer, the remaining GitHub repos wait for the next check.
+- **Optional sign-in** with a code at github.com/login/device. It asks for no access, so it can only read public
+  information. Kept in the desktop's password store, never in the settings file.
+  - **Not the GitHub CLI's login:** `gh` logins can usually change your repositories, more than a read-only app
+    should hold.
+  - **No built-in token:** anyone could pull it out of the app.
 
-**Status:** decided 2026-10-10.
+## D8. Where installed things go
 
-## D6. Safety rules
+| What | Where |
+| --- | --- |
+| AppImages | `~/Applications`, with a menu entry |
+| Programs from release archives | `~/.local/share/couriercollie/programs`, with a link in `~/.local/bin` |
+| Packages (`.rpm`, `.deb`, Arch) | The package manager |
+| Flatpak bundles | Flatpak, for you only |
+| Projects cloned by Install | `~/src` |
 
-- Never run anything as root without you clicking and entering your password.
-- Verify downloads against the checksum file when the project publishes one; warn when it doesn't.
-- Keep the previous version until the new one is in place, so a failed update leaves a working copy.
-- Never run a project's own install script automatically.
+Nothing goes into system folders except through the package manager.
 
-**Status:** decided 2026-10-10.
+## D9. Hosted on GitHub
 
-## D7. How the app talks to GitHub and GitLab
-
-**The limits.** GitHub's API allows **60 requests an hour per IP address** without logging in, and 5,000 an hour
-with a login. GitLab.com's limits are much looser, and self-hosted GitLab sites like gitgud.io set their own. These
-limits apply **per user**: every copy of the app runs on its own machine and sends its own requests, so users don't
-share a limit and there's no server of ours to run or pay for.
-
-**How the app stays well under them, without needing a login:**
-
-1. **Git clones use `git ls-remote`**, not the API. It asks the server which commit a branch is on, a few hundred
-   bytes per repo, and isn't counted against the API limit at all. Most of what you'd track today is git clones.
-2. **One request per repo per check** for release-tracked repos (just "what's the latest release?"). The full release
-   list is fetched only when you open a repo's page.
-3. **"Has anything changed?" requests.** The app remembers each answer's fingerprint (an ETag) and asks "only send
-   it if it changed". When nothing changed, GitHub answers "not modified", and for logged-in requests those don't
-   count against the limit.
-4. **Back off when told to.** If a site says "slow down", the app waits until the time it gives and tries again next
-   round instead of retrying in a loop.
-
-**Rough math:** 30 release-tracked repos checked every 6 hours is 30 requests per check, well under 60 an hour,
-with no login. You'd only hit the limit with something like 60+ release repos checked hourly.
-
-**Optional login, for heavy use:** Settings → "Sign in to GitHub", which raises the limit to 5,000 an hour.
-- It uses GitHub's sign-in code page ("enter this code at github.com/login/device"), asking for no access to your
-  account, so the login can only read public information.
-- **Not** the GitHub CLI's login (decided 2026-10-11): `gh` logins can usually change your repositories, and a
-  read-only app shouldn't hold or use one. One way to sign in, with the least access, is also one less thing to get
-  wrong.
-- The login token is stored in the desktop's password store (KDE Wallet, GNOME Keyring, …), never in the plain
-  settings file.
-- The app **never ships with a built-in token**. Anyone could pull it out of the app and use it, and GitHub would
-  revoke it.
-
-**Status:** decided 2026-10-10 ("works for now"): the four points above, working without a login by default, with
-optional sign-in as designed in DESIGN.md §8.
-
-## D8. Where downloaded apps go
-
-AppImages in `~/Applications`, loose programs in `~/.local/bin`, with a menu entry created for AppImages so they show
-up in the KDE launcher. Nothing in system folders except through the package manager. Projects Install clones (ones you don't have,
-followed by branch or source only) go in `~/src`, a common place for source code, and inside the default scan
-folders.
-
-**Status:** decided 2026-10-10.
-
-## D9. Keeping this project in git
-
-**Status:** decided 2026-10-10. Local git repo only, no GitHub for now.
+github.com/FalloutSeeker/couriercollie.
 
 ## D10. Name
 
-**couriercollie**, written all lowercase everywhere: the window, the menu, the command, the package, the repository
-and the app's folders (`~/.config/couriercollie`, …). Environment variables are the exception, upper case as usual
-(`COURIERCOLLIE_CONFIG`, …).
+**couriercollie**, all lowercase everywhere: window, menu, command, package, repository and folders. Environment
+variables are upper case as usual (`COURIERCOLLIE_CONFIG`, …).
 
-**Status:** decided 2026-10-11, replacing the working name the project started with.
+## D11. Old versions aren't kept
 
-## D11. Old versions
+An update removes the version it replaced once the new one is in place (D6). Nothing piles up, so there's no cleanup
+setting. A clone's history is its own and isn't touched.
 
-Not kept. An update removes the version it replaced, once the new one is in place (D6). There's no Undo, and so no
-setting to delete old versions after a while: nothing piles up. RPMs: dnf replaces the old version itself. Git clones:
-the old versions are the repo's own history, which isn't touched.
+## D12. Scanning is off until you turn it on
 
-**Status:** decided 2026-10-10; changed 2026-10-11: Undo and the "delete old versions after…" setting were dropped as
-unnecessary, so old versions are removed straight away.
-
-## D12. Scanning the computer
-
-**Where:** the home folder, `/opt`, `/usr/local` and `/srv` by default (marked "Default" in Settings, which can add
-or remove folders). Home alone missed `/opt` and `/usr/local`, the standard places for software installed by hand.
-The rest of the system (`/usr`, …) isn't scanned: it's slow and doesn't hold hand-installed software. Decided
-2026-10-10.
-
-Global setting, **off by default**, because it looks through your files. Offered on first launch and in Settings.
-While it's off, the Scan button is hidden and tracking is manual: you add repos yourself and set which version
-you have, or mark it as up to date. Both places that offer the setting say so. With scanning
-on, repos can still be added by hand.
-
-**Manual and scanned entries are never duplicated.** Each repo is marked as added by hand or found on this computer.
-When a scan finds a repo that's already on the list (added by hand, installed from the app, or installed some other
-way), it updates that entry: it becomes a scanned one, with the folder it was found in and the version on disk.
-Matching uses the repo's address and any older addresses it's known by, ignoring upper/lower case. If nothing
-matches, the site is asked whether the address moved, and the old address is remembered for next time. Scan results start with nothing ticked. You pick specific repos or click
-**Select all**.
-
-**Status:** decided 2026-10-10.
+- **Why off:** it looks through your files.
+- **Default folders:** your home folder, `/opt`, `/usr/local` and `/srv`. These are where software installed by hand
+  lives. The rest of the system belongs to the package manager, so it's slow to search and has nothing to find.
+- **No duplicates:** a find that matches a tracked repo (by address, or an old address it was renamed from) updates
+  that entry instead of adding another.
+- Nothing in the results is ticked until you choose.
 
 ## D13. Repo icons
 
-Each repo gets an icon, looked up **once**, when it first appears in the list (on first load, when added by hand, or
-when a scan adds it). The result is saved, including "none found", so it's never looked up again; only a site that
-couldn't be reached is retried, on the next load. In order, the first that turns something up:
+Looked up once, then saved. The first that turns something up:
 
-1. **On this computer:** a scanned RPM's menu entry; a scanned AppImage's own icon (read with 7z, never run); an icon
-   file in a scanned clone; an installed app whose menu entry matches the repo's name (names under 4 letters skipped).
-2. **The project's picture on its site:** a GitLab project's icon, else its group's picture; on GitHub, the owner's
-   picture only if the owner is an organization. A person's profile picture wouldn't represent the project. Taken
-   from the project info already fetched when adding (no extra request), downloaded once (max 1 MB, must be a
-   picture) into `~/.cache/couriercollie/icons`, and deleted when the repo is removed.
-3. **The default icon** for the kind of repo.
-
-Scanned repos also get a corner mark (`emblem-mounted`: found on this computer).
-
-**Status:** decided 2026-10-10.
+1. On this computer: an installed package's menu entry, an AppImage's own icon (read, never run), an icon file in a
+   clone, or an installed app with the same name.
+2. The project's picture on its site: a GitLab project's icon or group picture; on GitHub, an organization's picture
+   (never a person's).
+3. The default icon for the kind of repo.
 
 ## D14. Categories
 
-Your own categories for sorting the list, e.g. "Themes" and "Tools".
-
-- **New Category…** (right of the filters) adds one at the bottom. Names are unique, ignoring upper/lower case.
-- **Drag** a repo by its handle onto a category's heading (to the top of it) or above/below another repo. Drag a
-  category by its handle to move it, with its repos. The row itself follows the pointer (its place stays faded),
-  and a line shows where it will land.
-- **⋮ on each heading** (or right-click it) has **Rename** and **Delete Category…**. Rename turns the name into a text
-  box in place (Enter saves, Esc cancels); double-clicking the name does the same. A name that's taken says so and
-  stays open. Delete sits in the menu rather than alone on the heading, so it isn't one stray click away.
-- **Delete** never removes repos: they move to the end of Uncategorized, and stay tracked. A category with repos asks
-  first; an empty one goes straight away.
-- A repo is in one category at most. Repos in none are under **Uncategorized**, which is always first and can't be
-  moved or deleted. Until there's a category, there are no headings and the list looks as before.
-- The order is yours: it's the order in the settings file. Files from before categories keep their order by name; new
-  repos go to the end of Uncategorized.
-- The All / GitHub / GitLab filter still applies; headings stay, with the number shown.
-
-**Status:** decided 2026-10-11.
+- Your own headings for the list (e.g. "Themes", "Tools"). Drag repos and categories by their handles.
+- Rename or delete from a heading's ⋮ menu. Deleting a category never removes its repos; they move to Uncategorized.

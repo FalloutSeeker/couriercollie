@@ -1,5 +1,5 @@
 # couriercollie for Arch Linux (the AUR). Built and tested by devtools/build_arch.sh in an Arch container.
-# Before publishing to the AUR (stage 7): a public release tag to download, its real sha256sum, and a license.
+# Before publishing to the AUR: a public release tag to download, its real sha256sum, and a license.
 pkgname=couriercollie
 pkgver=0.6.0
 pkgrel=1

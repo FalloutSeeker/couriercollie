@@ -1,149 +1,163 @@
 # couriercollie
 
-Something like Obtainium, but for Fedora KDE: a desktop app that keeps track of software you got
-straight from GitHub or GitLab (git clones, release downloads, AppImages, loose programs), checks for new versions on a
-schedule, and lets you update with a click.
+Keep the software you got from GitHub and GitLab up to date, in one simple window.
 
-Tools already exist for pieces of this: Topgrade runs your updaters from a terminal, Gear Lever handles AppImages,
-eget fetches release programs, nvchecker reports new versions. couriercollie brings these jobs together in one simple
-window, so there's one app to install and learn instead of several tools and their commands.
+![couriercollie showing an update for LocalSend](docs/screenshot.png)
 
-## Status
+AppImages, programs from release archives, downloaded `.rpm` or `.deb` files and git clones never get updates from
+your package manager. couriercollie keeps track of them, tells you when there's a new version, and updates them with
+a click.
 
-**Stages 1–5 of PLAN.md are built.** You can add GitHub/GitLab repos by hand or scan this computer for them, sort
-them into categories, browse their releases, build files and branches, set which version you have, check for updates
-(by hand or in the background, with notifications), and update with a click: git clones are pulled (or moved to the
-newest release), AppImages and programs from release archives are downloaded, checked and swapped in, and packages
-(RPMs, Debian and Arch packages) are installed with the package manager. Stage 6 (GitHub sign-in, packaging, GNOME) and stage 7 (release) aren't built yet.
+## Why another tool?
 
-**Developed and tested mainly on Fedora KDE.** Git clones, AppImages and programs from release archives should work
-on other distros, and packages install with dnf, zypper, apt or pacman (each tried in a container), but other
-distros (and GNOME) still need testing on real computers.
-If you try it elsewhere, please say how it went in a GitHub issue, whether it worked or not.
+Each existing tool covers one piece:
 
-## Installing it as a package
+| Tool | What it does | What it misses |
+| --- | --- | --- |
+| Topgrade | Runs your package managers | Software you got from GitHub |
+| Gear Lever, AppImageLauncher | AppImages | Everything else |
+| eget | Downloads a release's program | Runs in a terminal, one at a time |
+| nvchecker | Tells you about new versions | Doesn't update anything |
+| Discover | Packages and Flatpaks | What you downloaded yourself |
 
-```sh
-devtools/build_rpm.sh                                # builds dist/couriercollie-<version>.noarch.rpm from the last commit
-sudo dnf install dist/couriercollie-*.noarch.rpm     # then it's in the menu, and `couriercollie` runs it
-devtools/build_arch.sh                               # Arch's package (packaging/arch/PKGBUILD), built and tried in a container
-```
+couriercollie does all of it in one app. (Obtainium is the same idea, for Android.)
 
-Installed, it uses the system's menu entry and icon. Running it from this folder still works alongside.
+## Install
 
-## Running it
+**Fedora KDE** already has everything it needs:
 
 ```sh
-~/claudework/couriercollie/run.sh
+git clone https://github.com/FalloutSeeker/couriercollie
+cd couriercollie
+./run.sh
 ```
 
-Needs only what Fedora KDE already has: Python 3, PySide6 (`python3-pyside6`) and Kirigami. Your tracked repos are
-saved in `~/.config/couriercollie/repos.toml`.
+To put it in your app menu, build and install the package:
 
-On other distros, install these first (names checked 2026-10-11 on Ubuntu 26.04, Arch and openSUSE Tumbleweed;
-Python 3.13 or newer):
+```sh
+devtools/build_rpm.sh
+sudo dnf install dist/couriercollie-*.noarch.rpm
+```
 
-| Needed for | Fedora | Ubuntu / Debian | Arch | openSUSE |
+**Other distros:** install the packages below first, then run the same three commands.
+
+<details>
+<summary>Packages to install</summary>
+
+| For | Fedora | Ubuntu / Debian | Arch | openSUSE |
 | --- | --- | --- | --- | --- |
 | The window | `python3-pyside6` | `python3-pyside6.qtquick python3-pyside6.qtwidgets python3-pyside6.qtdbus python3-pyside6.qtnetwork python3-pyside6.qtsvg` | `pyside6` | `python313-pyside6` |
-| KDE's window parts | `kf6-kirigami` | `qml6-module-org-kde-kirigami qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts` | `kirigami` | `kf6-kirigami-imports` |
+| KDE's toolkit | `kf6-kirigami` | `qml6-module-org-kde-kirigami qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts` | `kirigami` | `kf6-kirigami-imports` |
 | KDE's look (optional) | `kf6-qqc2-desktop-style` | `qml6-module-org-kde-desktop` | `qqc2-desktop-style` | `kf6-qqc2-desktop-style` |
 | Icons | `breeze-icon-theme` | `kf6-breeze-icon-theme` | `breeze-icons` | `kf6-breeze-icons` |
 | Notifications | `libnotify` | `libnotify-bin` | `libnotify` | `libnotify-tools` |
-| Clones | `git-core` | `git` | `git` | `git-core` |
-| Updates that ask for your password | `polkit` | `pkexec` | `polkit` | `polkit` |
-| Keeping the GitHub sign-in | `libsecret` | `libsecret-tools` | `libsecret` | `secret-tool` |
+| Git | `git-core` | `git` | `git` | `git-core` |
+| Password prompts | `polkit` | `pkexec` | `polkit` | `polkit` |
+| GitHub sign-in | `libsecret` | `libsecret-tools` | `libsecret` | `secret-tool` |
 
-Other ways to run it:
+Needs Python 3.13 or newer.
+
+</details>
+
+## Use it
+
+1. **Add** a project by pasting its GitHub or GitLab address. Or turn on scanning in Settings, then click **Scan**
+   to find what's already on your computer.
+2. **Open it** and pick your file (the AppImage, archive or package you use), or a branch to follow.
+3. **Update** when the list says there's a new version.
+
+Settings has how often to check (or never), notifications, scan folders and GitHub sign-in.
+
+## Good to know
+
+**Is it safe?**
+
+- Nothing updates until you click Update.
+- Downloads are checked against the project's published checksum. You're warned when there isn't one.
+- Your password is only asked for packages (through your package manager) and for clones owned by the system.
+- A project's install script is shown to you before it runs.
+
+**Does it run all the time?** No. With automatic checks on, a small timer runs a quick check and exits. Close the
+window and nothing stays running.
+
+**Do I need to sign in to GitHub?** Only if you track a lot of GitHub projects. GitHub allows 60 requests an hour
+without signing in, and 5,000 with.
+
+- couriercollie uses its registered app identity to ask GitHub for a read-only, public-data token on behalf of
+  whoever signs in.
+- That login can't see anything private or change anything.
+- It's kept in your desktop's password store (KDE Wallet, GNOME Keyring, …).
+- You can revoke it anytime in GitHub's Settings → Applications.
+
+**What does a scan find?** Only what your package manager can't update:
+
+- Git clones and AppImages in your scan folders.
+- Packages installed from a downloaded file that no repository you have offers. On Fedora that's two checks: it
+  came from a file (`@commandline`), and no enabled repository offers it (some packages add their own repository
+  when installed).
+- Flatpak bundles installed from a file.
+
+The scan folders are your home folder, `/opt`, `/usr/local` and `/srv`, where software installed by hand lives. The
+rest of the system belongs to your package manager. Change them in Settings.
+
+**Which distros?** It's built and tested mainly on Fedora KDE. Package installs were tested on Fedora, openSUSE,
+Ubuntu and Arch in containers. GNOME works, but needs more testing. Tried it somewhere? Please
+[open an issue](https://github.com/FalloutSeeker/couriercollie/issues), whether it worked or not.
+
+**Start over:** `./run.sh --reset` brings the welcome screen back. Your old settings are kept as a dated backup.
+
+<details>
+<summary>Where it keeps things</summary>
+
+| What | Where |
+| --- | --- |
+| Settings and your list | `~/.config/couriercollie/repos.toml` |
+| Last check's results | `~/.local/state/couriercollie/checks.json` |
+| Icons, release lists | `~/.cache/couriercollie/` |
+| Background checks (only while on) | `~/.config/systemd/user/couriercollie-check.timer` |
+| AppImages it installs | `~/Applications` |
+| Programs it installs | `~/.local/share/couriercollie/programs`, linked from `~/.local/bin` |
+| Projects it clones | `~/src` |
+| GitHub sign-in (only if you sign in) | Your desktop's password store |
+
+</details>
+
+## For developers
+
+- [DESIGN.md](DESIGN.md): how it works.
+- [DECISIONS.md](DECISIONS.md): why it works that way.
+- [ROADMAP.md](ROADMAP.md): what's next.
+- [CHANGELOG.md](CHANGELOG.md): what changed.
+
+Run the tests, which need no network:
 
 ```sh
-~/claudework/couriercollie/run.sh --check   # check every repo for updates now, without the window
+python3 -m unittest discover -s tests -t .
 ```
 
-**What it adds outside this folder** (all removable):
+<details>
+<summary>Window checks and packaging scripts (<code>devtools/</code>)</summary>
 
-- `~/.local/share/applications/couriercollie.desktop`: the menu entry (written when the app starts).
-- `~/.config/systemd/user/couriercollie-check.{timer,service}`: background checks, only while automatic checks are on
-  (Settings). Turning them off removes the timer. To remove it by hand:
-  `systemctl --user disable --now couriercollie-check.timer`.
-- `~/.local/state/couriercollie/checks.json`: the last check's results. `~/.cache/couriercollie/icons/`: repo icons.
-  `~/.cache/couriercollie/github/`: GitHub release lists, to ask "has it changed?" instead of downloading them again.
-- Only if you sign in to GitHub with a code: the login, in your desktop's password store (KDE Wallet on Plasma,
-  GNOME Keyring on GNOME, …), as
-  "couriercollie: GitHub sign-in".
-- Only when you install or update something: AppImages in `~/Applications` (or beside the one you had), with a menu
-  entry `~/.local/share/applications/couriercollie-<repo>.desktop`; programs unpacked in
-  `~/.local/share/couriercollie/programs/`, with a link in `~/.local/bin`; packages through the package manager (downloaded first to
-  `~/.cache/couriercollie/downloads/`, then deleted); projects you install by cloning, in `~/src`.
+The window checks drive the real window off-screen, with temporary settings, and save screenshots to `.uicheck/`.
 
-To start over as if newly installed (the welcome screen shows again), run it with `--reset`. Your settings file is
-renamed to a dated backup next to it, not deleted:
+| Script | Checks |
+| --- | --- |
+| `check_look.py [dark\|readme]` | Every screen and state, for looking over |
+| `check_pages.py` | Welcome screen, list, repo page, Settings |
+| `check_settings.py` | Scan folders in Settings |
+| `check_categories.py` | Adding, dragging, renaming, deleting categories |
+| `check_updates.py` | Check Now, results, the rate-limit bar |
+| `check_update_clone.py` | Updating a clone, refusals, install scripts |
+| `check_install_clone.py` | Install clones a project |
+| `check_scanned_repo.py` | A scanned clone's page (uses a copy of your settings) |
+| `check_icons.py` | Icon lookup (uses a copy of your settings) |
+| `check_scan.py` | A real scan of this computer |
+| `check_appimage.py`, `check_program.py` | Real downloads, into temporary folders |
+| `check_rpm.py` | A real `.rpm` up to a stand-in dnf |
+| `check_flatpak.py` | A Flatpak bundle, in a temporary Flatpak folder |
+| `check_distros.sh` | Packages with dnf, zypper, apt and pacman, in containers |
+| `build_rpm.sh`, `build_arch.sh` | Build the Fedora and Arch packages |
 
-```sh
-~/claudework/couriercollie/run.sh --reset
-```
+Run Python ones as `python3 -I devtools/<script>`.
 
-## Tests
-
-```sh
-cd ~/claudework/couriercollie && python3 -m unittest discover -s tests -t .
-```
-
-They don't use the network: GitHub and GitLab answers are saved in `tests/fixtures/`, and downloads come from a
-small local server the tests start.
-
-`devtools/` has checks that drive the real window off-screen (clicks, screenshots in `.uicheck/`), using a temporary
-copy of your settings:
-
-```sh
-python3 -I devtools/check_scan.py   # scans this computer and asks GitHub/GitLab about new finds
-python3 -I devtools/check_pages.py  # clicks through the welcome screen, list, repo page and Settings
-python3 -I devtools/check_settings.py        # the folder list in Settings
-python3 -I devtools/check_scanned_repo.py    # a scanned clone's page: version from disk, new commits, branches
-python3 -I devtools/check_icons.py           # looks up icons for your repos (temporary cache folder)
-python3 -I devtools/check_updates.py         # Check Now, the status line, results, the rate-limit bar
-python3 -I devtools/check_categories.py      # new category, dragging, renaming, deleting one
-python3 -I devtools/check_update_clone.py    # Update on a temporary clone, refusals, showing and running a script
-python3 -I devtools/check_install_clone.py   # Install clones a project added by hand, into a temporary folder
-python3 -I devtools/check_look.py [dark]     # a tour of every screen and state, to look over (made-up projects)
-python3 -I devtools/check_appimage.py        # installs then updates LocalSend's AppImage, in temporary folders
-python3 -I devtools/check_program.py         # installs then updates ripgrep from its .tar.gz, in temporary folders
-python3 -I devtools/check_rpm.py             # bottom's real .rpm up to dnf, which is a stand-in: nothing is installed
-devtools/check_distros.sh [fedora opensuse ubuntu arch]  # packages installed for real, in each distro's container
-python3 -I devtools/check_flatpak.py         # a Flatpak bundle installed and updated for real, in a temporary folder
-```
-
-## Code layout
-
-| File                       | What it does                                                                   |
-| -------------------------- | ------------------------------------------------------------------------------ |
-| `couriercollie/config.py`    | The settings file: global settings and tracked repos                           |
-| `couriercollie/sources.py`   | Talking to GitHub and GitLab: addresses, releases, branches                    |
-| `couriercollie/assets.py`    | Build files: which kind, whether it suits this PC, remembering your pick       |
-| `couriercollie/scan.py`      | Scanning: finding clones, RPMs and AppImages; matching them to tracked repos     |
-| `couriercollie/icons.py`     | Repo icons: from this computer, the project's site, or the default (D13)          |
-| `couriercollie/checker.py`   | Checking every repo for updates; results kept apart from settings                 |
-| `couriercollie/integration.py` | Menu entry, notifications, taskbar badge, background timer, one copy at a time |
-| `couriercollie/updater.py`   | Updating: pulling and cloning, downloads checked and put in place, packages     |
-| `couriercollie/packages.py`  | Packages per distro: which tool installs each kind, reading names and versions  |
-| `couriercollie/flatpaks.py`  | Flatpak bundles: which app a bundle holds, installing it for you, finding them  |
-| `couriercollie/backend.py`   | Connects the window to the above; runs network work in the background          |
-| `couriercollie/updating.py`  | The backend's Update and Install buttons and install scripts (part of it)      |
-| `couriercollie/github_login.py` | Signing in to GitHub: the code sign-in, and keeping it in the password store |
-| `couriercollie/account.py`   | The backend's sign-in buttons, for Settings and the welcome screen (part of it) |
-| `couriercollie/qml/`         | The window: list page, repo page, Add dialog                                   |
-
-## Files
-
-| File                         | What's in it                                                      |
-| ---------------------------- | ----------------------------------------------------------------- |
-| [DESIGN.md](DESIGN.md)       | What the app does: features, screens, and how it works underneath |
-| [DECISIONS.md](DECISIONS.md) | The choices made, and why                                         |
-| [PLAN.md](PLAN.md)           | The build order, in stages                                        |
-| [LOG.md](LOG.md)             | Dated notes on what we decided and did, newest first              |
-
-## Background
-
-- Started 2026-10-10 from a conversation about tracking GitHub updates on Fedora.
-- First idea was a "custom dnf": a local package repo filled from GitHub releases, so plain `dnf upgrade` sees them.
-  That idea still lives on as one way to install RPM updates (see DECISIONS.md, D4), but the main product is now a GUI.
+</details>

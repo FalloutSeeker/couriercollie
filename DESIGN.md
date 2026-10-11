@@ -1,361 +1,178 @@
 # Design
 
-## The problem
+How couriercollie works, for anyone reading or changing the code. The *why* behind each choice is in
+[DECISIONS.md](DECISIONS.md).
 
-Some software on a Fedora machine never gets updated, because it didn't come from Fedora's repos or Flathub:
+**The problem:** software you get straight from GitHub or GitLab (an AppImage, a program from a release archive, a
+downloaded `.rpm` or `.deb`, a git clone you built) is invisible to your package manager. Nothing tells you when
+there's a new version.
 
-- **Git clones** you built or installed from, e.g. AeroThemePlasma in `~/aero/aerothemeplasma` (from gitgud.io).
-- **Release downloads** from a project's Releases page: an `.rpm`, an AppImage, or a `.tar.gz` with a program inside.
+## 1. Scanning
 
-`dnf upgrade` and Discover don't know these exist. You only find out about new versions by visiting each page.
+Off until turned on (D12). When on, **Scan** lists what it finds; you tick what to track.
 
-## What the app does
+| Finds | Where | How it knows the project |
+| --- | --- | --- |
+| Git clones | The scan folders, 6 levels deep | The clone's remote address |
+| AppImages | The scan folders, plus `~/.local/bin` | Update info built into the AppImage |
+| Packages installed from a file | The package manager | The package's homepage |
+| Flatpak bundles | Flatpak | The app's homepage |
 
-### 1. Find what's already installed
+- **Only what nothing else updates is listed:**
+  - **RPMs (dnf):** the package came from a downloaded file (`@commandline`), *and* no enabled repository offers it.
+    The second check catches packages that add their own repository when installed.
+  - **openSUSE (zypper):** listed under "(System Packages)".
+  - **Debian/Ubuntu (apt):** marked "local".
+  - **Arch:** never listed, because pacman can't tell a downloaded package from an AUR build (which AUR helpers update).
+  - **Flatpak bundles:** their origin has no address, so Flatpak can't update them.
+- **Scan folders:** your home folder, `/opt`, `/usr/local` and `/srv` by default; change them in Settings. Hidden and
+  build folders (`node_modules`, `build`, …) are skipped. A scan runs as you, so a folder you can't open is skipped,
+  and Settings says so.
+- **No duplicates:** a find matching a tracked repo, by address or an old address, updates that entry instead.
 
-Scanning is **off by default** (DECISIONS.md, D12), because it means looking through your files. You can turn it on
-during first launch (see 6) or later in Settings (see 7). While it's off, the Scan button is hidden.
+## 2. Adding a repo by hand
 
-When it's on, a **Scan** button looks through the machine for things that came from GitHub/GitLab and lists them.
-Nothing is ticked to start with. You tick the ones to track, or use **Select all**.
+Paste a project's address (any GitHub or GitLab page of it). The app follows renames, fetches the releases, and
+picks the file for this computer if there's exactly one. A project without releases follows its default branch.
 
-**Where it looks.** Folders to scan, by default the home folder, `/opt`, `/usr/local` and `/srv`: where software
-installed by hand usually lives. Each is marked "Default" in Settings, where folders can be added (e.g. a second
-drive) or removed. Subfolders are included up to 6 levels deep, except hidden ones and dependency or build folders
-(`node_modules`, `build`, …), so a scan stays fast. A scan runs as you and never asks for a password: a folder you
-can't open is skipped. Settings says so under that folder (or that it isn't there), and the scan's results list the
-folders it didn't look in.
+## 3. The repo page
 
-| Kind                         | Where it looks                                          | How it finds the source                      |
-| ---------------------------- | ------------------------------------------------------- | -------------------------------------------- |
-| Git clones                   | The folders to scan                                     | The clone's own remote URL (`git remote`)    |
-| AppImages                    | The folders to scan, plus `~/.local/bin` (hidden)       | Update info embedded in the AppImage         |
-| Packages installed from a file | The package manager's list (dnf, zypper or apt)      | The package's homepage, if it's a Git host   |
-| Loose programs               | Not scanned                                             | Can't be detected reliably; add them by hand |
+Top to bottom:
 
-Finds in folders that belong to the system (common in `/opt`) are tracked like any other. Updating them will ask
-for the password, on the user's click.
-
-Anything already looked after by dnf or Flatpak is left out, since those update themselves, and the scan says so.
-For RPMs that takes two checks, both asked of dnf: the package was installed from a downloaded file (dnf records it
-as `@commandline`, where Fedora's would say `fedora` or `updates`); and no repository you have enabled offers a
-package of that name. The second catches RPMs that add their own repository when installed (like
-`rpmfusion-free-release`): installed from a file, but dnf updates them. If dnf can't answer, no RPMs are listed.
-On openSUSE, zypper lists such packages under "(System Packages)"; on Debian and Ubuntu, apt marks them "local". Arch's
-are never listed: pacman can't tell a downloaded package from one built from the AUR, which AUR helpers update.
-
-> On this machine today, a scan would find 11 git clones (10 AeroThemePlasma repos and `ultrakanban`) and no
-> AppImages or GitHub RPMs.
-
-### 1b. Categories
-
-The list can be sorted into categories of your own, by dragging (DECISIONS.md, D14). Repos in none are under
-"Uncategorized". Deleting a category keeps its repos.
-
-### 2. Add a repo by hand
-
-**Add** asks for:
-
-- **Name**: what to call it in the list.
-- **URL**: the project page, e.g. `https://github.com/owner/project`.
-
-The app then fetches the project's releases and shows them, so you can pick which build file to follow (see 3).
-
-### 3. Repo detail page
-
-Clicking a tracked repo shows, top to bottom (laid out for scanning, chosen 2026-10-11):
-
-- **Header:** the repo's icon, name (large), description and address.
-- **Status box:** a short headline ("Update available", "Up to date", "New commits on Plasma/6.7", "Not installed",
-  "Couldn't compare") with **your version → newest** in large type, the buttons below them, and new commits when
-  following a branch. Coloured by the theme: highlight for an update, green for up to date, orange for a problem.
-- **Tracking:** lined-up labels on the left: Follow, Build file (or Branch), Pre-releases, Source (added by hand, or
-  found on this computer with its path).
-- Then the build file picker, and the releases or branches lists.
+- **Header:** icon, name, description, address.
+- **Status box:** a headline ("Update available", "Up to date", "New commits on main", "Not installed"), your version
+  → the newest, the buttons, and new commits when following a branch.
+- **Tracking:** what's followed (a file or a branch), pre-releases, and where it came from.
+- **Your build file:** choose from the newest release's files that run here. The choice is kept as a pattern
+  (`app-1.2-x86_64.AppImage` → `app-*-x86_64.AppImage`), so the same file is followed in later releases. If nothing
+  runs here, it's tracked by version only.
+- **Releases:** the newest 10, with notes. **Show Older Releases** loads up to 30. Pictures in notes become links, so
+  opening notes downloads nothing.
+- **Branches:** for following new commits.
 
 Details:
 
-- **Your version** and a status line ("Up to date" / "Newer version available: …"). Your version is a release, a
-  commit (when following a branch), or "Not installed". A repo added by hand starts as "Not installed" (adding it doesn't mean you have it). To
-  change it, open a release in the list and click "This is my version", or use "Mark as up to date" / "Mark as not
-  installed".
-  For repos found by a scan, your version is read from disk (a clone's commit, an AppImage's version, an RPM's
-  version), so it follows a `git pull` or reinstall done outside the app, and isn't set by hand. Like everything on
-  the page, it's read the first time the page opens after the app starts, then only on **Refresh** or when an update
-  check finds something newer: opening a page again makes no requests. When following a branch you're behind on, the new commits are listed (up to 5, newest first).
-- **Releases list**: the newest 10 versions, newest first, with their dates and release notes; **Show Older
-  Releases** loads up to 30. Pre-releases are hidden unless you turn them on for that repo. (Each release comes with
-  its notes and file list, so a busy project's 30 can be half a megabyte; a check asks for only the newest 5.)
-- **Your build file**: one project often publishes several files for the same version (an `.rpm`, an AppImage, ARM
-  and Intel builds, etc.). You pick the one you use in one place, from the newest release's files, and the app
-  follows that same file in future releases (it matches by pattern, so `app-1.2-x86_64.rpm` → `app-1.3-x86_64.rpm`
-  still matches). Only files that run on this computer can be chosen. The releases list is for reading.
-- **Versions only**: if nothing in the newest release runs on this computer (e.g. an Android-only project), there's
-  no file to choose. The repo is tracked by version only, as with scanning off: you hear about new releases and set
-  your version yourself or mark it as up to date. Nothing is downloaded or installed. If a later release adds a file
-  for this computer, the file picker comes back.
-- **Branches**, for repos that don't publish releases (common for git clones): the app follows new commits on a
-  branch instead, e.g. `Plasma/6.7`.
-- **Update** and **Open project page** buttons.
+- **Your version:**
+  - A repo added by hand starts as "Not installed". Set it with Mark as Up to Date or Set as My Version.
+  - For a repo found on this computer, it's read from disk.
+- **Loading:** a page loads once per app start. After that, only on Refresh, or when a check found something newer.
+- **Install script:** a clone's `install.sh` / `install` / `setup.sh` gets a button. The button reads "Show and Run"
+  (never run from here), "Run Again" (run at this version) or "Install the Update" (run before the clone changed).
+  The script is always shown first, then runs in a terminal.
+- **A clone on another branch than the one followed:** the page explains it, and offers to follow the clone's branch
+  instead of an Update that would refuse.
 
-There are no per-repo check settings. Checking is one global schedule (see 4), to keep things simple and light on the
-system.
+## 4. Checking for updates
 
-### 4. Checking for updates
+- **Check Now**, or automatically: daily, weekly, every two weeks or monthly (D5).
+- **Requests:**
+  - **A repo following releases:** one, for the newest 5 releases.
+  - **A branch:** none (`git ls-remote`), plus one or two to list new commits when you're behind.
+  - **In parallel:** 4 repos at a time.
+- **Limits and offline:**
+  - **GitHub's hourly limit:** the remaining GitHub repos keep their last result, marked "not rechecked". A bar says
+    when they can be checked again, and offers to sign in.
+  - **No connection:** results are kept the same way. A check where no site answered doesn't count, so the next one
+    isn't put off.
+- **Background:** a systemd user timer wakes hourly and 3 minutes after login, and runs `couriercollie --check
+  --if-due`.
+  - It checks only if the interval has passed since the last check.
+  - If the app is open, the check is handed to it.
+  - Opening the app never checks on its own.
+- **Telling you:** a notification for updates not announced before, only when the window isn't in front. The taskbar
+  icon shows the number of updates.
+- **Results** live in `~/.local/state/couriercollie/checks.json`, apart from the settings. That way the background
+  check and the window never overwrite each other.
 
-One global setting, chosen on first launch (see 6) and changeable in Settings:
+## 5. Updating
 
-- **Automatic checks on**, with an interval: daily / every 7 days / every 14 days / monthly (every 4 weeks). The
-  time is counted from the last check, not from a weekday. Checks run in the background
-  even when the window is closed.
-- **Automatic checks off**: nothing runs in the background. The **Check now** button in the main window still works.
+Only when you click Update, or Install for something you don't have yet (D4).
 
-When an automatic check finds updates:
+| Kind | What Update does | Password? |
+| --- | --- | --- |
+| AppImage | Downloads it beside the old one, swaps it in, keeps your menu entries pointing at it | No |
+| Program (release archive) | Unpacks into its own folder, switches the `~/.local/bin` link in one step | No |
+| Package (`.rpm`, `.deb`, Arch) | Installs with dnf, zypper, apt or pacman | Yes |
+| Flatpak bundle | Installs it for you with flatpak | No |
+| Git clone | Pulls the followed branch (fast-forward only), or moves to the newest release's tag | Only if the system owns it |
+| Not installed, branch only | Install clones it into `~/src` | No |
 
-- **Toast** (on by default): a KDE notification like "2 updates available: AeroThemePlasma, SomeApp". Clicking it
-  opens the main window.
-- **Badge**: the app's icon in the taskbar shows the number of updates. If toasts are turned off in Settings, the
-  badge is the only signal.
-- **In the main window**, each repo with an update has an **update icon** (⬆) next to it. Clicking the icon updates
-  that repo.
+Every download:
 
-### 5. Updating
+1. Goes to a hidden `.part` file, with progress shown.
+2. Is checked against the project's published SHA-256 (GitHub's own, or a checksum file in the release). A mismatch
+   is thrown away; no checksum at all gives a warning.
+3. Must really be what it claims (an AppImage's header, a package's magic bytes, a bundle's app ID).
 
-**Nothing ever installs on its own**, so the app never shows a password prompt you didn't ask for. You update by
-clicking the ⬆ icon in the list, or **Update** on the repo's page.
+The old version is removed only once the new one works (D6, D11).
 
-What "Update" does depends on the kind:
+**Packages, as root:** the checked file is copied where only root can write, checked again, and installed by the
+package manager, named by its full path. Nothing in between can swap the file. Cancelling the password prompt
+changes nothing.
 
-| Kind        | Update does                                                                     |
-| ----------- | ------------------------------------------------------------------------------- |
-| Package     | Downloads the new `.rpm`/`.deb`/Arch package; the package manager installs it  |
-| Flatpak bundle | Downloads the new `.flatpak` and installs it for you with flatpak            |
-| AppImage    | Downloads the new file and swaps it in, keeping the old one until it works      |
-| Program     | Downloads, unpacks, and swaps in the new program file                           |
-| Git clone   | Pulls the new commits. Re-running the project's install script is a separate, deliberate step |
+**Clones are never forced.** Update refuses, saying why, when:
 
-**Git clones (built 2026-10-11).** For clones found by a scan, or made by Install. Update is on the repo page, and
-the ⬆ in the list becomes a button.
+- the clone is on another branch;
+- it has commits of its own;
+- your changed files would be overwritten;
+- moving to a release would strand commits;
+- or it belongs to someone else.
 
-- **Install, for a project you don't have** (added by hand, and following a branch, or releases with nothing to
-  download for this computer): clones it into `~/src/<name>` (D8; `<name>-2` if that's taken), on the branch, or at
-  the newest release's tag. It's cloned under a hidden name first, so a failed clone leaves nothing behind.
-  Afterwards it's a clone like one a scan found: its version is read from disk, and Update pulls it.
+As root (a system clone), git is run by full path, with the clone's hooks off.
 
-- **Following a branch:** fetches the branch from the clone's remote for the project and fast-forwards to it.
-- **Following releases:** the clone's version is the release tag it's at (else its commit). Update fetches the newest
-  release's tag and moves the clone to it; the branch it was on is left as it was (`git switch <branch>` goes back).
-  No build-file picker for a clone.
-- **Refuses**, saying why and changing nothing, when: the clone is on another branch than the one followed; it has
-  commits of its own; files you changed would be overwritten; moving to a release would strand commits that aren't
-  on any branch; or the clone is someone else's (it shows the command to run as them).
-- **Clones that belong to the system** (e.g. in `/opt`): Update asks for your password once (polkit, as Discover
-  does) and runs the git commands as root. The page says so beforehand.
-- Afterwards your version, the page and the list say Up to date, without asking the site. A failed update from the
-  list opens the repo's page, where the reason is. Changing what a repo follows clears the old result until the next
-  check.
+**Programs:**
 
-**AppImages (built 2026-10-11).** For repos that follow an AppImage file. **Update** downloads the newest
-release's file next to the one you have; **Install** (when you don't have it) puts it in `~/Applications` (D8).
+- **Unpacking is fenced:** nothing may land outside the program's folder, and no device files or setuid.
+- **The program to link:** the archive's Linux executable. With several, the one named like the project, else you
+  choose.
+- **Your own commands are safe:** a command in `~/.local/bin` that couriercollie didn't put there is never replaced.
 
-- The download goes to a hidden `.part` file, with its progress shown, then is **checked**: against the SHA-256
-  GitHub publishes for every release file (no extra request), or else a checksum file in the release
-  (`<file>.sha256`, `SHA256SUMS`, `checksums.txt`, …). A mismatch throws the download away. With no published
-  checksum it's still installed, and the page says so in a warning (D6). It must also really be an AppImage
-  (the "AI" mark in its header), or it's thrown away.
-- Then it's made runnable and swapped in under the release's own file name. The old file is removed only once the
-  new one is in place (D6), so nothing piles up.
-- **Menu entries:** yours that started the old file (e.g. from AppImageLauncher or Gear Lever) are pointed at the
-  new one. If none starts it, the app adds one (`~/.local/share/applications/couriercollie-<repo>.desktop`) with the
-  AppImage's own icon.
-- From then on the repo's version is read from the file, as for a scanned one ("Found on this computer").
+**Flatpak bundles** installed for all users are tracked but not updated here. Flatpak would read the file as root
+from a folder you can write to, with no way to check it again.
 
-**Packages (RPMs built 2026-10-11; Debian and Arch packages, and zypper, too).** For repos that follow a release's
-package for this distro: an `.rpm` (dnf on Fedora, zypper on openSUSE), a `.deb` (apt) or an Arch package (pacman).
-**Install…** / **Update…** (the dots: it asks for your password, which the page says beforehand):
+## 6. First launch
 
-- Downloaded (with progress) into `~/.cache/couriercollie/downloads`, checked against the published checksum (else a
-  warning), and must really be that kind of package. Its name, version and processor are read from the file (`rpm`,
-  `dpkg-deb`, `pacman`, as you, nothing installed): if you have the package already, the file must be that same
-  package (a renamed one stops, saying so), and it must be for this computer's processor or for any.
-- Then, as root through polkit, one password prompt per update: the file is copied where only root can write,
-  checked again against the verified download, and installed by the package manager (`dnf install -y`, `zypper
-  install --allow-unsigned-rpm`, `apt-get install -y`, `pacman -U`), each by its full path. Cancelling changes
-  nothing; the package manager's own error is shown if it fails. The download is deleted either way.
-- From then on the version is read from the installed package, like one a scan found.
-- **Tested for real** in Fedora, openSUSE, Ubuntu and Arch containers (`devtools/check_distros.sh`): install, version
-  read back, found by a scan (not on Arch, below), update, and a renamed package refused.
+One screen, everything changeable later in Settings:
 
-**Flatpak bundles (built 2026-10-11).** For repos that follow a single-file `.flatpak` in each release. A bundle
-installed from a file has no address to update from (its origin is disabled, with no URL), so Flatpak never updates
-it; the app does. Installed for you only (`flatpak install --user --bundle`), so no password. The bundle must hold the
-app you have (its ID is read from the file first) and suit this computer's processor. Its version is read from the
-app's own release list. A scan finds bundle-installed apps whose homepage is a project's. One installed for all users
-is tracked, but not updated from here: flatpak would read the file as root from a folder you can write to, with no
-way to check it again there. Tested for real with `devtools/check_flatpak.py`, in a temporary Flatpak folder.
+1. Check for updates automatically? (Yes, daily, by default)
+2. Scan this computer? (Off by default)
+3. Sign in to GitHub (optional)
 
-**Programs (built 2026-10-11).** For repos that follow a release archive (`.tar.gz`, `.tgz`, `.tar.xz`, `.tar.bz2`,
-`.tar.zst`, `.zip`) with a ready-made program inside, e.g. ripgrep or LocalSend's tarball.
+## 7. Settings
 
-- Downloaded and checked like an AppImage (published checksum, else a warning), then **unpacked whole** into its own
-  folder, `~/.local/share/couriercollie/programs/<repo>/<version>/`, since some programs need the files next to them.
-  Unpacking is safe: nothing may land outside that folder, no device files or setuid, at most 4 GB unpacked.
-- **The program** is the archive's Linux executable (not libraries); if there are several, the one named like the
-  project; otherwise the page lists them to choose from, and the choice is kept for later updates.
-- A **link** in `~/.local/bin` (where Fedora's terminal looks for commands) starts it, e.g. `rg`. Updating unpacks
-  the new version beside the old, switches the link in one step, then removes the old version's folder.
-- A command in `~/.local/bin` that couriercollie didn't put there is **never replaced**: the update stops and says so.
-- No menu entry: these are mostly command-line tools. The page shows the command under Tracking.
+All global; nothing per repo.
 
-**Install scripts.** A clone's `install.sh`, `install` or `setup.sh` (never `uninstall.sh`) gets a "Show and Run…"
-button under Tracking. The script is shown in full first; Run in Terminal opens Konsole in the clone's folder, as
-you, kept open afterwards so its output can be read. The script asks for a password itself if it needs one. Update
-never runs it.
+- **Checking for Updates:** automatic checks and how often; notifications.
+- **GitHub Account (optional):** sign in or out.
+- **Finding Installed Repos:** scanning on/off and the scan folders.
 
-**Old versions** aren't kept (D11): each update removes the version it replaced, once the new one is in place.
+## 8. Signing in to GitHub
 
-### 6. First launch
+Optional. Only needed if you track a lot of GitHub projects: GitHub answers 60 requests an hour without signing in,
+5,000 with.
 
-A short setup screen asks two things and says both can be changed later in Settings:
+- **Sign In…** shows a code to enter at github.com/login/device (GitHub's device flow, through couriercollie's OAuth
+  App). No client secret exists or is needed.
+- **Read-only:** no access is asked for, so the login can only read public information.
+- **Kept in the desktop's password store** (via `secret-tool`). The page names the one you have: KDE Wallet, GNOME
+  Keyring, KeePassXC. With none, Sign In is unavailable and says why.
+- **Sent only to api.github.com**, over https, never along a redirect, and only if it looks like a GitHub login. If
+  GitHub turns it down, the app carries on without it and says so.
+- **Unchanged release lists** are asked for with their ETag. A "not modified" answer has nothing to download, and
+  costs nothing when signed in.
 
-1. **Check for updates automatically?** If yes, pick how often. If no, checks only happen when you click Check now.
-2. **Scan this computer for repos?** Off by default. If turned on, a scan runs when you click Done, and the scan
-   results let you tick specific repos or **Select all**.
+## 9. Categories
 
-Toasts are on by default whenever automatic checks are on, and can be turned off in Settings.
+Your own headings for the list; see D14.
 
-### 7. Settings
+## Under the hood
 
-All global; there are no per-repo settings.
-
-- **Automatic checks**: on/off, and the interval.
-- **Toast notifications**: on/off. Off leaves only the taskbar badge and the ⬆ icons in the app.
-- **Scanning**: on/off. On shows the Scan button in the main window.
-- **GitHub account** (optional): Sign in / Sign out, with the explanation below.
-
-### 8. Signing in to GitHub (optional; built 2026-10-11)
-
-Never required. Offered on the welcome screen and in Settings, both titled "(optional)", with one line on why: only
-needed if you track a lot of GitHub projects, since GitHub answers 60 requests an hour without signing in, and 5,000
-with.
-
-- **Sign In…** asks GitHub for a code (the device flow, through couriercollie's OAuth App, whose Client ID is in
-  `github_login.py`; no client secret exists). The code is shown large, with **Copy Code and Open GitHub**; the app
-  waits for you to approve it at github.com/login/device, then shows "Signed in as <you>" (and no request count: not needed). Cancel stops
-  waiting.
-- **No access asked for:** the login can only read public information. A login made here is kept in the desktop's
-  password store (the Secret Service) through `secret-tool`, never in the settings file. The page names the store the
-  desktop actually has (KDE Wallet on Plasma, GNOME Keyring on GNOME, KeePassXC, or "your desktop's password store").
-  With none running (e.g. a bare window manager), Sign In is unavailable and says why. Signing out removes it; GitHub's Settings → Applications removes couriercollie's access there too.
-- **Sent only to api.github.com**, over https, and never along a redirect. If GitHub turns it down (revoked),
-  requests carry on without it and Settings says so.
-- **The GitHub CLI's login is not used** (D7): it can usually change your repositories.
-- **Unchanged release lists:** each is kept with its ETag and asked for with it. An unchanged one comes back "304
-  Not Modified" with nothing to download; signed in, that doesn't count against the limit (tried: it doesn't), signed
-  out it still does.
-- **When the limit is hit**, the main window's bar offers **Sign In to GitHub…** (to Settings) if you aren't.
-
-## Screens (rough sketches)
-
-**First launch**
-
-```
-┌ Welcome to couriercollie ───────────────────────────────────────┐
-│  Check for updates automatically?                             │
-│    ◉ Yes, every [ 6 hours ▾ ]                                 │
-│    ○ No, I'll click "Check now" myself                        │
-│                                                               │
-│  You'll get a notification when updates are found.            │
-│                                                               │
-│  [ ] Scan this computer for repos I've already installed      │
-│      You'll choose which ones to track.                       │
-│                                                               │
-│  You can change all of this later in Settings.                │
-│                                                       [Done]  │
-└───────────────────────────────────────────────────────────────┘
-```
-
-**Main list** (the Scan button only shows when scanning is on)
-
-```
-┌ couriercollie ────────────────────────────────────── [Scan] [+ Add] [⚙] ┐
-│  Show: (All) (GitHub) (GitLab)                       2 updates        │
-│  Name                 Installed      Latest        Kind               │
-│  AeroThemePlasma      a1b2c3d        f9e8d7c       git          [⬆]   │
-│  smod                 4d5e6f7        4d5e6f7       git           ✓    │
-│  SomeApp              1.4.0          1.5.2         AppImage     [⬆]   │
-│  OtherTool            2.0.1          2.0.1         RPM           ✓    │
-│                                                                       │
-│  Last checked 14:02 · next check 20:02                [Check now]     │
-└───────────────────────────────────────────────────────────────────────┘
-```
-
-**Repo detail**
-
-```
-┌ ← SomeApp ─────────────────────────── github.com/owner/someapp ┐
-│  Installed 1.4.0 · Latest 1.5.2                     [Update]  │
-│  Follow: [ Releases ▾ ]                                       │
-│                                                               │
-│  ▾ 1.5.2   2026-10-08   (latest)                              │
-│      ◉ SomeApp-1.5.2-x86_64.AppImage     84 MB   ← you use    │
-│      ○ SomeApp-1.5.2-aarch64.AppImage    80 MB                │
-│      ○ someapp-1.5.2.x86_64.rpm          31 MB                │
-│      Release notes…                                           │
-│  ▸ 1.5.1   2026-09-21                                         │
-│  ▸ 1.4.0   2026-08-02   (installed)                           │
-└───────────────────────────────────────────────────────────────┘
-```
-
-**Scan results**
-
-```
-┌ Found 11 items ────────────────────── [Select all] [Select none] ┐
-│  [ ] AeroThemePlasma   git   ~/aero/aerothemeplasma  gitgud.io │
-│  [ ] smod              git   …/repos/smod            gitgud.io │
-│  [ ] ultrakanban       git   ~/ultrakanban           github    │
-│  …                                                             │
-│                                  [Cancel] [Track selected (0)] │
-└────────────────────────────────────────────────────────────────┘
-```
-
-### 9. Checking for updates (built in stage 4)
-
-- **Check Now** in the list's toolbar checks every repo; the line under the filters shows "3 updates · checked 21:53 ·
-  next check tomorrow 21:53" (or "automatic checks are off"). Each row shows its result on the right, with the update
-  icon for an update.
-- **Requests per check:** one per repo that follows releases; none for a branch (`git ls-remote`), plus one or two to
-  compare when your commit isn't the branch's newest. Scanned repos read their version from disk. Four at a time.
-- **Hourly limit:** once GitHub says it's reached, the other GitHub repos aren't asked; they keep their last result,
-  marked "not rechecked", and a bar says when they can be checked again.
-- **No connection** (or a site that doesn't answer): those repos also keep their last result, marked "(not
-  rechecked)", rather than an error replacing it. The line under the filters says how many couldn't be checked. A
-  repo that fails for a reason of its own (e.g. its branch is gone) says "Couldn't check", with why on hover.
-- **Results** are kept in `~/.local/state/couriercollie/checks.json`, apart from the settings file, so the background
-  checker and the open window never overwrite each other's changes.
-- **Background:** a systemd user timer (`couriercollie-check.timer`) wakes hourly, after a missed hour, and 3 minutes
-  after login, and runs `run.sh --check --if-due`. That only checks if automatic checks are on and the interval has
-  passed since the last check. If the app is open, it hands the check to the app. Opening the app never checks on its
-  own, and a computer that was off past the interval checks once, shortly after login. A check where no site answered
-  (no connection yet) doesn't count, so it's tried again within the hour rather than a whole interval later.
-- **Notifications** only for updates not announced before, and only when the window isn't in front; clicking one opens
-  (or brings forward) the app. The **taskbar badge** shows the number of updates while the app is open (Plasma clears a
-  badge when its app closes).
-- **One copy at a time:** opening the app again brings the open window forward.
-
-## How it works underneath (plain version)
-
-- **One settings file** (`~/.config/couriercollie/repos.toml`) lists what's tracked, which build file or branch to
-  follow, and the global settings. It's plain text, so you can read or back it up.
-- **A background checker** runs on a systemd user timer, only if automatic checks are on. It runs, checks every repo
-  in one pass, records what's new for the window to show, sets the taskbar badge, sends a toast if those are on, and
-  exits. Nothing stays running between checks. It never installs anything.
-- **Taskbar badge** uses the same mechanism other KDE apps use for unread counts. It shows on the app's taskbar icon
-  when the app is open or pinned to the taskbar. To check when building: whether the badge stays visible after the
-  checker exits while the window is closed.
-- **The window** is a separate program that reads the same settings file. Closing it doesn't stop checks.
-- **Downloads** go to a hidden `.part` file beside where they'll end up (RPMs: `~/.cache/couriercollie/downloads`),
-  and are removed once installed or if anything goes wrong.
-
-Tools (DECISIONS.md, D1): Python, with Qt and KDE's Kirigami for the window so it looks native on KDE. Both are
-already installed on this machine.
+- **The window** is QML (Kirigami). It talks to one Python `Backend` object (`backend.py`, with `updating.py` and
+  `account.py` as parts of it).
+- **No freezing:** anything that touches the network or disk runs on a worker thread. Results come back to the main
+  thread through `_deliver`.
+- **Page data** (releases, branches, comparisons) is kept in memory until the app closes; nothing is cached on disk
+  except release lists (for ETags) and icons.
+- **The settings file** is `~/.config/couriercollie/repos.toml`. It's written to a temporary file and renamed, so a
+  crash can't leave it half-written. A file that can't be read is never overwritten.
+- **One copy at a time:** a second launch, or the background check, talks to the open app through a local socket.

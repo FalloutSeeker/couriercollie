@@ -79,7 +79,7 @@ class MergeTest(unittest.TestCase):
         self.assertEqual(len(cfg.repos), 1)
 
     def test_installed_from_the_app_then_scanned(self):
-        # Stage 5 will install from the app; the next scan finds it on disk and flags it as scanned, same entry.
+        # Installed from the app: the next scan finds it on disk and marks it as scanned, the same entry.
         cfg = Config(repos=[TrackedRepo(id="github.com/localsend/localsend", name="LocalSend", url="", host="github",
                                         asset_pattern="LocalSend-*-linux-x86-64.AppImage", kind="AppImage",
                                         installed="v1.18.2")])
