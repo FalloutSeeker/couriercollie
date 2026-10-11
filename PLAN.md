@@ -93,6 +93,16 @@ Plus **Undo last update** for AppImages and programs while the old version is st
 - **Restore to Defaults** in the Settings window: every setting back to how it was on a fresh start (automatic
   checks, notifications, scanning and its folders, deleting old versions). Tracked repos and categories are kept.
   Asks first.
+- **User documentation** (a short guide in the README, or Help in the app). Include how the scan decides an RPM is
+  one dnf won't update, in plain words:
+  1. *Where it was installed from.* dnf records this for every package. Packages from Fedora, RPM Fusion or a COPR
+     show that repository's name; one installed from a downloaded `.rpm` shows as `@commandline`. Only the second
+     kind is considered, and only if its homepage is a GitHub or GitLab project.
+  2. *Whether any repository you have enabled offers it.* Some RPMs add their own repository when you install them,
+     so dnf does update them later (e.g. `rpmfusion-free-release`: installed from a file, but RPM Fusion keeps it
+     updated). The first check alone would let a GitHub-hosted package like that through.
+
+  If dnf can't answer, no RPMs are listed. (Details in DESIGN.md §1.)
 - Added (2026-10-11) at your request.
 
 ## Later, not planned yet
