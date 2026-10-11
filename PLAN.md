@@ -56,7 +56,8 @@ Built kind by kind, simplest first:
    running it.
 2. **AppImages** (done): download, verify the checksum if one is published, swap in, keep the old one, add a menu
    entry. Install, for one you don't have yet, into `~/Applications`.
-3. **Programs**: download, unpack, swap the program file in `~/.local/bin`, keep the old one.
+3. **Programs** (moved to Later, 2026-10-11: not needed now; such repos are still tracked and notified, only
+   one-click Update is missing).
 4. **RPMs**: download, verify, install through dnf, which asks for your password.
 
 Plus **Undo last update** for AppImages and programs while the old version is still kept.
@@ -106,6 +107,11 @@ Plus **Undo last update** for AppImages and programs while the old version is st
 - Added (2026-10-11) at your request.
 
 ## Later, not planned yet
+
+- **Programs** (`.tar.gz` downloads with a ready-made program inside, common for command-line tools): download,
+  unpack, swap the program file in `~/.local/bin`, keep the old one.
+- **Any git host, by git alone** (sourcehut, Bitbucket, kernel.org, self-hosted): new commits, versions from tags and
+  Update for clones, without the site's API (no description, icon, release notes or commit list).
 
 - Codeberg/Gitea sites.
 - Tracking private repos.

@@ -581,6 +581,27 @@ class OfflineTest(unittest.TestCase):
         self.assertEqual(item["status"], "problem")
         self.assertIn("Couldn\u2019t reach", item["note"])
 
+    def test_a_site_found_unsupported_isnt_asked_again(self):
+        finds = [scan.Found(id=f"git.sr.ht/~me/{n}", name=n, url="", host="", path=f"/x/{n}", kind="git", version="a")
+                 for n in ("one", "two")]
+        asked = []
+
+        def project_info(ref, get=None):
+            asked.append(ref.id)
+            raise sources.Unsupported(sources.unsupported_text(ref.domain))
+
+        saved = scan.find_all, sources.project_info
+        scan.find_all, sources.project_info = (lambda folders: finds), project_info
+        try:
+            self.backend.startScan()
+            first = len(asked)
+            self.backend.startScan()
+        finally:
+            scan.find_all, sources.project_info = saved
+        self.assertGreaterEqual(first, 1)
+        self.assertEqual(len(asked), first)  # the second scan asked nothing
+        self.assertTrue(all("git.sr.ht isn\u2019t supported yet" in i["note"] for i in self.backend.scanItems))
+
 
 class ScanFlowTest(unittest.TestCase):
     """What the Scan button does with results, using prepared finds instead of the disk and network."""

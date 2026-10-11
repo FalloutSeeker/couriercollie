@@ -27,6 +27,14 @@ class NotFound(SourceError):
     pass
 
 
+class Unsupported(SourceError):
+    """The project is on a site the app can't talk to (yet): not GitHub, and not a GitLab site."""
+
+
+def unsupported_text(domain: str) -> str:
+    return f"{domain} isn\u2019t supported yet: only GitHub and GitLab sites are."
+
+
 class BadAnswer(SourceError):
     """The site answered, but with an unexpected error code or something that isn't JSON."""
 
@@ -290,14 +298,28 @@ def project_info(ref: RepoRef, get=http_get_json) -> ProjectInfo:
     if ref.domain == "github.com":
         return parse_github_project(get(f"https://api.github.com/repos/{ref.path}", _GITHUB_HEADERS))
     # Anything else: see if it answers like a GitLab site.
-    unsupported = f"{ref.domain} doesn’t look like a GitHub or GitLab site. Only those are supported."
     try:
         data = get(_gitlab_api(ref.domain, ref.path))
+    except NotFound:
+        # A GitLab site without this project, or a site that isn't GitLab at all (sourcehut, Codeberg, …, which
+        # answer "not found" to GitLab's addresses). Only then is it asked which: saying "not found" for a site that
+        # isn't supported would be wrong.
+        if not _is_gitlab(ref.domain, get):
+            raise Unsupported(unsupported_text(ref.domain)) from None
+        raise
     except BadAnswer as e:
-        raise SourceError(unsupported) from e
+        raise Unsupported(unsupported_text(ref.domain)) from e
     if not isinstance(data, dict) or "path_with_namespace" not in data:
-        raise SourceError(unsupported)
+        raise Unsupported(unsupported_text(ref.domain))
     return parse_gitlab_project(ref.domain, data)
+
+
+def _is_gitlab(domain: str, get) -> bool:
+    """Whether a site answers like GitLab: a list of its public projects."""
+    try:
+        return isinstance(get(f"https://{domain}/api/v4/projects?per_page=1"), list)
+    except SourceError:
+        return False
 
 
 def releases(ref: RepoRef, host: str, get=http_get_json) -> list[Release]:

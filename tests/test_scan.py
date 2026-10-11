@@ -305,12 +305,12 @@ class IdentifyTest(unittest.TestCase):
         def lookup(ref):
             if ref.path == "me/private":
                 raise sources.NotFound("nope")
-            raise sources.SourceError("example.org doesn’t look like a GitHub or GitLab site. Only those are supported.")
+            raise sources.Unsupported(sources.unsupported_text("example.org"))
 
         checked = scan.identify([aero_clone("github.com/me/private"), aero_clone("example.org/a/b")],
                                 known=lambda _id: False, lookup=lookup)
         self.assertIn("private", checked[0].problem)
-        self.assertIn("Only those are supported", checked[1].problem)
+        self.assertIn("isn’t supported yet", checked[1].problem)
 
 
 class MirrorTest(unittest.TestCase):

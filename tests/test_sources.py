@@ -161,8 +161,25 @@ class ProjectInfoTest(unittest.TestCase):
         def get(url, headers=None):
             raise sources.BadAnswer("example.org sent an answer that isn’t from a GitHub or GitLab site.")
 
-        with self.assertRaisesRegex(sources.SourceError, "doesn’t look like a GitHub or GitLab site"):
+        with self.assertRaisesRegex(sources.Unsupported, "example.org isn’t supported yet: only GitHub and GitLab"):
             sources.project_info(RepoRef("example.org", "a/b"), get)
+
+    def test_a_site_that_isnt_gitlab_isnt_reported_as_not_found(self):
+        # sourcehut, Codeberg and the like answer "not found" to GitLab's addresses.
+        def get(url, headers=None):
+            raise sources.NotFound("Project not found.")
+
+        with self.assertRaisesRegex(sources.Unsupported, "git.sr.ht isn’t supported yet"):
+            sources.project_info(RepoRef("git.sr.ht", "~someone/project"), get)
+
+    def test_a_gitlab_site_without_the_project_is_not_found(self):
+        def get(url, headers=None):
+            if "projects?per_page=1" in url:
+                return [{"id": 1}]  # it is a GitLab site
+            raise sources.NotFound("Project not found.")
+
+        with self.assertRaises(sources.NotFound):
+            sources.project_info(RepoRef("gitlab.example.org", "a/b"), get)
 
     def test_not_found_passes_through(self):
         def get(url, headers=None):

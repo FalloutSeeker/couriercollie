@@ -10,6 +10,9 @@ Newest first.
   Konsole in the clone's folder. Tested against real git repos made for the tests; your own clones weren't touched.
   - Also: a branch whose newest commit is your version is no longer asked about (it's the same, no request).
   - The scanned-repo window check now waits for each comparison to come back, rather than a fixed time.
+- A clone from a site that isn't supported (sourcehut, Codeberg, …) now says so ("git.sr.ht isn't supported yet:
+  only GitHub and GitLab sites are."), instead of "not found, may be private". Such a site is asked once per app
+  start, not on every scan. Programs (.tar.gz) moved to Later; "any git host by git alone" added to Later.
 - RPMs kept in the plan (dnf never updates one installed from a downloaded file). The scan now also leaves out RPMs
   that an enabled repository offers (some add their own repository when installed, so dnf updates them; on this
   machine, the RPM Fusion release packages), and lists none if dnf can't say. The scan, welcome screen and Settings

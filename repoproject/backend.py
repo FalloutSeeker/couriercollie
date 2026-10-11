@@ -235,6 +235,7 @@ class Backend(QObject):
         self._updating: set[str] = set()
         self._update_notes: dict[str, tuple[str, str]] = {}
         self._progress: dict[str, float] = {}  # a download's progress, 0 to 1, per repo
+        self._unsupported_hosts: set[str] = set()  # sites a scan found the app can't talk to, while it's open
         self._desktop = desktop
         self._icons_pending: set[str] = set()
         self._path = config_path
@@ -855,9 +856,20 @@ class Backend(QObject):
         known = {r.id.lower() for r in self._config.repos} | {a.lower() for r in self._config.repos for a in r.aliases}
 
         folders = list(self._config.settings.scan_folders)
+        unsupported = self._unsupported_hosts
+
+        def lookup(ref):
+            # A site already found to be unsupported isn't asked again while the app is open.
+            if ref.domain in unsupported:
+                raise sources.Unsupported(sources.unsupported_text(ref.domain))
+            try:
+                return sources.project_info(ref)
+            except sources.Unsupported:
+                unsupported.add(ref.domain)
+                raise
 
         def work():
-            return scan.identify(scan.find_all(folders), known=lambda repo_id: repo_id.lower() in known)
+            return scan.identify(scan.find_all(folders), known=lambda repo_id: repo_id.lower() in known, lookup=lookup)
 
         self._scan_state, self._scan_error = "scanning", ""
         self.scanChanged.emit()
