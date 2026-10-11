@@ -4,6 +4,11 @@ Newest first.
 
 ## 2026-10-10
 
+- Manual vs scanned entries. Each repo records how it got on the list, where it was found, and other addresses it's
+  known by. `scan.merge` (for stage 3) updates existing entries instead of adding duplicates, including when the
+  clone on disk uses an old address: the Aero clone here is `wackyideas/aerothemeplasma`, but the app saves the new
+  `aeroshell/atp/aerothemeplasma`. Repo pages show "Tracking: Added by hand" or "Found on this computer: <folder>".
+  With scanning on, the welcome screen and Settings say repos can still be added by hand.
 - With scanning off, the welcome screen and Settings now say tracking is manual: you add repos yourself and set which
   version you have, or mark it as up to date. With scanning on, they say versions are read from the computer.
 - Added a "Mark as up to date" button on the repo page, shown when your version isn't the newest.

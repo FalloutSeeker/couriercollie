@@ -130,7 +130,14 @@ after 7 / 30 / 90 days.
 
 Global setting, **off by default**, because it looks through your files. Offered on first launch and in Settings.
 While it's off, the Scan button is hidden and tracking is manual: you add repos yourself and set which version
-you have, or mark it as up to date. Both places that offer the setting say so. Scan results start with nothing ticked. You pick specific repos or click
+you have, or mark it as up to date. Both places that offer the setting say so. With scanning
+on, repos can still be added by hand.
+
+**Manual and scanned entries are never duplicated.** Each repo is marked as added by hand or found on this computer.
+When a scan finds a repo that's already on the list (added by hand, installed from the app, or installed some other
+way), it updates that entry: it becomes a scanned one, with the folder it was found in and the version on disk.
+Matching uses the repo's address and any older addresses it's known by, ignoring upper/lower case. If nothing
+matches, the site is asked whether the address moved, and the old address is remembered for next time. Scan results start with nothing ticked. You pick specific repos or click
 **Select all**.
 
 **Status:** decided 2026-10-10.

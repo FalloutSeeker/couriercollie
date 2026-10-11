@@ -33,6 +33,8 @@ AeroThemePlasma and ultrakanban repos), and nothing in a stage can change your s
 - Finds git clones in your home folder, RPMs installed from a downloaded file whose homepage is on GitHub/GitLab, and
   AppImages in the usual folders.
 - Scan results dialog with checkboxes; "Track selected" adds them to the list.
+- Uses `scan.merge` (already built and tested): repos already on the list are updated in place and marked as
+  scanned, never added twice. In the results, those show as "already tracked" rather than as new.
 - For git clones, records the commit you're on as the installed version.
 
 ## Stage 4: Checking for updates

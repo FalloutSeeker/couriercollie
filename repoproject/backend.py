@@ -157,6 +157,8 @@ class Backend(QObject):
             "kind": r.kind,
             "icon": KIND_ICONS.get(r.kind, "package-x-generic"),
             "followText": follow_text,
+            "scanned": r.source == config.SOURCE_SCANNED,
+            "localPath": r.local_path,
         }
 
     # -- the list ---------------------------------------------------------------------------------------------------
@@ -246,7 +248,7 @@ class Backend(QObject):
         except ValueError as e:
             self.addFailed.emit(str(e))
             return
-        if existing := self._config.find(ref.id):
+        if existing := self._config.find_any(ref.id):
             self.addFailed.emit(f"Already tracking this as “{existing.name}”.")
             return
 
@@ -264,7 +266,7 @@ class Backend(QObject):
                 return
             info, rels, default, branches, branch_error = result
             # The address may have redirected to a project we already track (renamed or moved).
-            if existing := self._config.find(info.ref.id):
+            if existing := self._config.find_any(info.ref.id):
                 self.addFailed.emit(f"Already tracking this as “{existing.name}”.")
                 return
             repo = TrackedRepo(
@@ -275,6 +277,8 @@ class Backend(QObject):
                 branch=default or info.default_branch,
                 description=info.description,
                 added_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                # The typed address, if the site redirected (renamed or moved project).
+                aliases=[ref.id] if ref.id.lower() != info.ref.id.lower() else [],
             )
             if rels:
                 self._auto_pick(repo, rels)

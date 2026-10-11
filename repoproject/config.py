@@ -14,6 +14,9 @@ from . import tomlwrite
 FOLLOW_RELEASES = "releases"
 FOLLOW_BRANCH = "branch"
 NOT_INSTALLED = "-"
+# How a repo got onto the list. A manual entry becomes a scanned one when a scan finds it on this computer.
+SOURCE_MANUAL = "manual"
+SOURCE_SCANNED = "scanned"
 
 
 # The choices offered in the window (DESIGN.md §6, §7).
@@ -52,6 +55,12 @@ class TrackedRepo:
     installed: str = ""
     description: str = ""
     added_at: str = ""
+    source: str = SOURCE_MANUAL
+    # Where a scan found it on this computer (a git clone's folder, an AppImage, …). Empty for manual entries.
+    local_path: str = ""
+    # Other addresses for the same project: what was typed when adding, and old names the site redirected from.
+    # A scan matches against these too, so a clone made under an old name isn't added a second time.
+    aliases: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -61,6 +70,12 @@ class Config:
 
     def find(self, repo_id: str) -> TrackedRepo | None:
         return next((r for r in self.repos if r.id == repo_id), None)
+
+    def find_any(self, repo_id: str) -> TrackedRepo | None:
+        """Find a repo by its address or any of its other addresses. Ignores upper/lower case, as GitHub and GitLab
+        do (github.com/ImranR98/Obtainium and github.com/imranr98/obtainium are the same project)."""
+        key = repo_id.lower()
+        return next((r for r in self.repos if key == r.id.lower() or key in (a.lower() for a in r.aliases)), None)
 
 
 class ConfigError(Exception):

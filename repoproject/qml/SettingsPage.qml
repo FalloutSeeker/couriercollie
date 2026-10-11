@@ -68,7 +68,7 @@ Kirigami.ScrollablePage {
         QQC2.Label {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 24
             text: page.s.scanning
-                ? "Looks for git clones and downloaded apps, reads which version you have, and lets you choose which to track. A Scan button appears in the main window."
+                ? "Looks for git clones and downloaded apps, reads which version you have, and lets you choose which to track. A Scan button appears in the main window. You can still add repos by hand; if a scan later finds one on this computer, it switches to the version found there."
                 : "Off: tracking is manual. You add repos yourself, and for each one set which version you have, or mark it as up to date."
             wrapMode: Text.Wrap
             opacity: 0.7

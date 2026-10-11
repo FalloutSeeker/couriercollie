@@ -128,6 +128,13 @@ Kirigami.ScrollablePage {
                 wrapMode: Text.Wrap
             }
 
+            QQC2.Label {
+                Kirigami.FormData.label: "Tracking:"
+                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+                text: page.repo.scanned ? `Found on this computer: ${page.repo.localPath}` : "Added by hand. Set your version yourself."
+                wrapMode: Text.WrapAnywhere
+            }
+
             QQC2.ComboBox {
                 Kirigami.FormData.label: "Follow:"
                 model: ["Releases", "A branch (new commits)"]

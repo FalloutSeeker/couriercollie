@@ -80,6 +80,13 @@ class ConfigTest(unittest.TestCase):
             config.load(self.path)
         self.assertEqual(self.path.read_text(), "this is [not toml")
 
+    def test_find_any_matches_aliases_and_ignores_case(self):
+        cfg = Config(repos=[TrackedRepo(id="gitgud.io/aeroshell/atp/aerothemeplasma", name="A", url="", host="gitlab",
+                                        aliases=["gitgud.io/wackyideas/aerothemeplasma"])])
+        self.assertIsNotNone(cfg.find_any("gitgud.io/WackyIdeas/AeroThemePlasma"))
+        self.assertIsNotNone(cfg.find_any("GITGUD.IO/aeroshell/atp/aerothemeplasma"))
+        self.assertIsNone(cfg.find_any("gitgud.io/someone/else"))
+
     def test_find(self):
         cfg = Config(repos=[TrackedRepo(id="a/b/c", name="C", url="", host="github")])
         self.assertEqual(cfg.find("a/b/c").name, "C")
