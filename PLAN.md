@@ -64,7 +64,9 @@ Each update removes the version it replaced once the new one is in place (no Und
 
 ## Stage 6: Finishing
 
-- **Sign in to GitHub** (DESIGN.md §8).
+- **Sign in to GitHub** (DESIGN.md §8). With it, checks send each repo's last ETag (`If-None-Match`), and an
+  unchanged answer (304) doesn't count against the limit when signed in (GitHub's docs). Signed out, a 304 still
+  counts (tried 2026-10-11) but has no body, so it's still worth sending.
 - App icon, KDE menu entry, and packaging the app itself as an RPM so it installs like anything else.
 - **GNOME support** (checked 2026-10-11 by running the window with GNOME settings; the list, dragging and menus work):
   - Use KDE's control style only if it's installed (`kf6-qqc2-desktop-style`), else a standard Qt style. Without it
