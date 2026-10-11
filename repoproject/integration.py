@@ -13,8 +13,12 @@ from pathlib import Path
 
 APP_ID = "repoproject"
 PROJECT = Path(__file__).resolve().parent.parent
-LAUNCHER = PROJECT / "run.sh"
-ICON = "system-software-update"
+# Run from its project folder (run.sh), or installed (the RPM: a `repoproject` command, and its own menu entry and
+# icon in the system's folders).
+INSTALLED = not (PROJECT / "run.sh").is_file()
+LAUNCHER = Path(shutil.which(APP_ID) or f"/usr/bin/{APP_ID}") if INSTALLED else PROJECT / "run.sh"
+ICON = APP_ID
+ICON_FILE = PROJECT / "data" / f"{APP_ID}.svg"
 TIMER = "repoproject-check"
 
 
@@ -34,25 +38,42 @@ def menu_entry_path() -> Path:
     return _data_home() / "applications" / f"{APP_ID}.desktop"
 
 
-def menu_entry_text() -> str:
+def menu_entry_text(launcher: str | Path = LAUNCHER) -> str:
+    """The menu entry. The RPM installs the same one (data/repoproject.desktop), started as `repoproject`."""
     return (
         "[Desktop Entry]\n"
         "Type=Application\n"
         "Name=RepoProject\n"
         "GenericName=Update Tracker\n"
         "Comment=Keep track of software from GitHub and GitLab, and hear about updates\n"
-        f"Exec={LAUNCHER}\n"
+        f"Exec={launcher}\n"
         f"Icon={ICON}\n"
         "Terminal=false\n"
         "Categories=System;Utility;\n"
     )
 
 
+def icon_path() -> Path:
+    return _data_home() / "icons" / "hicolor" / "scalable" / "apps" / f"{APP_ID}.svg"
+
+
 def install_menu_entry() -> bool:
-    """Write the menu entry if it's missing or out of date (e.g. the project folder moved). Returns True if written.
-    Notifications and the taskbar badge use it to know which app they belong to."""
+    """Run from the project folder: write the menu entry and the app's icon into your home folder if they're missing
+    or out of date (e.g. the project folder moved). Returns True if the entry was written. Notifications and the
+    taskbar badge use it to know which app they belong to.
+
+    Installed: the system has both, so an entry written by a copy run from a project folder is removed, as it would
+    hide the installed one."""
     path, text = menu_entry_path(), menu_entry_text()
     try:
+        if INSTALLED:
+            if path.is_file() and path.read_text(encoding="utf-8").rstrip().endswith("Categories=System;Utility;") \
+                    and "/run.sh" in path.read_text(encoding="utf-8"):
+                path.unlink()
+            return False
+        if ICON_FILE.is_file() and (not icon_path().is_file() or icon_path().read_bytes() != ICON_FILE.read_bytes()):
+            icon_path().parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ICON_FILE, icon_path())
         if path.is_file() and path.read_text(encoding="utf-8") == text:
             return False
         path.parent.mkdir(parents=True, exist_ok=True)

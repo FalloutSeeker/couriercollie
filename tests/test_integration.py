@@ -38,10 +38,28 @@ class MenuEntryTest(TempHome):
         self.assertEqual(path, self.root / "data/applications/repoproject.desktop")
         text = path.read_text()
         self.assertIn(f"Exec={integration.LAUNCHER}\n", text)
-        self.assertIn("Icon=system-software-update\n", text)
+        self.assertIn("Icon=repoproject\n", text)
+        # Its icon too, as installed copies have it in the system's icon folder.
+        self.assertEqual(integration.icon_path().read_bytes(), integration.ICON_FILE.read_bytes())
         self.assertFalse(integration.install_menu_entry())  # already right
         path.write_text(text.replace(str(integration.LAUNCHER), "/old/place/run.sh"))  # the project moved
         self.assertTrue(integration.install_menu_entry())
+
+    def test_installed_copy_leaves_it_to_the_system(self):
+        integration.install_menu_entry()  # from the project folder
+        saved = integration.INSTALLED
+        integration.INSTALLED = True
+        self.addCleanup(setattr, integration, "INSTALLED", saved)
+        self.assertFalse(integration.install_menu_entry())
+        self.assertFalse(integration.menu_entry_path().exists())  # it would hide the system's entry
+        other = integration.menu_entry_path()
+        other.write_text("[Desktop Entry]\nName=Something you made\nExec=/opt/x/run.sh\n")
+        integration.install_menu_entry()
+        self.assertTrue(other.exists())  # not one the app wrote: left alone
+
+    def test_the_rpms_entry_matches(self):
+        self.assertEqual((integration.PROJECT / "data/repoproject.desktop").read_text(),
+                         integration.menu_entry_text("repoproject"))
 
 
 class TimerTest(TempHome):

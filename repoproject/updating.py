@@ -5,6 +5,8 @@ Uses the Backend's settings (`_config`), page data (`_details`), check results (
 and signals.
 """
 
+from __future__ import annotations
+
 import dataclasses
 import os
 import re
