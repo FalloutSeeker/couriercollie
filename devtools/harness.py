@@ -26,6 +26,7 @@ def start(copy_settings_from: Path | None = None, settings: dict | None = None, 
         shutil.copy(copy_settings_from, config_path)
     os.environ["REPOPROJECT_CONFIG"] = str(config_path)
     os.environ["XDG_CACHE_HOME"] = str(config_path.parent / "cache")  # icons found during a check stay out of yours
+    os.environ["REPOPROJECT_STATE"] = str(config_path.parent / "checks.json")  # and so do update-check results
     sys.path.insert(0, str(PROJECT))
     OUT.mkdir(exist_ok=True)
     return Harness({"firstLaunchDone": True, **(settings or {})}, find_icons)
@@ -55,7 +56,9 @@ class Harness:
         self.failures = []
         self._find = self.engine.evaluate("""(function (root, name) {
             function walk(item) {
-                if (item.objectName === name && item.visible) return item;
+                // "text:Check Now" finds a button by its text (toolbar buttons made from actions have no name).
+                const wanted = name.startsWith("text:") ? item.text === name.slice(5) : item.objectName === name;
+                if (wanted && item.visible) return item;
                 for (let i = 0; i < item.children.length; i++) {
                     const found = walk(item.children[i]);
                     if (found) return found;

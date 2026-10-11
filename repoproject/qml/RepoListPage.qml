@@ -10,7 +10,8 @@ Kirigami.ScrollablePage {
 
     // The Scan button is only in the list while scanning is allowed. Listing it hidden instead makes Kirigami log
     // "Could not create delegate for ToolBarLayout" at start-up.
-    actions: backend.settings.scanning ? [addAction, scanAction, settingsAction] : [addAction, settingsAction]
+    actions: backend.settings.scanning ? [addAction, scanAction, checkAction, settingsAction]
+                                       : [addAction, checkAction, settingsAction]
 
     Kirigami.Action {
         id: addAction
@@ -27,6 +28,16 @@ Kirigami.ScrollablePage {
         icon.name: "edit-find"
         text: "Scan…"
         onTriggered: applicationWindow().showScanDialog()
+    }
+
+    Kirigami.Action {
+        id: checkAction
+
+        objectName: "checkNow"
+        icon.name: "system-software-update"
+        text: backend.checking ? "Checking\u2026" : "Check Now"
+        enabled: !backend.checking
+        onTriggered: backend.checkNow()
     }
 
     Kirigami.Action {
@@ -98,6 +109,70 @@ Kirigami.ScrollablePage {
                 }
             }
         }
+
+        // How many updates, and when it last checked and checks next.
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.margins: Kirigami.Units.largeSpacing
+            Layout.topMargin: Kirigami.Units.smallSpacing
+            Layout.bottomMargin: Kirigami.Units.smallSpacing
+            spacing: Kirigami.Units.smallSpacing
+
+            QQC2.BusyIndicator {
+                visible: backend.checking
+                running: visible
+                Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+            }
+
+            Kirigami.Icon {
+                visible: !backend.checking && backend.checks.updates > 0
+                source: "update-low"
+                Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+            }
+
+            QQC2.Label {
+                objectName: "checkSummary"
+                Layout.fillWidth: true
+                text: {
+                    const c = backend.checks;
+                    if (backend.checking)
+                        return "Checking for updates\u2026";
+                    const parts = [];
+                    if (c.lastChecked)
+                        parts.push(c.updates === 1 ? "1 update" : `${c.updates} updates`, `checked ${c.lastChecked}`);
+                    else
+                        parts.push("Not checked yet");
+                    parts.push(c.autoCheck ? (c.nextCheck ? `next check ${c.nextCheck}` : "checks automatically")
+                                           : "automatic checks are off");
+                    return parts.join(" \u00b7 ");
+                }
+                font.bold: !backend.checking && backend.checks.updates > 0
+                elide: Text.ElideRight
+            }
+        }
+
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
+            visible: backend.checks.error !== ""
+            type: Kirigami.MessageType.Error
+            text: `Couldn\u2019t check for updates: ${backend.checks.error}`
+        }
+
+        Kirigami.InlineMessage {
+            objectName: "rateLimitBar"
+            Layout.fillWidth: true
+            visible: !backend.checking && backend.checks.rateLimited > 0
+            type: Kirigami.MessageType.Warning
+            showCloseButton: true
+            text: {
+                const c = backend.checks;
+                const which = c.rateLimited === 1 ? "1 repo wasn\u2019t checked" : `${c.rateLimited} repos weren\u2019t checked`;
+                const when = c.rateLimitEnds ? ` It can be checked again after ${c.rateLimitEnds}.` : "";
+                return `The site\u2019s hourly limit for requests was reached, so ${which}; it keeps its last result.${when}`;
+            }
+        }
     }
 
     ListView {
@@ -165,6 +240,39 @@ Kirigami.ScrollablePage {
                         font: Kirigami.Theme.smallFont
                         opacity: 0.7
                         elide: Text.ElideMiddle
+                    }
+                }
+
+                // The last check's result; an update gets the update icon.
+                ColumnLayout {
+                    Layout.maximumWidth: Kirigami.Units.gridUnit * 10
+                    visible: row.modelData.checkText !== ""
+                    spacing: 0
+
+                    Kirigami.Icon {
+                        objectName: "updateIcon:" + row.modelData.id
+                        Layout.alignment: Qt.AlignRight
+                        visible: row.modelData.updateAvailable
+                        source: "update-low"
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                    }
+
+                    QQC2.Label {
+                        Layout.alignment: Qt.AlignRight
+                        Layout.maximumWidth: Kirigami.Units.gridUnit * 10
+                        horizontalAlignment: Text.AlignRight
+                        // Bold through the text itself: setting font.bold here would replace the small font.
+                        text: {
+                            const t = row.modelData.checkText.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+                            return row.modelData.updateAvailable ? `<b>${t}</b>` : t;
+                        }
+                        textFormat: Text.StyledText
+                        font: Kirigami.Theme.smallFont
+                        opacity: row.modelData.updateAvailable ? 1 : 0.7
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
                     }
                 }
             }

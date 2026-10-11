@@ -52,6 +52,9 @@ Later option: the "custom dnf" idea, a local package repo the app fills, so `dnf
 - **Toasts can be turned off**, leaving just the badge and the ⬆ icons.
 - **Only from the background** (KDE HIG, status changes): a toast is sent only when the main window isn't open or
   in front. With the window in front, new updates show in the window itself.
+- **As built (stage 4):** the timer wakes hourly (and after login) and the checker decides if the interval has passed,
+  so the interval counts from the last check. Each update is announced once. The badge only shows while the app is
+  open: Plasma clears a badge when the app that set it closes.
 
 **Status:** decided 2026-10-10.
 

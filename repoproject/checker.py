@@ -1,0 +1,208 @@
+"""Checking every tracked repo for updates (PLAN.md stage 4).
+
+Requests per check (DECISIONS.md, D7): one for a repo that follows releases; none for a branch (git ls-remote), plus
+one or two to compare when your commit isn't the branch's newest. Scanned repos read their version from disk.
+Once GitHub says its hourly limit is reached, the remaining GitHub repos aren't asked; they keep "not checked".
+
+Results are kept in their own file (`state_path()`), not the settings file: the background checker writes them
+while the window may be open, and the window owns the settings file. Nothing here installs anything.
+"""
+
+import dataclasses
+import json
+import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+from . import assets, scan, sources
+from .config import FOLLOW_BRANCH, NOT_INSTALLED, SOURCE_SCANNED, Settings, TrackedRepo
+from .sources import RepoRef, SourceError
+
+# What a check found.
+UP_TO_DATE = "up-to-date"
+UPDATE = "update"
+NOT_INSTALLED_YET = "not-installed"
+OTHER = "other"  # your version is ahead of, or not on, the followed branch: not an update
+NO_RELEASES = "no-releases"
+FAILED = "failed"
+RATE_LIMITED = "rate-limited"
+
+CHECKS_AT_ONCE = 4
+
+
+@dataclass
+class Result:
+    status: str
+    text: str  # one line for the list, e.g. "Update available: v1.19.0"
+    newest: str = ""  # the newest version seen (a tag, or a branch's newest commit)
+    checked_at: str = ""
+    retry_after: str = ""  # when a rate limit ends (ISO time), if that's why it wasn't checked
+    # This is the previous check's result, kept because this time the site's hourly limit stopped the check.
+    not_rechecked: bool = False
+
+
+@dataclass
+class State:
+    last_run: str = ""  # when the last check of everything finished (ISO time)
+    results: dict[str, Result] = field(default_factory=dict)
+    # The newest version already announced for each repo, so a notification is only sent for something new.
+    notified: dict[str, str] = field(default_factory=dict)
+
+    def updates(self) -> list[str]:
+        return [repo_id for repo_id, r in self.results.items() if r.status == UPDATE]
+
+
+def state_path() -> Path:
+    if env := os.environ.get("REPOPROJECT_STATE"):
+        return Path(env)
+    base = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    return base / "repoproject" / "checks.json"
+
+
+def load_state(path: Path | None = None) -> State:
+    """The saved results; empty if there are none yet, or the file can't be read (it's only a record of checks)."""
+    path = path or state_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return State(
+            last_run=str(data.get("last_run", "")),
+            results={k: Result(**v) for k, v in data.get("results", {}).items()},
+            notified={str(k): str(v) for k, v in data.get("notified", {}).items()},
+        )
+    except (OSError, ValueError, TypeError, AttributeError):
+        return State()
+
+
+def save_state(state: State, path: Path | None = None) -> None:
+    path = path or state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(asdict(state), indent=1), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def due(settings: Settings, state: State, at: datetime | None = None) -> bool:
+    """Whether an automatic check is due: automatic checks are on, and the interval has passed since the last one."""
+    if not settings.auto_check:
+        return False
+    if not state.last_run:
+        return True
+    try:
+        last = datetime.fromisoformat(state.last_run)
+    except ValueError:
+        return True
+    return (at or now()) - last >= timedelta(hours=settings.check_interval_hours)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# One repo
+
+
+def _yours(repo: TrackedRepo) -> str:
+    """Your version: read from disk for a scanned repo (it may have been updated outside the app)."""
+    if repo.source == SOURCE_SCANNED and repo.local_path:
+        version, _present = scan.version_on_disk(repo.local_path)
+        if version:
+            return version
+    return repo.installed
+
+
+def _check_releases(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
+    shown = [r for r in sources.releases(ref, repo.host) if repo.prereleases or not r.prerelease]
+    if not shown:
+        return Result(NO_RELEASES, "No releases yet")
+    newest = shown[0].tag
+    if not yours or yours == NOT_INSTALLED:
+        return Result(NOT_INSTALLED_YET, f"Not installed · newest {newest}", newest)
+    if assets.version_of(yours) == assets.version_of(newest) or yours == newest:
+        return Result(UP_TO_DATE, "Up to date", newest)
+    return Result(UPDATE, f"Update available: {newest}", newest)
+
+
+def _check_branch(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
+    default, branches = sources.branches(ref)  # git, not the API
+    branch = repo.branch or default
+    head = next((b.sha for b in branches if b.name == branch), "")
+    if not head:
+        return Result(FAILED, f"Couldn’t check: there’s no branch “{branch}” anymore")
+    if not yours or yours == NOT_INSTALLED:
+        return Result(NOT_INSTALLED_YET, f"Not installed · following {branch}", head)
+    if yours == head:
+        return Result(UP_TO_DATE, "Up to date", head)
+    try:
+        c = sources.compare(ref, repo.host, yours, head)
+    except sources.RateLimited:
+        raise
+    except SourceError:
+        return Result(OTHER, f"Couldn’t compare your version with {branch}", head)
+    if c.relation == sources.BEHIND:
+        count = "1 new commit" if c.total == 1 else f"{c.total} new commits"
+        return Result(UPDATE, f"{count} on {branch}", head)
+    if c.relation == sources.AHEAD:
+        return Result(OTHER, f"Your version is newer than {branch}", head)
+    if c.relation == sources.SAME:
+        return Result(UP_TO_DATE, "Up to date", head)
+    return Result(OTHER, f"Not comparable with {branch}", head)
+
+
+def check_repo(repo: TrackedRepo, github_limited: threading.Event | None = None) -> Result:
+    """Check one repo. `github_limited` is shared by a check of everything: once GitHub says its hourly limit is
+    reached, the other GitHub repos aren't asked."""
+    ref = RepoRef.from_id(repo.id)
+    if github_limited is not None and github_limited.is_set() and repo.host == "github":
+        return Result(RATE_LIMITED, "Not checked: GitHub’s hourly limit was reached")
+    try:
+        yours = _yours(repo)
+        if repo.follow == FOLLOW_BRANCH:
+            result = _check_branch(repo, ref, yours)
+        else:
+            result = _check_releases(repo, ref, yours)
+    except sources.RateLimited as e:
+        if repo.host == "github" and github_limited is not None:
+            github_limited.set()
+        until = f" (until {e.reset_at.astimezone():%H:%M})" if e.reset_at else ""
+        return Result(RATE_LIMITED, f"Not checked: {ref.domain}’s hourly limit was reached{until}",
+                      retry_after=e.reset_at.isoformat() if e.reset_at else "", checked_at=now().isoformat())
+    except SourceError as e:
+        return Result(FAILED, f"Couldn’t check: {e}", checked_at=now().isoformat())
+    result.checked_at = now().isoformat(timespec="seconds")
+    return result
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Everything
+
+
+def check_all(repos: list[TrackedRepo], previous: State | None = None) -> tuple[State, list[str]]:
+    """Check every repo, a few at a time. Returns the new state, and the repos with an update that hasn't been
+    announced before (for a notification). Repos that couldn't be checked keep their previous result's version."""
+    previous = previous or State()
+    github_limited = threading.Event()
+    with ThreadPoolExecutor(max_workers=CHECKS_AT_ONCE) as pool:
+        results = dict(zip((r.id for r in repos), pool.map(lambda r: check_repo(r, github_limited), repos)))
+    # GitHub repos checked before the limit was hit kept their answers; ones skipped after it get the reset time
+    # from the repo that hit it.
+    reset = next((r.retry_after for r in results.values() if r.status == RATE_LIMITED and r.retry_after), "")
+    for r in results.values():
+        if r.status == RATE_LIMITED and not r.retry_after:
+            r.retry_after = reset
+    # A repo the limit stopped keeps its last result (an update is still an update), marked as not rechecked.
+    for repo_id, r in list(results.items()):
+        old = previous.results.get(repo_id)
+        if r.status == RATE_LIMITED and old and old.status not in (RATE_LIMITED, FAILED):
+            results[repo_id] = dataclasses.replace(old, not_rechecked=True, retry_after=r.retry_after)
+    state = State(last_run=now().isoformat(timespec="seconds"), results=results,
+                  notified={k: v for k, v in previous.notified.items() if k in results})
+    fresh = []
+    for repo_id, r in results.items():
+        if r.status == UPDATE and not r.not_rechecked and previous.notified.get(repo_id) != r.newest:
+            fresh.append(repo_id)
+            state.notified[repo_id] = r.newest
+    return state, fresh

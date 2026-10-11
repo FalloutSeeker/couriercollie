@@ -69,6 +69,17 @@ Kirigami.ApplicationWindow {
             firstLaunch.open();
     }
 
+    // A second launch, or a click on an update notification: bring this window to the front.
+    Connections {
+        function onActivateRequested() {
+            root.show();
+            root.raise();
+            root.requestActivate();
+        }
+
+        target: backend
+    }
+
     FirstLaunchDialog {
         id: firstLaunch
 

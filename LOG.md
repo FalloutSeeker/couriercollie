@@ -4,6 +4,16 @@ Newest first.
 
 ## 2026-10-10
 
+- Built stage 4, checking for updates (DESIGN.md §9): Check Now, per-repo results with the update icon, a status line,
+  the rate-limit bar; background checks through a systemd user timer that only checks when the interval has passed;
+  notifications (only new updates, only when the window isn't in front, click opens the app); the taskbar badge while
+  the app is open; one copy at a time. The menu entry came forward from stage 6.
+  - Results live in their own file, so the background checker and the window can't overwrite each other.
+  - Found while testing on this machine: systemd stopped the notification's click helper when the check finished, so
+    clicking wouldn't have opened the app. Fixed with `KillMode=process` in the service.
+  - Found while testing: my window-check harness wrote check results into the real `~/.local/state`; removed them
+    and the harness now uses a temporary file.
+  - Repos skipped because of the hourly limit keep their last result (marked "not rechecked") instead of losing it.
 - Repo icons (D13): looked up once per repo, in order: on this computer (scanned RPM's menu entry, scanned AppImage's
   own icon read with 7z without running it, icon file in a scanned clone, matching installed app), then the
   project's picture on its site (GitLab project/group, GitHub organizations only), then the default. Scanned repos

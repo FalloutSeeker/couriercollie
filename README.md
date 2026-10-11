@@ -6,9 +6,9 @@ schedule, and lets you update with a click.
 
 ## Status
 
-**Stages 1–3 of PLAN.md are built.** You can add GitHub/GitLab repos by hand or scan this computer for them, browse
-their releases, build files and branches, and set which version you have. Update checks, installing and cleanup
-aren't built yet, so those settings have no effect for now.
+**Stages 1–4 of PLAN.md are built.** You can add GitHub/GitLab repos by hand or scan this computer for them, browse
+their releases, build files and branches, and set which version you have, and check for updates (by hand or in the background,
+with notifications). Installing updates (stage 5) and cleanup (stage 6) aren't built yet.
 
 ## Running it
 
@@ -18,6 +18,20 @@ aren't built yet, so those settings have no effect for now.
 
 Needs only what Fedora KDE already has: Python 3, PySide6 (`python3-pyside6`) and Kirigami. Your tracked repos are
 saved in `~/.config/repoproject/repos.toml`.
+
+Other ways to run it:
+
+```sh
+~/claudework/RepoProject/run.sh --check   # check every repo for updates now, without the window
+```
+
+**What it adds outside this folder** (all removable):
+
+- `~/.local/share/applications/repoproject.desktop`: the menu entry (written when the app starts).
+- `~/.config/systemd/user/repoproject-check.{timer,service}`: background checks, only while automatic checks are on
+  (Settings). Turning them off removes the timer. To remove it by hand:
+  `systemctl --user disable --now repoproject-check.timer`.
+- `~/.local/state/repoproject/checks.json`: the last check's results. `~/.cache/repoproject/icons/`: repo icons.
 
 To start over as if newly installed (the welcome screen shows again), run it with `--reset`. Your settings file is
 renamed to a dated backup next to it, not deleted:
@@ -43,6 +57,7 @@ python3 -I devtools/check_pages.py  # clicks through the welcome screen, list, r
 python3 -I devtools/check_settings.py        # the folder list in Settings
 python3 -I devtools/check_scanned_repo.py    # a scanned clone's page: version from disk, new commits, branches
 python3 -I devtools/check_icons.py           # looks up icons for your repos (temporary cache folder)
+python3 -I devtools/check_updates.py         # Check Now, the status line, results, the rate-limit bar
 ```
 
 ## Code layout
@@ -54,6 +69,8 @@ python3 -I devtools/check_icons.py           # looks up icons for your repos (te
 | `repoproject/assets.py`    | Build files: which kind, whether it suits this PC, remembering your pick       |
 | `repoproject/scan.py`      | Scanning: finding clones, RPMs and AppImages; matching them to tracked repos     |
 | `repoproject/icons.py`     | Repo icons: from this computer, the project's site, or the default (D13)          |
+| `repoproject/checker.py`   | Checking every repo for updates; results kept apart from settings                 |
+| `repoproject/integration.py` | Menu entry, notifications, taskbar badge, background timer, one copy at a time |
 | `repoproject/backend.py`   | Connects the window to the above; runs network work in the background          |
 | `repoproject/qml/`         | The window: list page, repo page, Add dialog                                   |
 

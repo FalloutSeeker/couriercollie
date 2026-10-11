@@ -4,15 +4,17 @@ The window calls the slots here and shows the properties. Anything that touches 
 so the window never freezes; results are handed back to the main thread through `_deliver`.
 """
 
+import dataclasses
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from PySide6.QtCore import Property, QObject, Signal, Slot
+from PySide6.QtCore import Property, QFileSystemWatcher, QObject, QProcess, Qt, Signal, Slot
+from PySide6.QtGui import QGuiApplication
 
-from . import assets, config, icons, scan, sources
+from . import assets, checker, config, icons, integration, scan, sources
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, Config, ConfigError, TrackedRepo
 from .sources import RepoRef, SourceError
 
@@ -57,6 +59,24 @@ def _whole_number(value) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _plus_hours(when: str, hours: int) -> str:
+    try:
+        return (datetime.fromisoformat(when) + timedelta(hours=hours)).isoformat()
+    except ValueError:
+        return ""
+
+
+def _when_text(when: str) -> str:
+    """"14:02" today, "yesterday 14:02", "tomorrow 14:02", else "12 Oct 14:02"."""
+    try:
+        moment = datetime.fromisoformat(when).astimezone()
+    except ValueError:
+        return ""
+    days = (moment.date() - datetime.now().astimezone().date()).days
+    day = {0: "", -1: "yesterday ", 1: "tomorrow "}.get(days, f"{moment:%-d %b} ")
+    return f"{day}{moment:%H:%M}"
 
 
 def _size_text(size: int | None) -> str:
@@ -170,14 +190,19 @@ class Backend(QObject):
     detailsChanged = Signal(str)  # repo id
     settingsChanged = Signal()
     scanChanged = Signal()
+    checksChanged = Signal()
+    activateRequested = Signal()  # bring the window to the front (a second launch, or a notification was clicked)
     saveErrorChanged = Signal()
     _deliver = Signal(object)
 
-    def __init__(self, config_path: Path | None = None, parent=None, find_icons: bool = False):
-        """`find_icons`: look up icons for repos (icons.py). Off by default so tests don't reach the network; the
-        app turns it on."""
+    def __init__(self, config_path: Path | None = None, parent=None, find_icons: bool = False,
+                 desktop: bool = False):
+        """`find_icons`: look up icons for repos (icons.py). `desktop`: notifications, the taskbar badge, and the
+        background-check timer (integration.py). Both off by default, so tests stay off the network and the desktop;
+        the app turns them on."""
         super().__init__(parent)
         self._find_icons = find_icons
+        self._desktop = desktop
         self._icons_pending: set[str] = set()
         self._path = config_path
         self._config_error = ""
@@ -198,7 +223,20 @@ class Backend(QObject):
         self._scan_updated: list[str] = []  # names of tracked repos updated by the last scan
         self._pool = ThreadPoolExecutor(max_workers=4)
         self._deliver.connect(lambda fn: fn())
-
+        # Check results live in their own file (checker.py); next to the settings file when one is given (tests).
+        self._state_path = config_path.parent / "checks.json" if config_path else checker.state_path()
+        self._checks = checker.load_state(self._state_path)
+        self._checking = False
+        self._check_error = ""
+        self._notifications: list[QProcess] = []
+        # The background checker writes the results file when the app isn't open; pick up changes made meanwhile.
+        self._watcher = QFileSystemWatcher(self)
+        self._state_path.parent.mkdir(parents=True, exist_ok=True)
+        self._watcher.addPath(str(self._state_path.parent))
+        self._watcher.directoryChanged.connect(self._reload_checks)
+        if self._desktop and not self._config_error:
+            integration.set_background_checks(self._config.settings.auto_check)
+            self._update_badge()
     def shutdown(self):
         self._pool.shutdown(wait=False, cancel_futures=True)
 
@@ -264,6 +302,7 @@ class Backend(QObject):
             "followText": follow_text,
             "scanned": r.source == config.SOURCE_SCANNED,
             "localPath": r.local_path,
+            **self._check_dict(r.id),
         }
 
     @staticmethod
@@ -275,6 +314,121 @@ class Backend(QObject):
         if r.icon.startswith("file:") and Path(r.icon.removeprefix("file:")).is_file():
             return "file://" + r.icon.removeprefix("file:")
         return KIND_ICONS.get(r.kind, "package-x-generic")
+
+    # -- checking for updates (stage 4) ------------------------------------------------------------------------------
+
+    def _check_dict(self, repo_id: str) -> dict:
+        result = self._checks.results.get(repo_id)
+        return {
+            "checkStatus": result.status if result else "",
+            "checkText": (result.text + (" (not rechecked: hourly limit)" if result.not_rechecked else ""))
+                         if result else "",
+            "updateAvailable": bool(result) and result.status == checker.UPDATE,
+        }
+
+    @Property(bool, notify=checksChanged)
+    def checking(self):
+        return self._checking
+
+    @Property("QVariantMap", notify=checksChanged)
+    def checks(self):
+        """For the list's header: how many updates, when it last checked, when it checks next, and problems."""
+        tracked = {r.id for r in self._config.repos}
+        results = {k: v for k, v in self._checks.results.items() if k in tracked}
+        limited = [v for v in results.values() if v.status == checker.RATE_LIMITED or v.not_rechecked]
+        reset = next((v.retry_after for v in limited if v.retry_after), "")
+        s = self._config.settings
+        return {
+            "updates": sum(1 for v in results.values() if v.status == checker.UPDATE),
+            "lastChecked": _when_text(self._checks.last_run),
+            "nextCheck": _when_text(_plus_hours(self._checks.last_run, s.check_interval_hours))
+                         if s.auto_check and self._checks.last_run else "",
+            "autoCheck": s.auto_check,
+            "rateLimited": len(limited),
+            "rateLimitEnds": _when_text(reset),
+            "error": self._check_error,
+        }
+
+    @Slot()
+    def checkNow(self):
+        """Check every tracked repo (checker.py). Repos are copied, so changes made while it runs don't mix in."""
+        if self._checking:
+            return
+        repos = [dataclasses.replace(r) for r in self._config.repos]
+        previous = self._checks
+        self._checking, self._check_error = True, ""
+        self.checksChanged.emit()
+
+        def done(result, error):
+            self._checking = False
+            if error:
+                self._check_error = self._error_text(error)
+            else:
+                self._checks, fresh = result
+                try:
+                    checker.save_state(self._checks, self._state_path)
+                except OSError:
+                    pass  # the results still show; they're just not kept for next time
+                self._announce(fresh)
+                self._update_badge()
+                for r in self._config.repos:  # what's new may have changed: reload repo pages when next shown
+                    if r.id in self._details and self._details[r.id].state == "ready":
+                        self._details.pop(r.id)
+            self.checksChanged.emit()
+            self.reposChanged.emit()
+
+        self._run(lambda: checker.check_all(repos, previous), done)
+
+    @Slot(str)
+    def handleRequest(self, message):
+        """From integration.tell_running_app: "show" (a second launch) or "check" (the background timer)."""
+        if message == "show":
+            self.activateRequested.emit()
+        elif message == "check":
+            self.checkNow()
+
+    def _reload_checks(self, *_):
+        if not self._checking:
+            self._checks = checker.load_state(self._state_path)
+            self.checksChanged.emit()
+            self.reposChanged.emit()
+            self._update_badge()
+
+    def _announce(self, fresh: list[str]):
+        """A notification for newly found updates, only when the window isn't in front (KDE HIG); with the window in
+        front, the list shows them. Clicking it brings the window forward."""
+        if not fresh or not self._desktop or not self._config.settings.toasts:
+            return
+        if QGuiApplication.applicationState() == Qt.ApplicationState.ApplicationActive:
+            return
+        names = [r.name for r in self._config.repos if r.id in fresh]
+        command = integration.notify_command(*integration.updates_message(names))
+        if not command:
+            return
+        process = QProcess(self)
+        self._notifications.append(process)
+
+        def finished(*_):
+            if bytes(process.readAllStandardOutput()).decode().strip() == "default":
+                self.activateRequested.emit()
+            self._notifications.remove(process)
+            process.deleteLater()
+
+        process.finished.connect(finished)
+        process.start(command[0], command[1:])
+
+    def _update_badge(self):
+        """The number of repos with updates, on the app's taskbar icon. Plasma removes it when the app closes."""
+        if not self._desktop:
+            return
+        from PySide6.QtDBus import QDBusConnection, QDBusMessage
+
+        count = len([r for r in self._config.repos if self._check_dict(r.id)["updateAvailable"]])
+        message = QDBusMessage.createSignal(f"/io/github/{integration.APP_ID}", "com.canonical.Unity.LauncherEntry",
+                                            "Update")
+        message.setArguments([f"application://{integration.APP_ID}.desktop",
+                              {"count": count, "count-visible": count > 0}])
+        QDBusConnection.sessionBus().send(message)
 
     # -- icons ------------------------------------------------------------------------------------------------------
 
@@ -374,15 +528,19 @@ class Backend(QObject):
         s = self._config.settings
         bools = {"firstLaunchDone": "first_launch_done", "autoCheck": "auto_check", "toasts": "toasts",
                  "scanning": "scanning", "deleteOld": "delete_old"}
+        auto_before = s.auto_check
         for key, attr in bools.items():
             if isinstance(changes.get(key), bool):
                 setattr(s, attr, changes[key])
+        if self._desktop and s.auto_check != auto_before:
+            integration.set_background_checks(s.auto_check)
         if (hours := _whole_number(changes.get("checkIntervalHours"))) in config.CHECK_INTERVALS_HOURS:
             s.check_interval_hours = hours
         if (days := _whole_number(changes.get("deleteOldDays"))) in config.DELETE_AFTER_DAYS:
             s.delete_old_days = days
         self._save()
         self.settingsChanged.emit()
+        self.checksChanged.emit()  # "next check" depends on these
 
     @Slot(str)
     def addScanFolder(self, folder):

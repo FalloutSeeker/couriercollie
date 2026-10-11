@@ -12,7 +12,7 @@ AeroThemePlasma and ultrakanban repos), and nothing in a stage can change your s
 | 5     | Click ⬆ to update                                                     | Yes, on your click   |
 | 6     | Old-version cleanup, GitHub sign-in, app icon, installable package    | No                   |
 
-**Progress:** stages 1–3 done, plus the first-launch screen and Settings page from stage 4 (2026-10-10).
+**Progress:** stages 1–4 done (2026-10-10). The menu entry was pulled forward from stage 6 (notifications and the badge need it).
 
 ## Stage 1: Skeleton (done)
 
@@ -37,7 +37,7 @@ AeroThemePlasma and ultrakanban repos), and nothing in a stage can change your s
   scanned, never added twice. In the results, those show as "already tracked" rather than as new.
 - For git clones, records the commit you're on as the installed version.
 
-## Stage 4: Checking for updates
+## Stage 4: Checking for updates (done)
 
 - **Check now** button, using the light-touch methods from D7 (`git ls-remote` for clones, one request per release
   repo, "has anything changed?" requests, backing off when told to).

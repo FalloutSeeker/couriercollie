@@ -236,6 +236,25 @@ Signing in is never required. The Settings section explains why someone would do
 └────────────────────────────────────────────────────────────────┘
 ```
 
+### 9. Checking for updates (built in stage 4)
+
+- **Check Now** in the list's toolbar checks every repo; the line under the filters shows "3 updates · checked 21:53 ·
+  next check tomorrow 21:53" (or "automatic checks are off"). Each row shows its result on the right, with the update
+  icon for an update.
+- **Requests per check:** one per repo that follows releases; none for a branch (`git ls-remote`), plus one or two to
+  compare when your commit isn't the branch's newest. Scanned repos read their version from disk. Four at a time.
+- **Hourly limit:** once GitHub says it's reached, the other GitHub repos aren't asked; they keep their last result,
+  marked "not rechecked", and a bar says when they can be checked again.
+- **Results** are kept in `~/.local/state/repoproject/checks.json`, apart from the settings file, so the background
+  checker and the open window never overwrite each other's changes.
+- **Background:** a systemd user timer (`repoproject-check.timer`) wakes hourly, after a missed hour, and 3 minutes
+  after login, and runs `run.sh --check --if-due`. That only checks if automatic checks are on and the interval has
+  passed since the last check. If the app is open, it hands the check to the app.
+- **Notifications** only for updates not announced before, and only when the window isn't in front; clicking one opens
+  (or brings forward) the app. The **taskbar badge** shows the number of updates while the app is open (Plasma clears a
+  badge when its app closes).
+- **One copy at a time:** opening the app again brings the open window forward.
+
 ## How it works underneath (plain version)
 
 - **One settings file** (`~/.config/repoproject/repos.toml`) lists what's tracked, which build file or branch to
