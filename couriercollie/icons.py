@@ -48,7 +48,7 @@ def _cache_name(repo_id: str, suffix: str) -> Path:
 
 def _keep(repo_id: str, data: bytes, suffix: str) -> str:
     """Save a picture in the cache folder. Returns "file:<path>", or "" if it's too big or not a picture."""
-    if not data or len(data) > MAX_BYTES or suffix not in IMAGE_SUFFIXES + (".jpeg",):
+    if not data or len(data) > MAX_BYTES or suffix not in IMAGE_SUFFIXES:
         return ""
     if suffix != ".svg" and not _looks_like_image(data):
         return ""

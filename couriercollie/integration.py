@@ -152,7 +152,8 @@ def _unit_dir() -> Path:
 
 
 def unit_texts() -> dict[str, str]:
-    """The timer wakes up hourly, after a missed hour (the computer was off), and a few minutes after login. The
+    """The timer wakes up hourly, after a missed hour (the computer was off), and 3 minutes after login (by then the
+    network is usually up, so the check doesn't fail for want of a connection). The
     checker then only checks if the chosen interval has passed since the last check (checker.due), so the interval
     is counted from the last check, and a missed check happens soon after the next login."""
     return {
