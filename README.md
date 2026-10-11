@@ -72,7 +72,8 @@ Settings has how often to check (or never), notifications, scan folders and GitH
 
 - Nothing updates until you click Update.
 - Downloads are checked against the project's published checksum. You're warned when there isn't one.
-- Your password is only asked for packages (through your package manager) and for clones owned by the system.
+- It only asks for your password when an update changes system files: installing a package (your package
+  manager asks), or updating a git clone owned by the system, such as one in `/opt`.
 - A project's install script is shown to you before it runs.
 
 **Does it run all the time?** No, but automatic checks don't need the window. With them on, a small background
