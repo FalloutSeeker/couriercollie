@@ -16,6 +16,10 @@ them into categories, browse their releases, build files and branches, set which
 newest release), AppImages and programs from release archives are downloaded, checked and swapped in, and RPMs are
 installed with dnf. Stage 6 (GitHub sign-in, packaging, GNOME) and stage 7 (release) aren't built yet.
 
+**Developed and tested mainly on Fedora KDE.** Git clones, AppImages and programs from release archives should work
+on other distros, but those (and GNOME) still need thorough testing, and package handling is Fedora's (dnf) for now.
+If you try it elsewhere, please say how it went in a GitHub issue, whether it worked or not.
+
 ## Running it
 
 ```sh

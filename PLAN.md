@@ -75,6 +75,19 @@ Each update removes the version it replaced once the new one is in place (no Und
   - Follow GNOME's dark mode: KDE's style takes colors from KDE settings, so on GNOME it likely stays light. Needs a
     real GNOME session to confirm.
   - Known and fine: no taskbar badge on GNOME's dock (Dash to Dock shows it); it looks like a KDE app.
+- **Other distros** (asked for 2026-10-11). Fedora KDE stays the main target; these make the app safe and useful
+  elsewhere:
+  - Which package files suit this computer depends on what it has: `.rpm` only where dnf is (today any `.rpm` is
+    offered, and Install fails on Arch); `.deb` where apt is (today always marked "for Debian/Ubuntu"). Arch packages
+    (`.pkg.tar.zst`) are recognised as packages, not unpacked as a program archive.
+  - Installing them: `.deb` with apt, Arch packages with pacman, RPMs with zypper on openSUSE (each through pkexec,
+    as dnf is now), and the scan finding packages installed from downloaded files with each of those, where the
+    package manager can tell.
+  - Single-file `.flatpak` bundles in releases: installed from a file they usually never update, like an RPM from a
+    downloaded file, so the app could install and update them. (Installed Flatpaks stay Flatpak's to update.)
+  - Packages besides the RPM: an AUR package, maybe a `.deb`. Not a Flatpak of the app itself: its sandbox blocks
+    scanning folders, running git, dnf and pkexec, `~/.local/bin` and the systemd timer.
+  - The libraries' package names per distro (PySide6, Kirigami, KDE's control style), for the README.
 
 ## Stage 7: Release (once the app is complete)
 
@@ -103,7 +116,9 @@ Each update removes the version it replaced once the new one is in place (no Und
 - **Restore to Defaults** in the Settings window: every setting back to how it was on a fresh start (automatic
   checks, notifications, scanning and its folders). Tracked repos and categories are kept.
   Asks first.
-- **User documentation** (a short guide in the README, or Help in the app). Open with what the app is for:
+- **User documentation** (a short guide in the README, or Help in the app). Say up front that it was developed and
+  tested mainly on Fedora KDE; other distros (and GNOME) still need thorough testing, and reports from them are
+  welcome, through Send Feedback or a GitHub issue. Open with what the app is for:
   **everything in one place, in a simple window**, instead of several separate tools. Each of these covers one piece
   (check each is still accurate when writing):
   - *Topgrade* runs every updater you have (dnf, Flatpak, …) from a terminal, but doesn't know about software you
