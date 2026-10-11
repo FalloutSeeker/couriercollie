@@ -55,6 +55,9 @@ h.run([
     (0, lambda: expand("v1.18.0", 2)),
     (300, lambda: h.click("mine:v1.18.0")),
     (300, lambda: h.check("Set as My Version", b.details(LS)["versionText"] == "v1.18.0")),
+    (0, lambda: h.check("status box: yours, then the newest", h.find("yourVersion") and h.find("newestVersion")
+                        and b.details(LS)["headline"] == "Update available")),
+    (300, lambda: h.shot("pages-1-status")),
     (0, lambda: h.shot("pages-1-repo")),
     (0, lambda: h.click("markNotInstalled")),
     (300, lambda: h.check("Mark as Not Installed", b.details(LS)["versionText"] == "Not installed")),

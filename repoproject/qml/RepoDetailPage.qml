@@ -14,6 +14,7 @@ Kirigami.ScrollablePage {
     // Which releases are opened up, by tag. Kept here so they stay open when the list is refreshed.
     property var expanded: ({})
     readonly property bool followsReleases: repo.follow === "releases"
+    readonly property string currentBranch: ((details.branches || []).find(b => b.selected) || {}).name || ""
     readonly property bool ready: details.state === "ready"
     // A scanned repo's version is read from disk, so it isn't set by hand.
     readonly property bool canMarkUpToDate: ready && !details.versionFromDisk && details.status !== ""
@@ -130,142 +131,320 @@ Kirigami.ScrollablePage {
             }
         }
 
-        Kirigami.FormLayout {
+        // ---- Name, what it is, and where -------------------------------------------------------------------------
+
+        RowLayout {
             Layout.fillWidth: true
+            spacing: Kirigami.Units.largeSpacing
 
-            QQC2.Label {
-                Kirigami.FormData.label: "Project:"
-                text: `<a href="${page.repo.url}">${page.repo.url}</a>`
-                textFormat: Text.StyledText
-                onLinkActivated: link => Qt.openUrlExternally(link)
+            Kirigami.Icon {
+                Layout.alignment: Qt.AlignTop
+                Layout.preferredWidth: Kirigami.Units.iconSizes.large
+                Layout.preferredHeight: Kirigami.Units.iconSizes.large
+                source: page.repo.icon || ""
             }
 
-            QQC2.Label {
-                Kirigami.FormData.label: "About:"
-                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
-                visible: text !== ""
-                text: page.details.description
-                wrapMode: Text.Wrap
-            }
-
-            QQC2.Label {
-                Kirigami.FormData.label: "Tracking:"
-                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
-                text: page.repo.scanned ? `Found on this computer: ${page.repo.localPath}`
-                    : page.details.versionOnly === true && page.followsReleases ? "Versions only. Set your version yourself."
-                    : "Added by hand. Set your version yourself."
-                wrapMode: Text.WrapAnywhere
-            }
-
-            QQC2.ComboBox {
-                Kirigami.FormData.label: "Follow:"
-                model: ["Releases", "A branch (new commits)"]
-                currentIndex: page.followsReleases ? 0 : 1
-                enabled: page.ready && page.details.hasReleases
-                onActivated: index => backend.setFollow(page.repoId, index === 1 ? "branch" : "releases")
-            }
-
-            QQC2.Label {
-                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
-                visible: page.ready && !page.details.hasReleases
-                text: "This project doesn’t publish releases, so new commits on a branch are followed instead."
-                wrapMode: Text.Wrap
-                opacity: 0.7
-            }
-
-            // Set from the releases list ("This is my version"), or with the buttons below.
-            QQC2.Label {
-                Kirigami.FormData.label: "Your version:"
-                visible: page.ready && page.details.versionText !== ""
-                text: page.details.versionText
-                font.bold: true
-            }
-
-            QQC2.Label {
-                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
-                visible: page.ready && page.details.versionFromDisk === true && !page.details.localMissing
-                text: "Read from this computer each time this page opens, so it changes when the folder does."
-                font: Kirigami.Theme.smallFont
-                wrapMode: Text.Wrap
-                opacity: 0.7
-            }
-
-            Kirigami.InlineMessage {
+            ColumnLayout {
                 Layout.fillWidth: true
-                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
-                visible: page.ready && page.details.localMissing === true
-                type: Kirigami.MessageType.Warning
-                text: `It\u2019s no longer at ${page.repo.localPath}. If it moved, scan again; if it was removed, stop tracking it.`
-            }
+                spacing: Kirigami.Units.smallSpacing / 2
 
-            RowLayout {
-                Kirigami.FormData.label: "Status:"
-                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
-                visible: page.ready && page.details.status !== ""
-                spacing: Kirigami.Units.smallSpacing
-
-                Kirigami.Icon {
-                    visible: page.details.updateAvailable || page.details.status === "Up to date"
-                    source: page.details.updateAvailable ? "update-low" : "update-none"
-                    Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                    Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                Kirigami.Heading {
+                    Layout.fillWidth: true
+                    level: 1
+                    font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.6
+                    text: page.repo.name || ""
+                    elide: Text.ElideRight
                 }
 
                 QQC2.Label {
                     Layout.fillWidth: true
-                    text: page.details.status
-                    font.bold: page.details.updateAvailable
+                    Layout.maximumWidth: Kirigami.Units.gridUnit * 34
+                    visible: text !== ""
+                    text: page.details.description || ""
                     wrapMode: Text.Wrap
                 }
-            }
 
-            // What's new on the branch since your version. One label rather than a row per commit: rows added and
-            // removed inside the form layout as the list changes crash Qt's layout code.
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: `<a href="${page.repo.url}">${page.repo.domain}/${page.repo.path}</a>`
+                    textFormat: Text.StyledText
+                    elide: Text.ElideMiddle
+                    onLinkActivated: link => Qt.openUrlExternally(link)
+                }
+            }
+        }
+
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 34
+            visible: page.ready && page.details.localMissing === true
+            type: Kirigami.MessageType.Warning
+            text: `It\u2019s no longer at ${page.repo.localPath}. If it moved, scan again; if it was removed, stop tracking it.`
+        }
+
+        // ---- Status: your version next to the newest, coloured by how they compare ------------------------------
+
+        Rectangle {
+            id: statusBox
+
+            readonly property string kind: page.details.statusKind || ""
+            readonly property color tone: kind === "update" ? Kirigami.Theme.highlightColor
+                                        : kind === "current" ? Kirigami.Theme.positiveTextColor
+                                        : kind === "problem" ? Kirigami.Theme.neutralTextColor
+                                        : Kirigami.Theme.disabledTextColor
+
+            objectName: "statusBox"
+            Layout.fillWidth: true
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 34
+            Layout.topMargin: Kirigami.Units.smallSpacing
+            visible: page.ready && kind !== ""
+            implicitHeight: statusContent.implicitHeight + Kirigami.Units.largeSpacing * 2
+            radius: Kirigami.Units.cornerRadius
+            color: Kirigami.ColorUtils.tintWithAlpha(Kirigami.Theme.backgroundColor, tone, 0.12)
+            border.width: 1
+            border.color: Kirigami.ColorUtils.tintWithAlpha(Kirigami.Theme.backgroundColor, tone, 0.6)
+
+            ColumnLayout {
+                id: statusContent
+
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: Kirigami.Units.largeSpacing
+                spacing: Kirigami.Units.largeSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    Kirigami.Icon {
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                        source: ({ update: "update-low", current: "update-none", problem: "dialog-warning",
+                                   ahead: "go-up", checking: "view-refresh", notInstalled: "package-x-generic" })[statusBox.kind] || ""
+                    }
+
+                    Kirigami.Heading {
+                        objectName: "statusHeadline"
+                        Layout.fillWidth: true
+                        level: 3
+                        type: Kirigami.Heading.Type.Primary
+                        text: page.details.headline || ""
+                        wrapMode: Text.Wrap
+                    }
+                }
+
+                // Your version and the newest, side by side. Up to date shows yours only: they're the same.
+                RowLayout {
+                    spacing: Kirigami.Units.gridUnit
+
+                    ColumnLayout {
+                        spacing: 0
+
+                        QQC2.Label {
+                            text: "Your version"
+                            font: Kirigami.Theme.smallFont
+                            opacity: 0.7
+                        }
+
+                        // Large, so the two versions can be compared at a glance.
+                        Kirigami.Heading {
+                            objectName: "yourVersion"
+                            level: 2
+                            font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.5
+                            font.weight: Font.DemiBold
+                            text: page.details.versionText || ""
+                        }
+                    }
+
+                    Kirigami.Icon {
+                        Layout.alignment: Qt.AlignBottom
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                        Layout.bottomMargin: Kirigami.Units.smallSpacing
+                        visible: statusBox.kind === "update"
+                        source: "go-next"
+                    }
+
+                    ColumnLayout {
+                        visible: statusBox.kind !== "current" && (page.details.newestText || "") !== ""
+                        spacing: 0
+
+                        QQC2.Label {
+                            text: page.followsReleases || !page.currentBranch ? "Newest" : `Newest on ${page.currentBranch}`
+                            font: Kirigami.Theme.smallFont
+                            opacity: 0.7
+                        }
+
+                        Kirigami.Heading {
+                            objectName: "newestVersion"
+                            level: 2
+                            font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.5
+                            font.weight: Font.DemiBold
+                            text: page.details.newestText || ""
+                        }
+                    }
+                }
+
+                // Why it couldn't be compared, in full.
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    visible: statusBox.kind === "problem"
+                    text: page.details.status || ""
+                    wrapMode: Text.Wrap
+                }
+
+                // What's new on the branch since your version. One label rather than a row per commit: rows added and
+                // removed as the list changes crash Qt's layout code.
+                QQC2.Label {
+                    objectName: "newCommits"
+                    Layout.fillWidth: true
+                    visible: page.details.newCommitsTotal > 0
+                    text: {
+                        const total = page.details.newCommitsTotal;
+                        const shown = page.details.newCommits;
+                        const lines = [total === 1 ? "1 new commit:" : `${total} new commits, newest first:`];
+                        shown.forEach(c => lines.push(`    ${c.sha}  ${c.title}`));
+                        if (total > shown.length)
+                            lines.push(`    and ${total - shown.length} more`);
+                        return lines.join("\n");
+                    }
+                    font: Kirigami.Theme.smallFont
+                    textFormat: Text.PlainText
+                    elide: Text.ElideRight
+                }
+
+                RowLayout {
+                    visible: page.canMarkUpToDate || page.canMarkNotInstalled
+
+                    QQC2.Button {
+                        objectName: "markUpToDate"
+                        visible: page.canMarkUpToDate
+                        text: "Mark as Up to Date"
+                        icon.name: "dialog-ok-apply"
+                        onClicked: backend.markUpToDate(page.repoId)
+                    }
+
+                    QQC2.Button {
+                        objectName: "markNotInstalled"
+                        visible: page.canMarkNotInstalled
+                        flat: true
+                        text: "Mark as Not Installed"
+                        icon.name: "edit-clear"
+                        onClicked: backend.setInstalled(page.repoId, "-")
+                    }
+                }
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    visible: page.details.versionFromDisk === true && !page.details.localMissing
+                    text: "Your version is read from this computer each time this page opens, so it changes when the folder does."
+                    font: Kirigami.Theme.smallFont
+                    wrapMode: Text.Wrap
+                    opacity: 0.7
+                }
+            }
+        }
+
+        // ---- Tracking: what's followed, and where the repo came from ------------------------------------------------
+
+        Kirigami.Heading {
+            Layout.topMargin: Kirigami.Units.largeSpacing
+            level: 3
+            text: "Tracking"
+        }
+
+        // Labels on the left, lined up, so each setting can be found at a glance. Each label and its value are shown
+        // or hidden together, so the two columns stay paired.
+        GridLayout {
+            Layout.fillWidth: true
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 34
+            Layout.leftMargin: Kirigami.Units.largeSpacing
+            columns: 2
+            columnSpacing: Kirigami.Units.gridUnit
+            rowSpacing: Kirigami.Units.largeSpacing
+
             QQC2.Label {
-                objectName: "newCommits"
-                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
-                visible: page.ready && page.details.newCommitsTotal > 0
-                text: {
-                    const total = page.details.newCommitsTotal;
-                    const shown = page.details.newCommits;
-                    const lines = [total === 1 ? "1 new commit:" : `${total} new commits, newest first:`];
-                    shown.forEach(c => lines.push(`    ${c.sha}  ${c.title}`));
-                    if (total > shown.length)
-                        lines.push(`    and ${total - shown.length} more`);
-                    return lines.join("\n");
-                }
-                font: Kirigami.Theme.smallFont
-                textFormat: Text.PlainText
-                elide: Text.ElideRight
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                text: "Follow"
+                opacity: 0.7
             }
 
-            RowLayout {
-                visible: page.canMarkUpToDate || page.canMarkNotInstalled
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
 
-                QQC2.Button {
-                    objectName: "markUpToDate"
-                    visible: page.canMarkUpToDate
-                    text: "Mark as Up to Date"
-                    icon.name: "dialog-ok-apply"
-                    onClicked: backend.markUpToDate(page.repoId)
+                QQC2.ComboBox {
+                    model: ["Releases", "A branch (new commits)"]
+                    currentIndex: page.followsReleases ? 0 : 1
+                    enabled: page.ready && page.details.hasReleases
+                    onActivated: index => backend.setFollow(page.repoId, index === 1 ? "branch" : "releases")
                 }
 
-                QQC2.Button {
-                    objectName: "markNotInstalled"
-                    visible: page.canMarkNotInstalled
-                    flat: true
-                    text: "Mark as Not Installed"
-                    icon.name: "edit-clear"
-                    onClicked: backend.setInstalled(page.repoId, "-")
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    visible: page.ready && !page.details.hasReleases
+                    text: "This project doesn’t publish releases, so new commits on a branch are followed instead."
+                    font: Kirigami.Theme.smallFont
+                    wrapMode: Text.Wrap
+                    opacity: 0.7
                 }
+            }
+
+            QQC2.Label {
+                text: page.followsReleases ? "Build file" : "Branch"
+                opacity: 0.7
+            }
+
+            QQC2.Label {
+                objectName: "followedValue"
+                Layout.fillWidth: true
+                text: !page.followsReleases ? (page.currentBranch || "Loading…")
+                    : page.repo.assetPattern ? page.repo.assetPattern
+                    : page.details.versionOnly === true ? "None (versions only)"
+                    : "Not chosen yet. Choose one below."
+                font.bold: page.followsReleases ? page.repo.assetPattern !== "" : page.currentBranch !== ""
+                elide: Text.ElideMiddle
+            }
+
+            QQC2.Label {
+                visible: page.followsReleases
+                text: "Pre-releases"
+                opacity: 0.7
             }
 
             QQC2.CheckBox {
-                Kirigami.FormData.label: "Pre-releases:"
                 visible: page.followsReleases
                 text: "Show test versions"
                 checked: page.repo.prereleases
                 onToggled: backend.setPrereleases(page.repoId, checked)
+            }
+
+            QQC2.Label {
+                Layout.alignment: Qt.AlignTop
+                text: "Source"
+                opacity: 0.7
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 0
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: page.repo.scanned ? "Found on this computer" : "Added by hand"
+                }
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: page.repo.scanned ? page.repo.localPath
+                        : page.followsReleases ? "You set your version: with the buttons above, or Set as My Version on a release."
+                        : "You set your version, with the buttons above."
+                    font: Kirigami.Theme.smallFont
+                    wrapMode: page.repo.scanned ? Text.WrapAnywhere : Text.Wrap
+                    opacity: 0.7
+                }
             }
         }
 

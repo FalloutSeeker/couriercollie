@@ -128,13 +128,16 @@ class BackendTest(unittest.TestCase):
         self.assertEqual(d["status"], "Newer version available: v1.18.2 (you have v1.18.1)")
         self.assertTrue(d["updateAvailable"])
         self.assertEqual(d["versionText"], "v1.18.1")
+        # The repo page's status box: your version and the newest side by side, under a short headline.
+        self.assertEqual((d["statusKind"], d["headline"], d["newestText"]), ("update", "Update available", "v1.18.2"))
         self.assertEqual(self.saved(LOCALSEND).installed, "v1.18.1")
 
     def test_mark_up_to_date(self):
         self.backend.setInstalled(LOCALSEND, "v1.18.1")
         self.backend.markUpToDate(LOCALSEND)
         self.assertEqual(self.saved(LOCALSEND).installed, "v1.18.2")
-        self.assertEqual(self.backend.details(LOCALSEND)["status"], "Up to date")
+        d = self.backend.details(LOCALSEND)
+        self.assertEqual((d["status"], d["statusKind"], d["newestText"]), ("Up to date", "current", "v1.18.2"))
         # Following a branch: the newest commit on it.
         self.backend.setFollow(LOCALSEND, "branch")
         self.backend.setInstalled(LOCALSEND, "c" * 40)
@@ -146,6 +149,7 @@ class BackendTest(unittest.TestCase):
         d = self.backend.details(LOCALSEND)
         self.assertEqual(d["versionText"], "Not installed")
         self.assertEqual(d["status"], "The newest is v1.18.2.")
+        self.assertEqual((d["statusKind"], d["headline"]), ("notInstalled", "Not installed"))
 
     def test_version_older_than_the_list_is_kept_as_a_choice(self):
         self.backend.setInstalled(LOCALSEND, "v1.0.0")
@@ -190,7 +194,10 @@ class BackendTest(unittest.TestCase):
         # Switching branch keeps your version; it's compared with the new branch's newest commit.
         self.backend.setBranch(LOCALSEND, "dev")
         self.assertEqual(self.saved(LOCALSEND).installed, "a" * 40)
-        self.assertEqual(self.backend.details(LOCALSEND)["status"], "Newer commits on dev (you have commit aaaaaaa)")
+        d = self.backend.details(LOCALSEND)
+        self.assertEqual(d["status"], "Newer commits on dev (you have commit aaaaaaa)")
+        self.assertEqual((d["statusKind"], d["headline"], d["versionText"], d["newestText"]),
+                         ("update", "New commits on dev", "commit aaaaaaa", "commit bbbbbbb"))
         self.backend.setBranch(LOCALSEND, "main")
         self.assertEqual(self.backend.details(LOCALSEND)["status"], "Up to date")
         self.backend.setBranch(LOCALSEND, "dev")
@@ -397,6 +404,7 @@ class ScannedClonePageTest(unittest.TestCase):
         self.backend.setBranch(smod, "master")
         d = self.backend.details(smod)
         self.assertEqual((d["status"], d["updateAvailable"]), ("Your version is newer than master", False))
+        self.assertEqual(d["statusKind"], "ahead")
         self.backend.setBranch(smod, "hidpi-functionality")
         d = self.backend.details(smod)
         self.assertEqual(d["status"], "Not comparable with hidpi-functionality: your clone is on Plasma/6.7.")
@@ -409,6 +417,7 @@ class ScannedClonePageTest(unittest.TestCase):
         d = self.backend.details("gitgud.io/aeroshell/smod")
         self.assertTrue(d["status"].startswith("Couldn\u2019t compare your version"), d["status"])
         self.assertFalse(d["updateAvailable"])
+        self.assertEqual((d["statusKind"], d["headline"]), ("problem", "Couldn\u2019t compare"))
 
     def test_switching_branch_and_back_keeps_the_version_on_disk(self):
         smod = "gitgud.io/aeroshell/smod"

@@ -54,7 +54,7 @@ class Harness:
         self.win.setProperty("width", 1150)
         self.win.setProperty("height", 800)
         self.failures = []
-        self._find = self.engine.evaluate("""(function (root, name) {
+        self._find = self.engine.evaluate("""(function (root, name, windowHeight) {
             function walk(item) {
                 // "text:Check Now" finds a button by its text (toolbar buttons made from actions have no name).
                 const wanted = name.startsWith("text:") ? item.text === name.slice(5) : item.objectName === name;
@@ -67,7 +67,15 @@ class Harness:
             }
             const item = walk(root);
             if (!item) return null;
-            const p = item.mapToItem(null, item.width / 2, item.height / 2);
+            // Scrolled out of sight (e.g. further down a page): scroll it into the middle, as a person would.
+            let p = item.mapToItem(null, item.width / 2, item.height / 2);
+            for (let f = item.parent; f && (p.y < 0 || p.y > windowHeight); f = f.parent) {
+                if (f.contentY === undefined || f.contentHeight === undefined || !f.contentItem) continue;
+                const inside = item.mapToItem(f.contentItem, 0, item.height / 2).y;
+                const lowest = Math.max(f.originY, f.originY + f.contentHeight - f.height);
+                f.contentY = Math.max(f.originY, Math.min(lowest, inside - f.height / 2));
+                p = item.mapToItem(null, item.width / 2, item.height / 2);
+            }
             return [p.x, p.y, !!item.checked];
         })""")
 
@@ -95,7 +103,7 @@ class Harness:
     def find(self, name, window=None):
         """[x, y, checked] of a visible item with this objectName, or None. Looks in dialogs too."""
         window = window or self.win
-        return self._find.call([self.engine.newQObject(window.contentItem()), name]).toVariant()
+        return self._find.call([self.engine.newQObject(window.contentItem()), name, window.height()]).toVariant()
 
     def click(self, name, window=None):
         from PySide6.QtCore import QPoint, Qt

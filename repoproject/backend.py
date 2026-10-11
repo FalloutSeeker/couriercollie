@@ -28,6 +28,9 @@ KIND_ICONS = {
     assets.KIND_VERSIONS: "tag",
 }
 FILTERS = ("all", "github", "gitlab")
+# How your version compares with the newest, for the repo page's status box (colour and icon).
+STATUS_UPDATE, STATUS_CURRENT, STATUS_NOT_INSTALLED = "update", "current", "notInstalled"
+STATUS_AHEAD, STATUS_CHECKING, STATUS_PROBLEM = "ahead", "checking", "problem"
 # The heading for repos that aren't in one of your categories.
 UNCATEGORIZED = "Uncategorized"
 
@@ -987,7 +990,8 @@ class Backend(QObject):
             "branchOnDisk": d.branch_on_disk,
             "versionFromDisk": bool(repo) and repo.source == config.SOURCE_SCANNED,
             "localMissing": d.local_missing,
-            **{"versionText": "", "installed": "", "status": "", "updateAvailable": False}, **version,
+            **{"versionText": "", "installed": "", "status": "", "updateAvailable": False, "newestText": "",
+               "statusKind": "", "headline": ""}, **version,
             "state": d.state,
             "error": d.error,
             "description": repo.description if repo else "",
@@ -1015,54 +1019,63 @@ class Backend(QObject):
         return d.comparison
 
     def _version_info(self, repo: TrackedRepo, d: Details, shown: list[sources.Release]) -> dict:
-        """Your version as text, and a status line comparing it with the newest."""
+        """Your version as text, the newest, and how they compare: a status line, plus a kind (STATUS_*) and a short
+        headline for the status box on the repo page."""
         installed = repo.installed
         if repo.follow == FOLLOW_BRANCH:
             branch = repo.branch or d.default_branch
             newest = _head(repo, d)
             if not newest:
                 return {}
-            yours_text = f"commit {installed[:7]}"
+            yours_text, newest_text = f"commit {installed[:7]}", f"commit {newest[:7]}"
             if installed and installed not in (NOT_INSTALLED, newest):
-                return {"versionText": yours_text, "installed": installed,
+                return {"versionText": yours_text, "installed": installed, "newestText": newest_text,
                         **self._branch_status(repo, d, branch, yours_text)}
-            newest_text, newer_text = f"commit {newest[:7]}", f"Newer commits on {branch}"
+            newer_text, update_headline = f"Newer commits on {branch}", f"New commits on {branch}"
         else:
             if not shown:
                 return {}
             newest = shown[0].tag
             newest_text, yours_text = newest, installed
-            newer_text = f"Newer version available: {newest}"
+            newer_text, update_headline = f"Newer version available: {newest}", "Update available"
         if installed == NOT_INSTALLED:
-            text, status, update = "Not installed", f"The newest is {newest_text}.", False
+            text, status, kind, headline = "Not installed", f"The newest is {newest_text}.", STATUS_NOT_INSTALLED, \
+                "Not installed"
         elif installed == newest:
-            text, status, update = yours_text, "Up to date", False
+            text, status, kind, headline = yours_text, "Up to date", STATUS_CURRENT, "Up to date"
         elif installed:
-            text, status, update = yours_text, f"{newer_text} (you have {yours_text})", True
+            text, status, kind, headline = yours_text, f"{newer_text} (you have {yours_text})", STATUS_UPDATE, \
+                update_headline
         else:
-            text, status, update = "", "", False
-        return {"versionText": text, "installed": installed, "status": status, "updateAvailable": update}
+            text, status, kind, headline = "", "", "", ""
+        return {"versionText": text, "installed": installed, "status": status, "updateAvailable": kind == STATUS_UPDATE,
+                "newestText": newest_text, "statusKind": kind, "headline": headline}
 
     def _branch_status(self, repo: TrackedRepo, d: Details, branch: str, yours_text: str) -> dict:
         """Status when your commit isn't the branch's newest: depends on how the two relate."""
         c = self._current_comparison(repo, d)
         if d.comparing:
-            return {"status": "Checking\u2026", "updateAvailable": False}
+            return {"status": "Checking\u2026", "updateAvailable": False, "statusKind": STATUS_CHECKING,
+                    "headline": "Checking\u2026"}
         if c is None:
             site = RepoRef.from_id(repo.id).domain
             return {"status": f"Couldn\u2019t compare your version ({yours_text}) with {branch}. {site} may not have "
                               "that commit (for example, one that was never pushed), or couldn\u2019t be reached; "
                               "Refresh tries again.",
-                    "updateAvailable": False}
+                    "updateAvailable": False, "statusKind": STATUS_PROBLEM, "headline": "Couldn\u2019t compare"}
         if c.relation == sources.BEHIND:
-            return {"status": f"Newer commits on {branch} (you have {yours_text})", "updateAvailable": True}
+            return {"status": f"Newer commits on {branch} (you have {yours_text})", "updateAvailable": True,
+                    "statusKind": STATUS_UPDATE, "headline": f"New commits on {branch}"}
         if c.relation == sources.AHEAD:
-            return {"status": f"Your version is newer than {branch}", "updateAvailable": False}
+            return {"status": f"Your version is newer than {branch}", "updateAvailable": False,
+                    "statusKind": STATUS_AHEAD, "headline": f"Newer than {branch}"}
         if c.relation == sources.SAME:
-            return {"status": "Up to date", "updateAvailable": False}
+            return {"status": "Up to date", "updateAvailable": False, "statusKind": STATUS_CURRENT,
+                    "headline": "Up to date"}
         where = f"your clone is on {d.branch_on_disk}" if d.branch_on_disk and d.branch_on_disk != branch \
             else f"your version ({yours_text}) isn\u2019t part of it"
-        return {"status": f"Not comparable with {branch}: {where}.", "updateAvailable": False}
+        return {"status": f"Not comparable with {branch}: {where}.", "updateAvailable": False,
+                "statusKind": STATUS_PROBLEM, "headline": "Not comparable"}
 
     @Slot(str)
     def markUpToDate(self, repo_id):

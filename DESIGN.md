@@ -55,7 +55,17 @@ The app then fetches the project's releases and shows them, so you can pick whic
 
 ### 3. Repo detail page
 
-Clicking a tracked repo shows:
+Clicking a tracked repo shows, top to bottom (laid out for scanning, chosen 2026-10-11):
+
+- **Header:** the repo's icon, name (large), description and address.
+- **Status box:** a short headline ("Update available", "Up to date", "New commits on Plasma/6.7", "Not installed",
+  "Couldn't compare") with **your version → newest** in large type, the buttons below them, and new commits when
+  following a branch. Coloured by the theme: highlight for an update, green for up to date, orange for a problem.
+- **Tracking:** lined-up labels on the left: Follow, Build file (or Branch), Pre-releases, Source (added by hand, or
+  found on this computer with its path).
+- Then the build file picker, and the releases or branches lists.
+
+Details:
 
 - **Your version** and a status line ("Up to date" / "Newer version available: …"). Your version is a release, a
   commit (when following a branch), or "Not installed". A repo added by hand starts as "Not installed" (adding it doesn't mean you have it). To

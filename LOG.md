@@ -4,6 +4,11 @@ Newest first.
 
 ## 2026-10-11
 
+- Repo page redone for scanning (picked from three mockups: "status first, grouped"): a header with name, description
+  and address; a coloured status box with your version → newest in large type; a Tracking group with lined-up labels.
+  Checked in Aero and Breeze Dark, for releases and for a scanned branch.
+  - The window checks now scroll an item into view before clicking it, as the taller page put buttons below the
+    window.
 - Categories (D14): New Category…, drag repos into and around categories and drag categories by their handles,
   delete a category (its repos move to Uncategorized). The list order is now yours, kept in the settings file; an
   older file keeps its order by name. New click check: `devtools/check_categories.py`.
