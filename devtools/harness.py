@@ -23,7 +23,10 @@ def start(copy_settings_from: Path | None = None, settings: dict | None = None, 
     """Start the app off-screen. `settings` (names as in Backend.settings) are applied before the window loads, as a
     real start would have them; the welcome screen is marked done unless they say otherwise."""
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "org.kde.desktop")
+    sys.path.insert(0, str(PROJECT))
+    from repoproject.app import choose_style
+
+    choose_style()  # as the app does
     # Drawn with OpenGL, as on the desktop. Off-screen windows otherwise use Qt's software renderer, which draws some
     # icons on top of open dialogs (never seen on the desktop).
     os.environ.setdefault("QT_QUICK_BACKEND", "rhi")
@@ -34,7 +37,6 @@ def start(copy_settings_from: Path | None = None, settings: dict | None = None, 
     os.environ["REPOPROJECT_CONFIG"] = str(config_path)
     os.environ["XDG_CACHE_HOME"] = str(config_path.parent / "cache")  # icons found during a check stay out of yours
     os.environ["REPOPROJECT_STATE"] = str(config_path.parent / "checks.json")  # and so do update-check results
-    sys.path.insert(0, str(PROJECT))
     OUT.mkdir(exist_ok=True)
     return Harness({"firstLaunchDone": True, **(settings or {})}, find_icons)
 
@@ -52,6 +54,9 @@ class Harness:
         self.messages = []
         qInstallMessageHandler(lambda _m, _c, text: self.messages.append(text))
         self.app = QApplication(sys.argv)
+        from repoproject.app import fill_in_icons
+
+        fill_in_icons()
         self.backend = Backend(find_icons=find_icons)
         self.backend.updateSettings(settings)
         self.engine = QQmlApplicationEngine()

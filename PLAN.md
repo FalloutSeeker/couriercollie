@@ -69,10 +69,11 @@ Each update removes the version it replaced once the new one is in place (no Und
   counts (tried 2026-10-11) but has no body, so it's still worth sending.
 - App icon, KDE menu entry, and packaging the app itself as an RPM so it installs like anything else.
 - **GNOME support** (checked 2026-10-11 by running the window with GNOME settings; the list, dragging and menus work):
-  - Use KDE's control style only if it's installed (`kf6-qqc2-desktop-style`), else a standard Qt style. Without it
-    the window doesn't open at all today.
-  - Fall back to Breeze for icons the current theme lacks (Adwaita has no `handle-sort`, `overflow-menu`,
-    `update-low`, `emblem-mounted`, `application-x-rpm`, …), so none show blank.
+  - Done: KDE's control style only if it's installed (`kf6-qqc2-desktop-style`), else Qt's Fusion (the window
+    works in it, tested).
+  - Done: Breeze fills in icons the current theme lacks (Adwaita has no `handle-sort`, `overflow-menu`,
+    `update-low`, `emblem-mounted`, `application-x-rpm`, …), so none show blank; with no theme at all, Breeze is it
+    (breeze-dark in dark mode).
   - The RPM requires `kf6-kirigami`, `kf6-qqc2-desktop-style`, `breeze-icon-theme` and `libnotify` (notify-send).
   - Follow GNOME's dark mode: KDE's style takes colors from KDE settings, so on GNOME it likely stays light. Needs a
     real GNOME session to confirm.

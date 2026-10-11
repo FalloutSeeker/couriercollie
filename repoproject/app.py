@@ -40,6 +40,43 @@ def check(if_due: bool) -> int:
     return 0
 
 
+def choose_style() -> None:
+    """Before the app starts: KDE's control style where it's installed (it draws buttons and lists in the desktop's
+    own style, and needs QApplication rather than QGuiApplication), else Qt's Fusion, which works anywhere (e.g. on
+    GNOME without KDE's libraries)."""
+    if "QT_QUICK_CONTROLS_STYLE" in os.environ:
+        return
+    from PySide6.QtCore import QLibraryInfo
+
+    folders = [QLibraryInfo.path(QLibraryInfo.LibraryPath.QmlImportsPath),
+               *os.environ.get("QML_IMPORT_PATH", "").split(os.pathsep),
+               *os.environ.get("QML2_IMPORT_PATH", "").split(os.pathsep)]
+    kde = any(f and (Path(f) / "org" / "kde" / "desktop").is_dir() for f in folders)
+    os.environ["QT_QUICK_CONTROLS_STYLE"] = "org.kde.desktop" if kde else "Fusion"
+
+
+def fill_in_icons() -> None:
+    """After the app starts: icons the desktop's theme lacks (GNOME's Adwaita has far fewer than KDE's Breeze) come
+    from Breeze, if it's installed, so none show blank. With no icon theme at all, Breeze is the theme."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QGuiApplication, QIcon
+
+    # Where icon themes are installed (XDG); some platforms don't tell Qt.
+    data_dirs = [os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share"),
+                 *(os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share").split(os.pathsep)]
+    folders = [*QIcon.themeSearchPaths(), *(str(Path(d) / "icons") for d in data_dirs if d)]
+    folders = list(dict.fromkeys(folders))
+    if not any((Path(f) / "breeze").is_dir() for f in folders):
+        return
+    QIcon.setThemeSearchPaths(folders)
+    dark = QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
+    breeze = "breeze-dark" if dark else "breeze"
+    # KDE's style picks the theme from KDE's settings itself.
+    if QIcon.themeName() in ("", "hicolor") and os.environ.get("QT_QUICK_CONTROLS_STYLE") != "org.kde.desktop":
+        QIcon.setThemeName(breeze)
+    QIcon.setFallbackThemeName(breeze)
+
+
 def main() -> int:
     args = sys.argv[1:]
     if "--reset" in args:
@@ -58,8 +95,7 @@ def main() -> int:
         return 0
     integration.install_menu_entry()
 
-    # KDE's own look for buttons, lists, etc. Needs QApplication rather than QGuiApplication.
-    os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "org.kde.desktop")
+    choose_style()
 
     from PySide6.QtCore import QUrl
     from PySide6.QtGui import QIcon
@@ -74,6 +110,7 @@ def main() -> int:
     app.setOrganizationName("RepoProject")
     # Ties the window, its notifications and its taskbar badge to the menu entry.
     app.setDesktopFileName(integration.APP_ID)
+    fill_in_icons()
     app.setWindowIcon(QIcon.fromTheme(integration.ICON))
     # Let Ctrl+C in the terminal close the app.
     signal.signal(signal.SIGINT, signal.SIG_DFL)

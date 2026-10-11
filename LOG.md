@@ -4,6 +4,8 @@ Newest first.
 
 ## 2026-10-11
 
+- Stage 6, GNOME: the window uses KDE's control style only where it's installed, else Qt's Fusion (tested: every page
+  works in it). Icons the desktop's theme lacks come from Breeze (Adwaita alone lacks 5 the app uses).
 - Repo pages load the newest 10 releases, with Show Older Releases for a full page (30) when there may be more.
   The update code moved out of `backend.py` into `updating.py` (no change in behaviour). A versions-only project's
   page no longer says "Nothing is downloaded or installed" when Install can clone it.
