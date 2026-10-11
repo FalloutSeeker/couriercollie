@@ -8,20 +8,34 @@ Kirigami.ScrollablePage {
 
     title: "Tracked repos"
 
-    actions: [
-        Kirigami.Action {
-            id: addAction
-            icon.name: "list-add"
-            text: "Add"
-            onTriggered: applicationWindow().showAddDialog()
-        },
-        Kirigami.Action {
-            icon.name: "configure"
-            text: "Settings"
-            displayHint: Kirigami.DisplayHint.IconOnly
-            onTriggered: applicationWindow().openSettings()
-        }
-    ]
+    // The Scan button is only in the list while scanning is allowed. Listing it hidden instead makes Kirigami log
+    // "Could not create delegate for ToolBarLayout" at start-up.
+    actions: backend.settings.scanning ? [addAction, scanAction, settingsAction] : [addAction, settingsAction]
+
+    Kirigami.Action {
+        id: addAction
+
+        icon.name: "list-add"
+        text: "Add"
+        onTriggered: applicationWindow().showAddDialog()
+    }
+
+    Kirigami.Action {
+        id: scanAction
+
+        icon.name: "edit-find"
+        text: "Scan"
+        onTriggered: applicationWindow().showScanDialog()
+    }
+
+    Kirigami.Action {
+        id: settingsAction
+
+        icon.name: "configure"
+        text: "Settings"
+        displayHint: Kirigami.DisplayHint.IconOnly
+        onTriggered: applicationWindow().openSettings()
+    }
 
     header: ColumnLayout {
         spacing: 0

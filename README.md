@@ -6,9 +6,9 @@ schedule, and lets you update with a click.
 
 ## Status
 
-**Stages 1 and 2 of PLAN.md are built.** You can add GitHub/GitLab repos, browse their releases, build files and
-branches, and pick what to follow. The first-launch questions and the Settings page work and save your answers, but
-scanning, update checks and cleanup aren't built yet, so those settings have no effect for now.
+**Stages 1–3 of PLAN.md are built.** You can add GitHub/GitLab repos by hand or scan this computer for them, browse
+their releases, build files and branches, and set which version you have. Update checks, installing and cleanup
+aren't built yet, so those settings have no effect for now.
 
 ## Running it
 
@@ -34,6 +34,13 @@ cd ~/claudework/RepoProject && python3 -m unittest discover -s tests -t .
 
 They don't use the network: GitHub and GitLab answers are saved in `tests/fixtures/`.
 
+`devtools/` has checks that drive the real window off-screen (clicks, screenshots in `.uicheck/`), using a temporary
+copy of your settings:
+
+```sh
+python3 -I devtools/check_scan.py   # scans this computer and asks GitHub/GitLab about new finds
+```
+
 ## Code layout
 
 | File                       | What it does                                                                   |
@@ -41,6 +48,7 @@ They don't use the network: GitHub and GitLab answers are saved in `tests/fixtur
 | `repoproject/config.py`    | The settings file: global settings and tracked repos                           |
 | `repoproject/sources.py`   | Talking to GitHub and GitLab: addresses, releases, branches                    |
 | `repoproject/assets.py`    | Build files: which kind, whether it suits this PC, remembering your pick       |
+| `repoproject/scan.py`      | Scanning: finding clones, RPMs and AppImages; matching them to tracked repos     |
 | `repoproject/backend.py`   | Connects the window to the above; runs network work in the background          |
 | `repoproject/qml/`         | The window: list page, repo page, Add dialog                                   |
 

@@ -4,6 +4,20 @@ Newest first.
 
 ## 2026-10-10
 
+- Built stage 3, scanning. Finds git clones in the home folder (up to 6 folders deep, skipping hidden folders and
+  dependency folders), RPMs installed from a downloaded file with a GitHub/GitLab homepage, and AppImages that carry
+  their update source. Each project is listed once even if found in several places. Finds not already on the list
+  are checked with their site (moved projects, private repos, unsupported sites); tracked ones need no request.
+  Tracked repos are updated automatically; new finds are listed unticked with Select all / Select none.
+  - On this computer: 10 projects in 0.2 s on disk, about 6 s checking with the sites.
+  - Mirrors: the tracked "Aero" is a GitHub copy of the gitgud.io project the clone came from. Addresses can't tell,
+    so a find with the same project name and description as a tracked repo is shown as "Looks like Aero…"; ticking
+    it links the two instead of adding a second entry.
+  - Versions found on disk ("1.18.2") are matched to release tags ("v1.18.2").
+  - Fixed: the scan dialog showed nothing (all its content was hidden when it opened, so Kirigami sized it empty).
+  - Fixed: Kirigami logged "Could not create delegate for ToolBarLayout" on every start with scanning off (the
+    default), because the Scan button was listed but hidden. It's now left out of the toolbar instead.
+  - Added `devtools/` (off-screen window checks, reusable) and `devtools/check_scan.py`.
 - "Your version" is no longer a dropdown (it repeated the "your version" tag in the releases list). It's shown as
   text; you set it from the releases list ("This is my version" in an opened release) or with "Mark as up to date"
   and "Mark as not installed".

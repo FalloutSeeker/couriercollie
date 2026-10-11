@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
-from . import assets, config, sources
+from . import assets, config, scan, sources
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, Config, ConfigError, TrackedRepo
 from .sources import RepoRef, SourceError
 
@@ -89,6 +89,20 @@ def _fit_files(repo: TrackedRepo, d: Details) -> bool:
     return (repo.asset_pattern, repo.kind) != before
 
 
+def _match_tag(repo: TrackedRepo, d: Details) -> bool:
+    """A version found on disk ("1.18.2", from an RPM or AppImage) as the release's tag ("v1.18.2")."""
+    if repo.follow != FOLLOW_RELEASES or not repo.installed or repo.installed == NOT_INSTALLED or d.state != "ready":
+        return False
+    tags = [r.tag for r in d.releases]
+    if repo.installed in tags:
+        return False
+    version = assets.version_of(repo.installed)
+    tag = next((t for t in tags if version and assets.version_of(t) == version), None)
+    if tag:
+        repo.installed = tag
+    return bool(tag)
+
+
 def _fetch_branches(ref: RepoRef) -> tuple[str, list[sources.Branch], str]:
     try:
         default, branches = sources.branches(ref)
@@ -105,6 +119,7 @@ class Backend(QObject):
     addFailed = Signal(str)  # message for the user
     detailsChanged = Signal(str)  # repo id
     settingsChanged = Signal()
+    scanChanged = Signal()
     _deliver = Signal(object)
 
     def __init__(self, config_path: Path | None = None, parent=None):
@@ -120,6 +135,11 @@ class Backend(QObject):
         self._filter = "all"
         self._adding = False
         self._details: dict[str, Details] = {}
+        self._scan_state = "idle"  # "idle", "scanning" or "done"
+        self._scan_error = ""
+        self._scan_items: list[dict] = []  # for the results dialog
+        self._scan_finds: dict[int, scan.Found] = {}  # by item key
+        self._scan_updated: list[str] = []  # names of tracked repos updated by the last scan
         self._pool = ThreadPoolExecutor(max_workers=4)
         self._deliver.connect(lambda fn: fn())
 
@@ -337,6 +357,102 @@ class Backend(QObject):
         self._details.pop(repo_id, None)
         self._changed()
 
+    # -- scanning ---------------------------------------------------------------------------------------------------
+
+    @Property(str, notify=scanChanged)
+    def scanState(self):
+        return self._scan_state
+
+    @Property(str, notify=scanChanged)
+    def scanError(self):
+        return self._scan_error
+
+    @Property("QVariantList", notify=scanChanged)
+    def scanItems(self):
+        return self._scan_items
+
+    @Property("QVariantList", notify=scanChanged)
+    def scanUpdated(self):
+        return self._scan_updated
+
+    @Slot()
+    def startScan(self):
+        """Look through this computer (DESIGN.md §1). Repos already on the list are updated straight away; new finds
+        are listed for the user to choose from."""
+        if self._scan_state == "scanning" or not self._config.settings.scanning:
+            return
+        # Addresses already on the list: those finds need no request to their site.
+        known = {r.id.lower() for r in self._config.repos} | {a.lower() for r in self._config.repos for a in r.aliases}
+
+        def work():
+            return scan.identify(scan.find_all(), known=lambda repo_id: repo_id.lower() in known)
+
+        self._scan_state, self._scan_error = "scanning", ""
+        self.scanChanged.emit()
+        self._run(work, self._scan_done)
+
+    def _scan_done(self, checked, error):
+        self._scan_state = "done"
+        self._scan_items, self._scan_finds, self._scan_updated = [], {}, []
+        if error:
+            self._scan_error = self._error_text(error)
+            self.scanChanged.emit()
+            return
+        self._scan_error = ""
+        on_list = []
+        for key, c in enumerate(checked):
+            f = c.found
+            tracked = next((r for a in (f.id, *f.aliases) if (r := self._config.find_any(a))), None)
+            if tracked and not c.problem:
+                on_list.append(f)
+                continue
+            similar = None if c.problem else scan.looks_like(self._config, f)
+            if similar:
+                note = (f"Looks like \u201c{similar.name}\u201d, which you track from {similar.url}. "
+                        "Tick it to link the two; it won't be added twice.")
+            elif c.problem:
+                note = c.problem
+            else:
+                note = f"Also in {len(f.other_paths)} other place(s)" if f.other_paths else ""
+            self._scan_finds[key] = f
+            self._scan_items.append({
+                "key": key,
+                "name": f.name,
+                "address": f.id,
+                "path": f.path,
+                "kind": f.kind,
+                "icon": KIND_ICONS.get(f.kind, "package-x-generic"),
+                "status": "problem" if c.problem else ("similar" if similar else "new"),
+                "similarTo": similar.id if similar else "",
+                "note": note,
+            })
+        if on_list:
+            result = scan.merge(self._config, on_list)
+            self._scan_updated = [r.name for r in result.updated]
+            for r in result.updated:
+                self._details.pop(r.id, None)  # reload with the version found on disk
+            self._changed()
+        self.scanChanged.emit()
+
+    @Slot("QVariantList")
+    def trackFound(self, keys):
+        """Track the scan finds the user ticked. A find that looks like a tracked repo is linked to it, not added."""
+        keys = {int(k) for k in keys}
+        chosen = []
+        for item in self._scan_items:
+            if item["key"] not in keys or item["status"] == "problem":
+                continue
+            found = self._scan_finds[item["key"]]
+            if item["similarTo"] and (repo := self._config.find(item["similarTo"])):
+                found = scan.link_to(found, repo)
+            chosen.append(found)
+        if not chosen:
+            return
+        scan.merge(self._config, chosen)
+        self._scan_items = [i for i in self._scan_items if i["key"] not in keys or i["status"] == "problem"]
+        self._changed()
+        self.scanChanged.emit()
+
     # -- the repo page ----------------------------------------------------------------------------------------------
 
     @Slot(str, bool)
@@ -369,7 +485,8 @@ class Backend(QObject):
                 )
                 if repo := self._config.find(repo_id):
                     baseline_set = _set_baseline(repo, self._details[repo_id])
-                    if _fit_files(repo, self._details[repo_id]) or baseline_set:
+                    tag_matched = _match_tag(repo, self._details[repo_id])
+                    if _fit_files(repo, self._details[repo_id]) or baseline_set or tag_matched:
                         self._changed()
             self.detailsChanged.emit(repo_id)
 

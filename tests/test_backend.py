@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from repoproject import config, sources
-from repoproject.backend import Backend, Details, _fit_files, _set_baseline
+from repoproject import config, scan, sources
+from repoproject.backend import Backend, Details, _fit_files, _match_tag, _set_baseline
 from repoproject.config import TrackedRepo
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -207,6 +207,82 @@ class BackendTest(unittest.TestCase):
         backend.removeRepo("github.com/a/b")
         self.assertEqual(self.path.read_text(), "not [valid")
         backend.shutdown()
+
+
+
+class ScanFlowTest(unittest.TestCase):
+    """What the Scan button does with results, using prepared finds instead of the disk and network."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.path = Path(self.dir.name) / "repos.toml"
+        cfg = config.Config(settings=config.Settings(scanning=True), repos=[
+            TrackedRepo(id="github.com/aeroshell-desktop/aerothemeplasma", name="Aero", url="https://github.com/x",
+                        host="github", follow="branch", branch="Plasma/6.7",
+                        description="An alternative shell for KDE Plasma."),
+            TrackedRepo(id=LOCALSEND, name="LocalSend", url="", host="github", installed="v1.18.0"),
+        ])
+        config.save(cfg, self.path)
+        self.backend = Backend(self.path)
+
+    def tearDown(self):
+        self.backend.shutdown()
+        self.dir.cleanup()
+
+    def found(self, repo_id, kind="git", version="abc", description="", path=None):
+        return scan.Found(id=repo_id, name=repo_id.rsplit("/", 1)[-1], url=f"https://{repo_id}", host="gitlab",
+                          path=path or f"/home/me/{repo_id.rsplit('/', 1)[-1]}", kind=kind, version=version,
+                          branch="main", description=description)
+
+    def run_scan(self):
+        self.backend._scan_done([
+            scan.Checked(self.found(LOCALSEND, kind="RPM", version="1.18.2")),  # already tracked
+            scan.Checked(self.found("gitgud.io/aeroshell/smod")),  # new
+            scan.Checked(self.found("gitgud.io/aeroshell/atp/aerothemeplasma",
+                                    description="An alternative shell for KDE Plasma. ")),  # a mirror of Aero
+            scan.Checked(self.found("github.com/me/private"), "Not found on its site. It may be private."),
+        ], None)
+        return {i["address"]: i for i in self.backend.scanItems}
+
+    def test_tracked_repos_are_updated_without_asking(self):
+        items = self.run_scan()
+        self.assertNotIn(LOCALSEND, items)
+        self.assertEqual(self.backend.scanUpdated, ["LocalSend"])
+        repo = config.load(self.path).find(LOCALSEND)
+        self.assertEqual((repo.source, repo.installed), ("scanned", "1.18.2"))
+
+    def test_results_list_new_similar_and_problems(self):
+        items = self.run_scan()
+        self.assertEqual(items["gitgud.io/aeroshell/smod"]["status"], "new")
+        mirror = items["gitgud.io/aeroshell/atp/aerothemeplasma"]
+        self.assertEqual(mirror["status"], "similar")
+        self.assertIn("Aero", mirror["note"])
+        self.assertEqual(items["github.com/me/private"]["status"], "problem")
+
+    def test_tracking_ticked_finds(self):
+        items = self.run_scan()
+        keys = [items[a]["key"] for a in ("gitgud.io/aeroshell/smod", "gitgud.io/aeroshell/atp/aerothemeplasma",
+                                          "github.com/me/private")]
+        self.backend.trackFound(keys)
+        cfg = config.load(self.path)
+        self.assertEqual(len(cfg.repos), 3)  # Aero, LocalSend, smod: the mirror was linked, the problem skipped
+        aero = cfg.find("github.com/aeroshell-desktop/aerothemeplasma")
+        self.assertEqual((aero.source, aero.aliases), ("scanned", ["gitgud.io/aeroshell/atp/aerothemeplasma"]))
+        self.assertEqual(cfg.find("gitgud.io/aeroshell/smod").source, "scanned")
+        # Tracked finds leave the results; problems stay so the user can read why.
+        self.assertEqual([i["address"] for i in self.backend.scanItems], ["github.com/me/private"])
+
+    def test_scan_needs_scanning_turned_on(self):
+        self.backend.updateSettings({"scanning": False})
+        self.backend.startScan()
+        self.assertEqual(self.backend.scanState, "idle")
+
+    def test_found_version_matches_the_release_tag(self):
+        self.run_scan()
+        releases = sources.parse_github_releases(json.loads((FIXTURES / "github_releases.json").read_text()))
+        repo = self.backend._config.find(LOCALSEND)
+        self.assertTrue(_match_tag(repo, Details(state="ready", releases=releases)))
+        self.assertEqual(repo.installed, "v1.18.2")
 
 
 if __name__ == "__main__":

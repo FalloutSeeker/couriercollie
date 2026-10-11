@@ -1,10 +1,13 @@
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
-from repoproject import config, scan
+from repoproject import config, scan, sources
 from repoproject.config import Config, TrackedRepo
 from repoproject.scan import Found
+from repoproject.sources import ProjectInfo, RepoRef
 
 AERO_NEW = "gitgud.io/aeroshell/atp/aerothemeplasma"
 AERO_OLD = "gitgud.io/wackyideas/aerothemeplasma"
@@ -100,6 +103,148 @@ class MergeTest(unittest.TestCase):
             config.save(cfg, path)
             repo = config.load(path).repos[0]
             self.assertEqual((repo.source, repo.aliases), ("scanned", [AERO_OLD]))
+
+
+
+def make_clone(folder: Path, remote: str | None, branch: str = "main") -> str:
+    """A real git clone with one commit and an "origin" remote. Returns the commit."""
+    folder.mkdir(parents=True)
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": "/dev/null"}
+
+    def git(*args):
+        return subprocess.run(["git", "-C", str(folder), *args], check=True, capture_output=True, text=True,
+                              env=env).stdout.strip()
+
+    git("init", "-q", "-b", branch)
+    git("commit", "-q", "--allow-empty", "-m", "first")
+    if remote:
+        git("remote", "add", "origin", remote)
+    return git("rev-parse", "HEAD")
+
+
+class FindOnDiskTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.home = Path(self.dir.name)
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def test_git_clones(self):
+        commit = make_clone(self.home / "aero/aerothemeplasma", "https://gitgud.io/wackyideas/aerothemeplasma.git",
+                            "Plasma/6.7")
+        make_clone(self.home / "aero/aerothemeplasma/repos/smod", "git@gitgud.io:aeroshell/smod.git")
+        make_clone(self.home / "notes", None)  # no remote: not from a site
+        make_clone(self.home / "local-copy", "/srv/git/thing.git")  # a folder, not a project page
+        make_clone(self.home / ".hidden/proj", "https://github.com/a/hidden")
+        make_clone(self.home / "app/node_modules/dep", "https://github.com/a/dep")
+        found = {f.id: f for f in scan.find_git_clones(self.home)}
+        self.assertEqual(set(found), {"gitgud.io/wackyideas/aerothemeplasma", "gitgud.io/aeroshell/smod"})
+        aero = found["gitgud.io/wackyideas/aerothemeplasma"]
+        self.assertEqual((aero.kind, aero.branch, aero.version, aero.path),
+                         ("git", "Plasma/6.7", commit, str(self.home / "aero/aerothemeplasma")))
+
+    def test_depth_limit(self):
+        make_clone(self.home / "a/b/c/d/e/f/g/deep", "https://github.com/a/deep")
+        self.assertEqual(scan.find_git_clones(self.home, max_depth=6), [])
+        self.assertEqual(len(scan.find_git_clones(self.home, max_depth=8)), 1)
+
+    def test_rpms_from_a_downloaded_file(self):
+        text = ("7zip|26.04|updates|https://7-zip.org\n"
+                "kmod-nvidia|615.71|@commandline|https://www.nvidia.com/\n"
+                "someapp|1.5.2|@commandline|https://github.com/owner/someapp\n"
+                "repoapp|2.0|fedora|https://github.com/owner/repoapp\n"
+                "broken line\n")
+        found = scan.parse_rpm_list(text)
+        self.assertEqual([(f.id, f.kind, f.version) for f in found], [("github.com/owner/someapp", "RPM", "1.5.2")])
+
+    def test_appimages(self):
+        apps = self.home / "Applications"
+        apps.mkdir()
+        (apps / "LocalSend-1.18.2-linux-x86-64.AppImage").write_bytes(
+            b"\x7fELF" + b"\0" * 5000 + b"gh-releases-zsync|localsend|localsend|latest|*x86-64.AppImage.zsync\0")
+        (apps / "Mystery-2.0.AppImage").write_bytes(b"\x7fELF no update info")
+        (apps / "notes.txt").write_text("not an AppImage")
+        found = scan.find_appimages([str(apps), str(self.home / "missing")])
+        self.assertEqual([(f.id, f.kind, f.version) for f in found], [("github.com/localsend/localsend", "AppImage", "1.18.2")])
+
+    def test_version_in_appimage_names(self):
+        for name, version in [("LocalSend-1.18.2-linux-x86-64.AppImage", "1.18.2"), ("App_v2.0.1.AppImage", "2.0.1"),
+                              ("tool-3.1-beta.2-x86_64.AppImage", "3.1-beta.2"), ("NoVersion.AppImage", "")]:
+            self.assertEqual(scan.appimage_version(name), version, name)
+
+    def test_each_project_listed_once(self):
+        make_clone(self.home / "aero/aerothemeplasma", "https://gitgud.io/wackyideas/aerothemeplasma.git")
+        make_clone(self.home / "aero/aerothemeplasma/aerothemeplasma", "https://gitgud.io/WackyIdeas/aerothemeplasma")
+        found = scan.find_all(self.home, appimage_dirs=[], rpms=list)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].other_paths, [str(self.home / "aero/aerothemeplasma/aerothemeplasma")])
+
+
+def info(repo_id, host="gitlab", name="", description=""):
+    ref = RepoRef.from_id(repo_id)
+    return ProjectInfo(ref=ref, host=host, name=name or ref.name, description=description, default_branch="main")
+
+
+class IdentifyTest(unittest.TestCase):
+    def test_known_finds_arent_looked_up(self):
+        item = aero_clone(AERO_NEW)
+        checked = scan.identify([item], known=lambda _id: True, lookup=lambda ref: self.fail("no request needed"))
+        self.assertEqual(checked[0].problem, "")
+
+    def test_moved_project_gets_its_current_address(self):
+        item = aero_clone(AERO_OLD)
+        checked = scan.identify([item], known=lambda _id: False,
+                                lookup=lambda ref: info(AERO_NEW, name="AeroThemePlasma", description="Win 7 look"))
+        f = checked[0].found
+        self.assertEqual((f.id, f.host, f.aliases, f.name, f.description),
+                         (AERO_NEW, "gitlab", [AERO_OLD], "AeroThemePlasma", "Win 7 look"))
+
+    def test_problems_are_explained(self):
+        def lookup(ref):
+            if ref.path == "me/private":
+                raise sources.NotFound("nope")
+            raise sources.SourceError("example.org doesn't look like a GitHub or GitLab site. Only those are supported.")
+
+        checked = scan.identify([aero_clone("github.com/me/private"), aero_clone("example.org/a/b")],
+                                known=lambda _id: False, lookup=lookup)
+        self.assertIn("private", checked[0].problem)
+        self.assertIn("Only those are supported", checked[1].problem)
+
+
+class MirrorTest(unittest.TestCase):
+    """The same project on two sites (Aero on GitHub and gitgud.io) can't be told apart by address."""
+
+    def setUp(self):
+        self.cfg = Config(repos=[TrackedRepo(
+            id="github.com/aeroshell-desktop/aerothemeplasma", name="Aero", url="", host="github", follow="branch",
+            branch="Plasma/6.7", description="An alternative shell for KDE Plasma that aims to replicate the look and "
+                                             "feel of Windows 7.")])
+
+    def clone(self, description):
+        item = aero_clone(AERO_NEW)
+        item.description = description
+        return item
+
+    def test_same_name_and_description_looks_like_a_tracked_repo(self):
+        # gitgud's description has a trailing space and the name differs in case; still the same.
+        item = self.clone("An alternative shell for KDE Plasma that aims to replicate the look and feel of Windows 7. ")
+        self.assertIs(scan.looks_like(self.cfg, item), self.cfg.repos[0])
+
+    def test_different_description_isnt_a_match(self):
+        self.assertIsNone(scan.looks_like(self.cfg, self.clone("A fork with other goals.")))
+        self.assertIsNone(scan.looks_like(self.cfg, self.clone("")))
+
+    def test_linking_merges_into_the_tracked_repo(self):
+        item = self.clone("An alternative shell for KDE Plasma that aims to replicate the look and feel of Windows 7.")
+        scan.merge(self.cfg, [scan.link_to(item, self.cfg.repos[0])])
+        self.assertEqual(len(self.cfg.repos), 1)
+        repo = self.cfg.repos[0]
+        self.assertEqual((repo.id, repo.source, repo.aliases), ("github.com/aeroshell-desktop/aerothemeplasma",
+                                                                 "scanned", [AERO_NEW]))
+        # Next scan: the gitgud clone matches directly.
+        self.assertIs(self.cfg.find_any(AERO_NEW), repo)
 
 
 if __name__ == "__main__":

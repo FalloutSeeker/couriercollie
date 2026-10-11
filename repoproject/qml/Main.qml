@@ -28,6 +28,10 @@ Kirigami.ApplicationWindow {
         addDialog.open();
     }
 
+    function showScanDialog() {
+        scanDialog.openAndScan();
+    }
+
     // A separate window, as in other KDE apps. It blocks the main window while open, so it can't be opened twice.
     // The page belongs to this window rather than the Settings window: if it were deleted along with the Settings
     // window, a calculation inside Kirigami would run on the half-deleted page and log a TypeError. A page can only be
@@ -66,6 +70,16 @@ Kirigami.ApplicationWindow {
 
     FirstLaunchDialog {
         id: firstLaunch
+
+        // Ticking "Scan this computer" on the welcome screen runs a scan straight away.
+        onFinished: scanning => {
+            if (scanning)
+                scanDialog.openAndScan();
+        }
+    }
+
+    ScanDialog {
+        id: scanDialog
     }
 
     AddRepoDialog {

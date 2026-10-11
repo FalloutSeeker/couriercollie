@@ -1,29 +1,234 @@
-"""Turning what a scan finds into tracked repos, without duplicates.
+"""Scanning this computer for software that came from GitHub or GitLab (DESIGN.md §1).
 
-Finding things on disk is stage 3 (PLAN.md). This part decides what happens with each find: a repo already on the
-list (added by hand, installed from the app, or found before) is updated in place and marked as scanned; only
-genuinely new ones are added.
+Three steps:
+1. Find things on disk: git clones, RPMs installed from a downloaded file, AppImages. No network.
+2. Check each find with its site (`identify`): which project it is now (sites redirect renamed and moved projects),
+   or why it can't be tracked. Finds already on the list are matched without asking the site.
+3. Merge into the list (`merge`): a repo already on the list (added by hand, installed from the app, or found before)
+   is updated in place and marked as scanned. Only genuinely new ones are added.
 """
 
-from collections.abc import Callable
-from dataclasses import dataclass
+import os
+import re
+import subprocess
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 
+from . import assets, sources
 from .config import FOLLOW_BRANCH, SOURCE_SCANNED, Config, TrackedRepo
+from .sources import RepoRef, SourceError
+
+MAX_DEPTH = 6
+# Folders not worth looking in: dependencies, build output, caches. Hidden folders (".cache", ".local", …) are skipped
+# too.
+SKIP_DIRS = {"node_modules", "__pycache__", "venv", "site-packages", "vendor", "target", "build", "dist"}
+APPIMAGE_DIRS = ("~/Applications", "~/AppImages", "~/Downloads", "~/.local/bin", "~/bin", "/opt")
+# RPMs that came from a downloaded file rather than a package repository.
+RPM_FROM_FILE = {"@commandline", "<unknown>", "@System"}
 
 
 @dataclass
 class Found:
     """Something a scan found on this computer."""
 
-    id: str  # address as found on disk, e.g. from a clone's remote: may be an old name of the project
+    id: str  # "<domain>/<path>". Before `identify`, as on disk (may be an old name); after, the project's current one.
     name: str
     url: str
-    host: str
+    host: str  # "github"/"gitlab"; empty until identified
     path: str  # where on this computer
     kind: str  # assets.KIND_*: "git" for a clone
-    version: str  # what's on disk: a commit for a clone, a release tag for a downloaded app; "" if unknown
+    version: str  # what's on disk: a commit for a clone, a version number for an app or RPM; "" if unknown
     branch: str = ""  # for clones: the branch that's checked out
+    description: str = ""
+    other_paths: list[str] = field(default_factory=list)  # the same project found in more places
+    aliases: list[str] = field(default_factory=list)  # old addresses it was found under
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# 1. Finding things on disk
+
+
+def _git(path: str, *args: str) -> str:
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"}
+    try:
+        result = subprocess.run(["git", "-C", path, *args], capture_output=True, text=True, timeout=10, env=env)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def _clone_info(path: str) -> Found | None:
+    remote = _git(path, "config", "--get", "remote.origin.url")
+    if not remote:
+        # No "origin": use whichever remote there is.
+        first = _git(path, "remote").splitlines()
+        remote = _git(path, "config", "--get", f"remote.{first[0]}.url") if first else ""
+    try:
+        ref = sources.parse_url(remote)
+    except ValueError:
+        return None  # a local folder or an address that isn't a project page
+    return Found(
+        id=ref.id, name=ref.name, url=ref.web_url, host="", path=path, kind=assets.KIND_GIT,
+        version=_git(path, "rev-parse", "HEAD"), branch=_git(path, "symbolic-ref", "--short", "-q", "HEAD"),
+    )
+
+
+def find_git_clones(root: Path, max_depth: int = MAX_DEPTH) -> list[Found]:
+    found = []
+    root = root.expanduser()
+    base_depth = len(root.parts)
+    for dirpath, dirnames, filenames in os.walk(root):
+        if ".git" in dirnames or ".git" in filenames:
+            if item := _clone_info(dirpath):
+                found.append(item)
+        # Keep looking inside clones: some projects keep other clones in subfolders.
+        dirnames[:] = sorted(d for d in dirnames if not d.startswith(".") and d not in SKIP_DIRS)
+        if len(Path(dirpath).parts) - base_depth >= max_depth:
+            dirnames[:] = []
+    return found
+
+
+def parse_rpm_list(text: str) -> list[Found]:
+    """Parse `dnf repoquery --installed --qf '%{name}|%{version}|%{from_repo}|%{url}\\n'`: keep RPMs installed from
+    a downloaded file whose homepage is a project page."""
+    found = []
+    for line in text.splitlines():
+        parts = line.split("|")
+        if len(parts) != 4 or parts[2] not in RPM_FROM_FILE:
+            continue
+        name, version, _repo, url = parts
+        try:
+            ref = sources.parse_url(url)
+        except ValueError:
+            continue
+        found.append(Found(id=ref.id, name=name, url=ref.web_url, host="", path=f"RPM package “{name}”",
+                           kind=assets.KIND_RPM, version=version))
+    return found
+
+
+def find_rpms() -> list[Found]:
+    try:
+        result = subprocess.run(
+            ["dnf", "repoquery", "--installed", "--qf", "%{name}|%{version}|%{from_repo}|%{url}\n"],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    return parse_rpm_list(result.stdout) if result.returncode == 0 else []
+
+
+# AppImages made with the standard tools carry where they update from, e.g. "gh-releases-zsync|owner|repo|latest|…".
+_UPDATE_INFO = re.compile(rb"gh-releases-zsync\|([A-Za-z0-9_.-]+)\|([A-Za-z0-9_.-]+)\|")
+# "1.18.2", optionally with a pre-release part like "-beta.2" or "-rc1" (but not "-linux").
+_VERSION_IN_NAME = re.compile(r"(?<![\d.])v?(\d+(?:\.\d+)+(?:[-~](?:rc|beta|alpha|pre|dev)[0-9.]*)?)(?=[-_.+]|$)",
+                              re.I)
+
+
+def appimage_version(filename: str) -> str:
+    """The version in an AppImage's file name, e.g. "LocalSend-1.18.2-linux-x86-64.AppImage" -> "1.18.2"."""
+    stem = re.sub(r"\.appimage$", "", filename, flags=re.I)
+    m = _VERSION_IN_NAME.search(stem)
+    return m.group(1) if m else ""
+
+
+def appimage_source(path: Path) -> RepoRef | None:
+    try:
+        with open(path, "rb") as f:
+            head = f.read(4 * 1024 * 1024)  # the update info sits near the start of the file
+    except OSError:
+        return None
+    m = _UPDATE_INFO.search(head)
+    return RepoRef("github.com", f"{m.group(1).decode()}/{m.group(2).decode()}") if m else None
+
+
+def find_appimages(dirs: Iterable[str] = APPIMAGE_DIRS) -> list[Found]:
+    """AppImages that say where they came from. Others can't be matched to a project, so they're left out; they can
+    still be added by hand."""
+    found = []
+    for d in dirs:
+        folder = Path(d).expanduser()
+        if not folder.is_dir():
+            continue
+        for path in sorted(folder.iterdir()):
+            if path.suffix.lower() != ".appimage" or not path.is_file():
+                continue
+            if ref := appimage_source(path):
+                found.append(Found(id=ref.id, name=ref.name, url=ref.web_url, host="github", path=str(path),
+                                   kind=assets.KIND_APPIMAGE, version=appimage_version(path.name)))
+    return found
+
+
+def find_all(home: Path | None = None, appimage_dirs: Iterable[str] = APPIMAGE_DIRS,
+             rpms: Callable[[], list[Found]] = find_rpms) -> list[Found]:
+    """Everything on this computer, with each project listed once (extra places go in `other_paths`)."""
+    items = find_git_clones(home or Path.home()) + rpms() + find_appimages(appimage_dirs)
+    by_id: dict[str, Found] = {}
+    for item in items:
+        key = item.id.lower()
+        if key in by_id:
+            by_id[key].other_paths.append(item.path)
+        else:
+            by_id[key] = item
+    return list(by_id.values())
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# 2. Checking finds with their site
+
+
+@dataclass
+class Checked:
+    found: Found
+    problem: str = ""  # why it can't be tracked, for the user; empty if it can
+
+
+def identify(items: list[Found], known: Callable[[str], bool],
+             lookup: Callable[[RepoRef], sources.ProjectInfo] = sources.project_info) -> list[Checked]:
+    """Ask each find's site which project it is now. `known(id)` says if an address is already on the list: those
+    aren't looked up, so a scan of things you already track uses no requests."""
+    checked = []
+    for item in items:
+        if known(item.id):
+            checked.append(Checked(item))
+            continue
+        try:
+            info = lookup(RepoRef.from_id(item.id))
+        except sources.NotFound:
+            checked.append(Checked(item, "Not found on its site. It may be private, or have been removed."))
+            continue
+        except SourceError as e:
+            checked.append(Checked(item, str(e)))
+            continue
+        if info.ref.id.lower() != item.id.lower():
+            item.aliases.append(item.id)
+        item.id, item.url, item.host = info.ref.id, info.ref.web_url, info.host
+        item.description = info.description
+        if item.kind == assets.KIND_GIT:
+            item.name = info.name or item.name
+        checked.append(Checked(item))
+    return checked
+
+
+def _plain(text: str) -> str:
+    return " ".join(text.lower().split())
+
+
+def looks_like(config: Config, item: Found) -> TrackedRepo | None:
+    """A tracked repo that's probably the same project under another address: a mirror on another site (e.g. a GitHub
+    copy of a GitLab project). Same project name and same description, ignoring case and spacing. Addresses alone
+    can't tell, so the user decides."""
+    if not item.description.strip():
+        return None
+    name = RepoRef.from_id(item.id).name.lower()
+    return next((r for r in config.repos
+                 if RepoRef.from_id(r.id).name.lower() == name and _plain(r.description) == _plain(item.description)),
+                None)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# 3. Merging into the list
 
 
 @dataclass
@@ -32,29 +237,39 @@ class MergeResult:
     updated: list[TrackedRepo]  # already on the list; now marked as scanned
 
 
+def link_to(item: Found, repo: TrackedRepo) -> Found:
+    """Make a find merge into `repo` (the user confirmed it's the same project): the find's address becomes an alias."""
+    if item.id.lower() != repo.id.lower():
+        item.aliases.append(item.id)
+        item.id = repo.id
+    return item
+
+
 def merge(config: Config, found: list[Found], resolve: Callable[[str], str | None] = lambda _id: None) -> MergeResult:
     """Add or update tracked repos from scan finds.
 
-    `resolve` gives a project's current address for an old one (the sites redirect renamed and moved projects), or
-    None if unknown. It's only asked when an address doesn't match anything on the list directly.
+    A find matches a tracked repo by its address, any address it was found under (`Found.aliases`), or the tracked
+    repo's own aliases. `resolve` gives a project's current address for an old one, or None; it's only asked when
+    nothing matches directly.
     """
     result = MergeResult(added=[], updated=[])
     for item in found:
-        repo = config.find_any(item.id)
+        repo = next((r for a in (item.id, *item.aliases) if (r := config.find_any(a))), None)
         if repo is None and (current := resolve(item.id)):
             repo = config.find_any(current)
-            if repo is not None:
-                # Remember the old address, so the next scan matches without asking the site.
-                repo.aliases.append(item.id)
         if repo is None:
             repo = TrackedRepo(
-                id=item.id, name=item.name, url=item.url, host=item.host,
+                id=item.id, name=item.name, url=item.url, host=item.host, description=item.description,
                 added_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
             )
             config.repos.append(repo)
             result.added.append(repo)
         elif repo not in result.updated:
             result.updated.append(repo)
+        # Remember old addresses, so the next scan matches without asking the site.
+        for alias in (item.id, *item.aliases):
+            if alias.lower() != repo.id.lower() and alias.lower() not in (a.lower() for a in repo.aliases):
+                repo.aliases.append(alias)
         _apply(repo, item)
     return result
 
@@ -63,10 +278,14 @@ def _apply(repo: TrackedRepo, item: Found) -> None:
     """What's on disk wins over what was set by hand: it's the version you actually have."""
     repo.source = SOURCE_SCANNED
     repo.local_path = item.path
-    if item.kind == "git":
+    if item.kind == assets.KIND_GIT:
         # A clone's version is a commit, so it's followed by branch.
-        repo.follow, repo.kind = FOLLOW_BRANCH, "git"
+        repo.follow, repo.kind = FOLLOW_BRANCH, assets.KIND_GIT
         if item.branch:
             repo.branch = item.branch
+    elif item.kind == assets.KIND_APPIMAGE and not repo.asset_pattern and item.version:
+        # Follow the same file as the one on disk, e.g. "App-*-x86_64.AppImage".
+        repo.asset_pattern = assets.pattern_for(Path(item.path).name, item.version)
+        repo.kind = assets.KIND_APPIMAGE
     if item.version:
         repo.installed = item.version

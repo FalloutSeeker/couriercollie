@@ -95,6 +95,8 @@ Kirigami.Dialog {
         QQC2.CheckBox {
             id: scanBox
 
+            objectName: "scanBox"
+
             text: "Scan this computer for repos I've already installed"
             checked: false
         }
