@@ -328,13 +328,22 @@ def compare(ref: RepoRef, host: str, yours: str, head: str, get=http_get_json) -
     if yours == head:
         return Comparison(SAME)
     if host == "github":
-        return parse_github_compare(get(f"https://api.github.com/repos/{ref.path}/compare/{yours}...{head}",
-                                        _GITHUB_HEADERS))
+        try:
+            return parse_github_compare(get(f"https://api.github.com/repos/{ref.path}/compare/{yours}...{head}",
+                                            _GITHUB_HEADERS))
+        except NotFound:
+            # Also the answer for branches with no shared history (e.g. a branch started from scratch). If your
+            # commit is on the site, that's what this is; if not, it really isn't there.
+            get(f"https://api.github.com/repos/{ref.path}/commits/{yours}", _GITHUB_HEADERS)
+            return Comparison(DIVERGED)
     api = f"{_gitlab_api(ref.domain, ref.path)}/repository"
     commits = parse_gitlab_compare(get(f"{api}/compare?{urllib.parse.urlencode({'from': yours, 'to': head})}"))
     if not commits:
         return Comparison(AHEAD)  # nothing on the branch that you don't have
-    base = get(f"{api}/merge_base?{urllib.parse.urlencode([('refs[]', yours), ('refs[]', head)])}")
+    try:
+        base = get(f"{api}/merge_base?{urllib.parse.urlencode([('refs[]', yours), ('refs[]', head)])}")
+    except NotFound:
+        return Comparison(DIVERGED, len(commits), commits)  # no shared history at all
     relation = BEHIND if (base or {}).get("id") == yours else DIVERGED
     return Comparison(relation, len(commits), commits)
 

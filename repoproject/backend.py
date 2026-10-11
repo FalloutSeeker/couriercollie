@@ -694,7 +694,9 @@ class Backend(QObject):
             return {"status": "Checking\u2026", "updateAvailable": False}
         if c is None:
             site = RepoRef.from_id(repo.id).domain
-            return {"status": f"Your version ({yours_text}) isn\u2019t on {site}, so it can\u2019t be compared with {branch}.",
+            return {"status": f"Couldn\u2019t compare your version ({yours_text}) with {branch}. {site} may not have "
+                              "that commit (for example, one that was never pushed), or couldn\u2019t be reached; "
+                              "Refresh tries again.",
                     "updateAvailable": False}
         if c.relation == sources.BEHIND:
             return {"status": f"Newer commits on {branch} (you have {yours_text})", "updateAvailable": True}
@@ -703,7 +705,7 @@ class Backend(QObject):
         if c.relation == sources.SAME:
             return {"status": "Up to date", "updateAvailable": False}
         where = f"your clone is on {d.branch_on_disk}" if d.branch_on_disk and d.branch_on_disk != branch \
-            else "it\u2019s from another line of work"
+            else f"your version ({yours_text}) isn\u2019t part of it"
         return {"status": f"Not comparable with {branch}: {where}.", "updateAvailable": False}
 
     @Slot(str)

@@ -4,6 +4,11 @@ Newest first.
 
 ## 2026-10-10
 
+- Bug: on the hand-added "Test" repo (gitgud.io/atmk/app-store), choosing the "flatpak" branch said the user's commit
+  wasn't on gitgud.io, as if it were fake. "flatpak" was started from scratch and shares no history with "master",
+  so gitgud.io answers "Merge Base Not Found". That's now read as "split apart": "Not comparable with flatpak: your
+  version (commit 405c894) isn't part of it." GitHub gives a 404 for the same case; the app then checks your
+  commit exists before saying so. The "couldn't compare" message no longer blames the commit.
 - Bug: every SMOD branch said "Newer commits", because any difference from a branch's newest commit counted as an
   update. Now the app asks the site how your commit relates to the branch's newest: behind (an update, with the
   new commits listed), ahead ("Your version is newer than master"), split apart ("Not comparable with

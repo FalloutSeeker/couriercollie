@@ -144,6 +144,15 @@ class BackendTest(unittest.TestCase):
         self.assertEqual(d["versionText"], "v1.0.0")
         self.assertTrue(d["updateAvailable"])
 
+    def test_branch_with_no_shared_history(self):
+        # Added by hand on "main"; "dev" was started from scratch.
+        self.relations["b" * 40] = sources.DIVERGED
+        self.backend.setFollow(LOCALSEND, "branch")
+        self.backend.setBranch(LOCALSEND, "dev")
+        d = self.backend.details(LOCALSEND)
+        self.assertEqual(d["status"], "Not comparable with dev: your version (commit aaaaaaa) isn\u2019t part of it.")
+        self.assertFalse(d["updateAvailable"])
+
     def test_branch_versions_are_commits(self):
         self.backend.setFollow(LOCALSEND, "branch")
         repo = self.saved(LOCALSEND)
@@ -295,7 +304,7 @@ class ScannedClonePageTest(unittest.TestCase):
         sources.compare = lambda *a: (_ for _ in ()).throw(sources.SourceError("404"))
         self.backend.loadDetails("gitgud.io/aeroshell/smod", True)
         d = self.backend.details("gitgud.io/aeroshell/smod")
-        self.assertIn("isn\u2019t on gitgud.io", d["status"])
+        self.assertTrue(d["status"].startswith("Couldn\u2019t compare your version"), d["status"])
         self.assertFalse(d["updateAvailable"])
 
     def test_switching_branch_and_back_keeps_the_version_on_disk(self):

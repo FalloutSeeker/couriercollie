@@ -170,6 +170,32 @@ class CompareTest(unittest.TestCase):
         self.assertEqual(c.relation, sources.AHEAD)
         self.assertEqual(len(urls), 1)
 
+    def test_gitlab_no_shared_history(self):
+        # e.g. atmk/app-store's "flatpak" branch: started from scratch, so there's no common ancestor.
+        def get(url, headers=None):
+            if "/merge_base?" in url:
+                raise sources.NotFound("404 Merge Base Not Found")
+            return {"commits": [{"id": "8c9e698", "title": "Updated to use latest libaero"}]}
+
+        c = sources.compare(RepoRef("gitgud.io", "atmk/app-store"), "gitlab", "405c894", "8c9e698", get)
+        self.assertEqual(c.relation, sources.DIVERGED)
+
+    def test_github_no_shared_history(self):
+        def get(url, headers=None):
+            if "/compare/" in url:
+                raise sources.NotFound("No common ancestor")
+            return {"sha": "405c894"}  # your commit is there
+
+        c = sources.compare(RepoRef("github.com", "a/b"), "github", "405c894", "8c9e698", get)
+        self.assertEqual(c.relation, sources.DIVERGED)
+
+    def test_github_commit_not_on_the_site(self):
+        def get(url, headers=None):
+            raise sources.NotFound("Not found")
+
+        with self.assertRaises(sources.NotFound):
+            sources.compare(RepoRef("github.com", "a/b"), "github", "local-only", "8c9e698", get)
+
     def test_same_commit_needs_no_request(self):
         c = sources.compare(RepoRef("github.com", "a/b"), "github", "x", "x", get=lambda *a: self.fail("no request"))
         self.assertEqual(c.relation, sources.SAME)
