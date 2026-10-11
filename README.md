@@ -1,6 +1,6 @@
 # couriercollie
 
-Inspired by Obtainium, keep the software you got from GitHub and GitLab up to date, in one simple window.
+Inspired by [Obtainium](https://github.com/ImranR98/Obtainium), keep the software you got from GitHub and GitLab up to date, in one simple window.
 
 ![couriercollie showing an update for LocalSend](docs/screenshot.png)
 
