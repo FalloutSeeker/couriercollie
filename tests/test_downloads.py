@@ -114,6 +114,12 @@ class InstallTest(AppImageCase):
         self.assertIn('Exec="' + str(self.folder) + '/My \\\\$App.AppImage" %U', text)
         self.assertIn("X-colliecourier-Repo=github.com/a/app", text)
 
+    def test_a_name_cant_add_lines_to_the_menu_entry(self):
+        entry = updater.write_menu_entry("github.com/a/app", "App\nExec=rm -rf ~", Path("/x/App.AppImage"), "")
+        lines = entry.read_text().splitlines()
+        self.assertIn("Name=App Exec=rm -rf ~", lines)
+        self.assertEqual([line for line in lines if line.startswith("Exec=")], ['Exec="/x/App.AppImage" %U'])
+
 
 class InstallClickedTest(AppImageCase):
     """Install / Update clicked in the window for a repo that follows an AppImage."""

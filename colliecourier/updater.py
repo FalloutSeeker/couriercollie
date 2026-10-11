@@ -435,21 +435,27 @@ def repoint_menu_entries(old: Path, new: Path) -> int:
     return changed
 
 
+def _one_line(text: str) -> str:
+    """A value for one line of a desktop entry: line breaks and other control characters would start new lines (new
+    keys), so they become spaces."""
+    return "".join(" " if ord(c) < 32 or ord(c) == 127 else c for c in text)
+
+
 def write_menu_entry(repo_id: str, name: str, app: Path, icon: str) -> Path:
     """A menu entry (KDE launcher) for an AppImage the app installed. Marked as the app's, so it's kept up to date."""
-    entry = menu_dir() / f"colliecourier-{repo_id.replace('/', '-').lower()}.desktop"
+    entry = menu_dir() / f"colliecourier-{_folder_name(repo_id.replace('/', '-').lower())}.desktop"
     entry.parent.mkdir(parents=True, exist_ok=True)
     entry.write_text("\n".join([
         "[Desktop Entry]",
         "Type=Application",
-        f"Name={name}",
-        f"Exec={_desktop_quote(app)} %U",
-        f"TryExec={app}",
-        f"Icon={icon or 'application-vnd.appimage'}",
+        f"Name={_one_line(name)}",
+        f"Exec={_one_line(_desktop_quote(app))} %U",
+        f"TryExec={_one_line(str(app))}",
+        f"Icon={_one_line(icon) or 'application-vnd.appimage'}",
         "Terminal=false",
         "Categories=Utility;",
         "Comment=Installed by colliecourier",
-        f"X-colliecourier-Repo={repo_id}",
+        f"X-colliecourier-Repo={_one_line(repo_id)}",
     ]) + "\n", encoding="utf-8")
     return entry
 

@@ -191,14 +191,21 @@ def use_github_login(get_token: Callable[[], str] | None) -> None:
         _login, _token, login_rejected = get_token, None, False
 
 
+# What a GitHub login looks like ("gho_…", "ghp_…", "github_pat_…"). Anything else isn't sent: a stray character
+# could break the request, and the error would then quote the login.
+_TOKEN_FORM = re.compile(r"[A-Za-z0-9_]{20,255}")
+
+
 def _github_token() -> str:
-    global _token
+    global _token, login_rejected
     with _token_lock:
         if _token is None:
             try:
-                _token = (_login() if _login else "") or ""
+                _token = ((_login() if _login else "") or "").strip()
             except Exception:  # noqa: BLE001  (a password store that can't be reached: carry on without)
                 _token = ""
+            if _token and not _TOKEN_FORM.fullmatch(_token):
+                _token, login_rejected = "", True
         return _token
 
 
@@ -239,12 +246,12 @@ def _keep(url: str, etag: str, body) -> None:
         pass  # asked for in full next time
 
 
-def http_get_json(url: str, headers: dict | None = None):
+def http_get_json(url: str, headers: dict | None = None, _without_login: bool = False):
     """GET a URL and parse the JSON answer. Follows redirects (sites redirect renamed projects)."""
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **(headers or {})})
     parsed = urllib.parse.urlparse(url)
     domain = parsed.hostname
-    token = _github_token() if domain == GITHUB_API else ""
+    token = _github_token() if domain == GITHUB_API and parsed.scheme == "https" and not _without_login else ""
     if token:
         # Not carried over if the request is redirected, so it can't end up anywhere but GitHub's API.
         req.add_unredirected_header("Authorization", f"Bearer {token}")
@@ -264,7 +271,7 @@ def http_get_json(url: str, headers: dict | None = None):
         if e.code == 401 and token:
             # The login no longer works (revoked on GitHub, or gh signed out): carry on without it; Settings says so.
             _drop_rejected_login()
-            return http_get_json(url, headers)
+            return http_get_json(url, headers, _without_login=True)
         if e.code == 404:
             # GitHub and GitLab say "not found" in JSON. Any other website's 404 page means it's not one of them.
             try:

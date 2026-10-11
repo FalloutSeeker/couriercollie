@@ -11,6 +11,13 @@ from pathlib import Path
 
 from colliecourier import github_login, sources
 
+# Logins as GitHub makes them (the length matters: anything else isn't sent).
+APPROVED = "gho_x_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+SECRET = "gho_secret_aaaaaaaaaaaaaaaaaaaaaaaaaa"
+TOKEN = "gho_token_aaaaaaaaaaaaaaaaaaaaaaaaaaa"
+NEW = "gho_new_aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+CLI = "gho_cli_aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
 
 class DeviceFlowTest(unittest.TestCase):
     """Signing in with a code entered at github.com/login/device. GitHub's answers are stand-ins."""
@@ -36,12 +43,17 @@ class DeviceFlowTest(unittest.TestCase):
         self.assertEqual((url, fields), (github_login.DEVICE_CODE_URL, {"client_id": github_login.CLIENT_ID,
                                                                          "scope": ""}))
 
+    def test_the_button_only_ever_opens_github(self):
+        code = github_login.start(self.post([{"device_code": "d", "user_code": "ABCD-1234",
+                                              "verification_uri": "https://example.com/phish"}]))
+        self.assertEqual(code.verification_uri, "https://github.com/login/device")
+
     def test_waits_until_approved_slowing_down_when_told(self):
         pauses = []
         token = github_login.wait(self.code, threading.Event(), self.post([
-            {"error": "authorization_pending"}, {"error": "slow_down", "interval": 10}, {"access_token": "gho_x"}]),
+            {"error": "authorization_pending"}, {"error": "slow_down", "interval": 10}, {"access_token": APPROVED}]),
             pause=pauses.append)
-        self.assertEqual(token, "gho_x")
+        self.assertEqual(token, APPROVED)
         self.assertEqual(pauses, [5, 5, 10])
         self.assertNotIn("client_secret", self.asked[-1][1])  # none is needed, and none is kept
 
@@ -81,10 +93,10 @@ esac
 
     def test_keep_find_and_forget(self):
         self.assertEqual(github_login.kept(), "")
-        github_login.keep("gho_secret")
-        self.assertEqual(github_login.kept(), "gho_secret")
-        self.assertEqual(github_login.token_for(github_login.WITH_CODE), "gho_secret")
-        self.assertNotIn("gho_secret", self.args.read_text())  # on stdin, not on a command line
+        github_login.keep(SECRET)
+        self.assertEqual(github_login.kept(), SECRET)
+        self.assertEqual(github_login.token_for(github_login.WITH_CODE), SECRET)
+        self.assertNotIn(SECRET, self.args.read_text())  # on stdin, not on a command line
         self.assertIn("service colliecourier account github", self.args.read_text())
         github_login.forget()
         self.assertEqual(github_login.kept(), "")
@@ -100,7 +112,7 @@ class SentOnlyToGitHubTest(unittest.TestCase):
         os.environ["XDG_CACHE_HOME"] = self.dir.name
         self.addCleanup(lambda: os.environ.__setitem__("XDG_CACHE_HOME", saved_cache) if saved_cache
                         else os.environ.pop("XDG_CACHE_HOME", None))
-        sources.use_github_login(lambda: "gho_token")
+        sources.use_github_login(lambda: TOKEN)
         self.addCleanup(sources.use_github_login, None)
         self.sent = []
         self.answers = []
@@ -125,9 +137,31 @@ class SentOnlyToGitHubTest(unittest.TestCase):
         sources.http_get_json("https://api.github.com/repos/a/b")
         sources.http_get_json("https://gitlab.com/api/v4/projects/a%2Fb")
         github, gitlab = self.sent
-        self.assertEqual(github.unredirected_hdrs.get("Authorization"), "Bearer gho_token")
+        self.assertEqual(github.unredirected_hdrs.get("Authorization"), f"Bearer {TOKEN}")
         self.assertNotIn("Authorization", github.headers)  # headers that would follow a redirect
         self.assertIsNone(gitlab.get_header("Authorization"))
+
+    def test_not_over_plain_http_and_not_a_malformed_login(self):
+        self.answers = [(200, b"{}", {}), (200, b"{}", {})]
+        sources.http_get_json("http://api.github.com/repos/a/b")
+        self.assertIsNone(self.sent[0].get_header("Authorization"))
+        sources.use_github_login(lambda: TOKEN + "\nX-Injected: 1")  # e.g. a damaged password store entry
+        sources.http_get_json("https://api.github.com/repos/a/b")
+        self.assertIsNone(self.sent[1].get_header("Authorization"))
+        self.assertTrue(sources.login_rejected)  # and Settings says so
+
+    def test_errors_never_quote_the_login(self):
+        self.answers = [(500, b"{}", {}), (403, b"{}", {"x-ratelimit-remaining": "0"})]
+        for _ in range(2):
+            with self.assertRaises(sources.SourceError) as caught:
+                sources.http_get_json("https://api.github.com/repos/a/b")
+            self.assertNotIn(TOKEN, str(caught.exception))
+
+    def test_turned_down_twice_is_asked_again_only_once(self):
+        self.answers = [(401, b"{}", {}), (401, b"{}", {})]
+        with self.assertRaisesRegex(sources.BadAnswer, r"\(401\)"):
+            sources.http_get_json("https://api.github.com/repos/a/b")
+        self.assertEqual(len(self.sent), 2)
 
     def test_unchanged_release_lists_come_from_the_cache(self):
         url = "https://api.github.com/repos/a/b/releases?per_page=5"
@@ -161,11 +195,11 @@ class SettingsSignInTest(unittest.TestCase):
         fakes = {
             (github_login, "start"): lambda: github_login.DeviceCode("d", "ABCD-1234", "https://github.com/login/device",
                                                                       5, 900),
-            (github_login, "wait"): lambda code, cancelled: "gho_new",
+            (github_login, "wait"): lambda code, cancelled: NEW,
             (github_login, "keep"): self.kept.append,
             (github_login, "forget"): lambda: self.forgotten.append(True),
-            (github_login, "gh_token"): lambda: "gho_cli",
-            (account, "user_name"): lambda token: {"gho_new": "octocat", "gho_cli": "FalloutSeeker"}[token],
+            (github_login, "gh_token"): lambda: CLI,
+            (account, "user_name"): lambda token: {NEW: "octocat", CLI: "FalloutSeeker"}[token],
             (sources, "github_rate"): lambda: {"limit": 5000, "remaining": 4990, "reset": "13:00"},
         }
         for (module, name), fake in fakes.items():
@@ -188,11 +222,11 @@ class SettingsSignInTest(unittest.TestCase):
         self.backend.startSignIn()
         gh = self.backend.github
         self.assertEqual((gh["way"], gh["user"], gh["remaining"]), ("app", "octocat", 4990))
-        self.assertEqual(self.kept, ["gho_new"])  # kept in the password store
+        self.assertEqual(self.kept, [NEW])  # kept in the password store
         saved = self.config.load(self.path).settings
         self.assertEqual((saved.github_login, saved.github_user), ("app", "octocat"))
-        self.assertNotIn("gho_new", self.path.read_text())  # never in the settings file
-        self.assertEqual(sources._github_token(), "gho_new")  # used straight away
+        self.assertNotIn(NEW, self.path.read_text())  # never in the settings file
+        self.assertEqual(sources._github_token(), NEW)  # used straight away
         self.backend.signOut()
         self.assertEqual((self.backend.github["way"], self.forgotten), ("", [True]))
         self.assertEqual(sources._github_token(), "")
@@ -203,7 +237,7 @@ class SettingsSignInTest(unittest.TestCase):
         self.backend.useGhLogin()
         self.assertEqual((self.backend.github["way"], self.backend.github["user"]), ("gh", "FalloutSeeker"))
         self.assertEqual(self.kept, [])
-        self.assertEqual(sources._github_token(), "gho_cli")
+        self.assertEqual(sources._github_token(), CLI)
         self.backend.signOut()
         self.assertEqual(self.forgotten, [])  # gh's own login is left alone
 

@@ -19,6 +19,8 @@ def use_login(way: str) -> None:
 
 def user_name(token: str) -> str:
     """The GitHub account a login belongs to (one request, counted against that login's 5,000)."""
+    if not sources._TOKEN_FORM.fullmatch(token):
+        raise github_login.LoginError("That doesn\u2019t look like a GitHub login, so it wasn\u2019t used.")
     req = urllib.request.Request(f"https://{sources.GITHUB_API}/user",
                                  headers={"User-Agent": sources.USER_AGENT, "Accept": "application/vnd.github+json"})
     req.add_unredirected_header("Authorization", f"Bearer {token}")

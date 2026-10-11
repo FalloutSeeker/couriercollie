@@ -24,6 +24,8 @@ from dataclasses import dataclass
 CLIENT_ID = "Ov23liPCNM8DJb8qmhuS"
 DEVICE_CODE_URL = "https://github.com/login/device/code"
 TOKEN_URL = "https://github.com/login/oauth/access_token"
+# Where the code is entered. Always this address, whatever GitHub's answer says, so the button can only open GitHub.
+VERIFY_URL = "https://github.com/login/device"
 # Where the login is kept in the password store.
 SECRET = ["service", "colliecourier", "account", "github"]
 TIMEOUT = 20
@@ -65,7 +67,7 @@ def start(post=_post) -> DeviceCode:
     """Ask GitHub for a code to sign in with. No access is asked for (no scopes): public information only."""
     answer = post(DEVICE_CODE_URL, {"client_id": CLIENT_ID, "scope": ""})
     try:
-        return DeviceCode(answer["device_code"], answer["user_code"], answer["verification_uri"],
+        return DeviceCode(answer["device_code"], answer["user_code"], VERIFY_URL,
                           int(answer.get("interval", 5)), int(answer.get("expires_in", 900)))
     except (KeyError, TypeError, ValueError) as e:
         raise LoginError(answer.get("error_description") or "GitHub didn’t give a code to sign in with.") from e
