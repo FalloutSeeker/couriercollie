@@ -92,7 +92,9 @@ python3 -I devtools/check_rpm.py             # bottom's real .rpm up to dnf, whi
 | `repoproject/icons.py`     | Repo icons: from this computer, the project's site, or the default (D13)          |
 | `repoproject/checker.py`   | Checking every repo for updates; results kept apart from settings                 |
 | `repoproject/integration.py` | Menu entry, notifications, taskbar badge, background timer, one copy at a time |
+| `repoproject/updater.py`   | Updating: pulling and cloning, downloads checked and put in place, dnf          |
 | `repoproject/backend.py`   | Connects the window to the above; runs network work in the background          |
+| `repoproject/updating.py`  | The backend's Update and Install buttons and install scripts (part of it)      |
 | `repoproject/qml/`         | The window: list page, repo page, Add dialog                                   |
 
 ## Files
