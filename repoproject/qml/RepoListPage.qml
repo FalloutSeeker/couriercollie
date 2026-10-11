@@ -10,7 +10,9 @@ Kirigami.ScrollablePage {
 
     // The Scan button is only in the list while scanning is allowed. Listing it hidden instead makes Kirigami log
     // "Could not create delegate for ToolBarLayout" at start-up.
-    actions: backend.settings.scanning ? [addAction, scanAction, checkAction, settingsAction]
+    // Check Now before Scan: when the column is narrow, the last ones go into the overflow menu, and Scan is the
+    // occasional one.
+    actions: backend.settings.scanning ? [addAction, checkAction, scanAction, settingsAction]
                                        : [addAction, checkAction, settingsAction]
 
     // The category whose name is being edited in its heading, and why the typed name can't be used.
@@ -84,7 +86,7 @@ Kirigami.ScrollablePage {
         icon.name: "configure"
         text: "Settings"
         shortcut: StandardKey.Preferences
-        displayHint: Kirigami.DisplayHint.IconOnly
+        displayHint: Kirigami.DisplayHint.IconOnly | Kirigami.DisplayHint.KeepVisible
         onTriggered: applicationWindow().openSettings()
     }
 
