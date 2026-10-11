@@ -176,6 +176,23 @@ def check_repo(repo: TrackedRepo, github_limited: threading.Event | None = None)
     return result
 
 
+def recheck_against(old: Result, yours: str, by_branch: bool, branch: str = "") -> Result:
+    """A check's result redone for a different version of yours, against the same newest version, without asking
+    the site. A branch commit that's neither the newest nor known to be behind it can't be judged this way, so that
+    keeps the old result until the next check."""
+    newest = old.newest
+    if not yours or yours == NOT_INSTALLED:
+        what = f"following {branch}" if by_branch else f"newest {newest}"
+        return dataclasses.replace(old, status=NOT_INSTALLED_YET, text=f"Not installed \u00b7 {what}",
+                                   not_rechecked=False)
+    same = yours == newest or (not by_branch and assets.version_of(yours) == assets.version_of(newest))
+    if same:
+        return dataclasses.replace(old, status=UP_TO_DATE, text="Up to date", not_rechecked=False)
+    if not by_branch:
+        return dataclasses.replace(old, status=UPDATE, text=f"Update available: {newest}", not_rechecked=False)
+    return old
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Everything
 

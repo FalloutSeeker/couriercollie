@@ -174,6 +174,20 @@ class CheckNowTest(unittest.TestCase):
         # Kept for next time, next to the settings file.
         self.assertEqual(Backend(self.path).checks["updates"], 1)
 
+    def test_choosing_the_newest_clears_the_update_at_once(self):
+        self.backend.checkNow()
+        self.assertTrue(self.backend.repo("github.com/a/app")["updateAvailable"])
+        self.backend.setInstalled("github.com/a/app", "v2")  # "Set as My Version" on the newest release
+        row = self.backend.repo("github.com/a/app")
+        self.assertEqual((row["updateAvailable"], row["checkText"]), (False, "Up to date"))
+        self.assertEqual(self.backend.checks["updates"], 0)
+        self.assertEqual(Backend(self.path).checks["updates"], 0)  # saved, so the timer's next notification agrees
+        self.backend.setInstalled("github.com/a/app", "v1")  # back to an older one
+        self.assertEqual(self.backend.repo("github.com/a/app")["checkText"], "Update available: v2")
+        self.backend.setInstalled("github.com/a/app", "-")  # "Mark as Not Installed"
+        self.assertEqual(self.backend.repo("github.com/a/app")["checkText"], "Not installed \u00b7 newest v2")
+        self.assertEqual(self.backend.checks["updates"], 0)
+
     def test_requests_from_outside(self):
         shown = []
         self.backend.activateRequested.connect(lambda: shown.append(True))

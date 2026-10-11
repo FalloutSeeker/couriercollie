@@ -26,6 +26,35 @@ def report():
     h.shot("updates")
 
 
+def choose_newest_steps():
+    """Open a repo with an update, click "Set as My Version" on its newest release: the list updates at once."""
+    picked = {}
+
+    def open_one():
+        repo = next((r for r in b._config.repos if b.repo(r.id)["updateAvailable"] and r.follow == "releases"), None)
+        picked["repo"], picked["count"] = repo, b.checks["updates"]
+        if repo:
+            h.win.openRepo(repo.id)
+
+    def click_newest():
+        repo = picked["repo"]
+        if repo:
+            newest = b._checks.results[repo.id].newest
+            h.click("mine:" + newest)
+
+    def verify():
+        repo = picked["repo"]
+        if not repo:
+            print("  (no repo with a release update to try this on)")
+            return
+        h.check(f"{repo.name}: update icon gone at once", h.find("updateIcon:" + repo.id) is None)
+        h.check("update count went down by one", b.checks["updates"] == picked["count"] - 1)
+        h.shot("updates-chose-newest")
+
+    return [(0, open_one), h.until(lambda: not picked["repo"] or b.details(picked["repo"].id)["state"] == "ready"),
+            (800, click_newest), (500, verify)]
+
+
 def rate_limited():
     """Pretend GitHub's hourly limit stopped one repo being checked."""
     from repoproject import checker
@@ -43,6 +72,7 @@ h.run([
     (200, lambda: h.check("checking", b.checking)),
     h.until(lambda: not b.checking, 60000),
     (500, report),
+    *choose_newest_steps(),
     (0, rate_limited),
     (500, lambda: (h.check("rate-limit bar shown", h.find("rateLimitBar") is not None), h.shot("updates-rate-limited"))),
 ])

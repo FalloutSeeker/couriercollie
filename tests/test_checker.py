@@ -153,6 +153,25 @@ class CheckAllTest(unittest.TestCase):
         self.assertEqual(len(state.updates()), 4)
 
 
+class RecheckTest(unittest.TestCase):
+    """A result redone for a new version of yours, without asking the site."""
+
+    def test_releases(self):
+        old = checker.Result(checker.UPDATE, "Update available: v1.19.0", "v1.19.0", "2026-10-11T00:00:00+00:00")
+        self.assertEqual(checker.recheck_against(old, "v1.19.0", by_branch=False).status, checker.UP_TO_DATE)
+        self.assertEqual(checker.recheck_against(old, "1.19.0", by_branch=False).status, checker.UP_TO_DATE)
+        self.assertEqual(checker.recheck_against(old, "-", by_branch=False).text, "Not installed \u00b7 newest v1.19.0")
+        up = checker.recheck_against(old, "v1.19.0", by_branch=False)
+        self.assertEqual(checker.recheck_against(up, "v1.18.0", by_branch=False).status, checker.UPDATE)
+        self.assertEqual(up.checked_at, old.checked_at)  # still the time the site was asked
+
+    def test_branch(self):
+        old = checker.Result(checker.UPDATE, "1 new commit on main", "h" * 40)
+        self.assertEqual(checker.recheck_against(old, "h" * 40, by_branch=True).status, checker.UP_TO_DATE)
+        # Some other commit: can't tell without asking the site, so the last result stays.
+        self.assertEqual(checker.recheck_against(old, "x" * 40, by_branch=True), old)
+
+
 class StateTest(unittest.TestCase):
     def test_save_and_load(self):
         with tempfile.TemporaryDirectory() as d:

@@ -379,6 +379,24 @@ class Backend(QObject):
 
         self._run(lambda: checker.check_all(repos, previous), done)
 
+    def _version_changed(self, repo: TrackedRepo):
+        """Your version changed (set by hand, or read from disk): bring the last check's result for this repo in line
+        straight away, using the newest version that check found. No request needed."""
+        old = self._checks.results.get(repo.id)
+        if not old or not old.newest or old.status not in (checker.UPDATE, checker.UP_TO_DATE, checker.NOT_INSTALLED_YET):
+            return
+        new = checker.recheck_against(old, repo.installed, by_branch=repo.follow == FOLLOW_BRANCH,
+                                      branch=repo.branch)
+        if new == old:
+            return
+        self._checks.results[repo.id] = new
+        try:
+            checker.save_state(self._checks, self._state_path)
+        except OSError:
+            pass
+        self.checksChanged.emit()
+        self._update_badge()
+
     @Slot(str)
     def handleRequest(self, message):
         """From integration.tell_running_app: "show" (a second launch) or "check" (the background timer)."""
@@ -807,6 +825,7 @@ class Backend(QObject):
                     from_disk = bool(on_disk and on_disk[0] and on_disk[0] != repo.installed)
                     if from_disk:
                         repo.installed = on_disk[0]
+                        self._version_changed(repo)
                     baseline_set = _set_baseline(repo, self._details[repo_id])
                     tag_matched = _match_tag(repo, self._details[repo_id])
                     if _fit_files(repo, self._details[repo_id]) or baseline_set or tag_matched or from_disk:
@@ -954,6 +973,7 @@ class Backend(QObject):
     def setInstalled(self, repo_id, version):
         if (repo := self._config.find(repo_id)) and version and version != repo.installed:
             repo.installed = version
+            self._version_changed(repo)
             self._changed(repo_id)
             if repo.follow == FOLLOW_BRANCH:
                 self._refresh_whats_new(repo_id)  # compare the new version with the branch
@@ -1022,6 +1042,7 @@ class Backend(QObject):
             d.local_missing, d.branch_on_disk = bool(on_disk) and not on_disk[1], branch_on_disk
             if on_disk and on_disk[0] and on_disk[0] != repo.installed:
                 repo.installed = on_disk[0]
+                self._version_changed(repo)
                 self._changed(repo_id)
             else:
                 self.detailsChanged.emit(repo_id)
