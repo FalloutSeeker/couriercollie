@@ -4,6 +4,10 @@
 straight from GitHub or GitLab (git clones, release downloads, AppImages, loose programs), checks for new versions on a
 schedule, and lets you update with a click.
 
+Tools already exist for pieces of this: Topgrade runs your updaters from a terminal, Gear Lever handles AppImages,
+eget fetches release programs, nvchecker reports new versions. RepoProject brings these jobs together in one simple
+window, so there's one app to install and learn instead of several tools and their commands.
+
 ## Status
 
 **Stages 1–5 of PLAN.md are built.** You can add GitHub/GitLab repos by hand or scan this computer for them, sort

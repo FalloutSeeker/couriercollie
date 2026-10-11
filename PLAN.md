@@ -93,8 +93,20 @@ Each update removes the version it replaced once the new one is in place (no Und
 - **Restore to Defaults** in the Settings window: every setting back to how it was on a fresh start (automatic
   checks, notifications, scanning and its folders). Tracked repos and categories are kept.
   Asks first.
-- **User documentation** (a short guide in the README, or Help in the app). Include how the scan decides an RPM is
-  one dnf won't update, in plain words:
+- **User documentation** (a short guide in the README, or Help in the app). Open with what the app is for:
+  **everything in one place, in a simple window**, instead of several separate tools. Each of these covers one piece
+  (check each is still accurate when writing):
+  - *Topgrade* runs every updater you have (dnf, Flatpak, …) from a terminal, but doesn't know about software you
+    got straight from GitHub or GitLab.
+  - *Gear Lever* and *AppImageLauncher* manage AppImages, and only AppImages.
+  - *eget* and similar download a release's program from GitHub, in a terminal, one at a time.
+  - *nvchecker* tells you a new version is out, from a terminal, but doesn't update anything.
+  - *Discover* updates packages and Flatpaks, not what you downloaded or cloned yourself.
+  - *Obtainium* is the same idea as this app, for Android.
+  RepoProject brings these together for software from GitHub and GitLab: clones, AppImages, programs from release
+  archives and RPMs, found by a scan or added by hand, checked on a schedule, and updated with a click. The pitch is
+  one app to install and learn, not a handful of tools and their commands.
+  Also include how the scan decides an RPM is one dnf won't update, in plain words:
   1. *Where it was installed from.* dnf records this for every package. Packages from Fedora, RPM Fusion or a COPR
      show that repository's name; one installed from a downloaded `.rpm` shows as `@commandline`. Only the second
      kind is considered, and only if its homepage is a GitHub or GitLab project.
