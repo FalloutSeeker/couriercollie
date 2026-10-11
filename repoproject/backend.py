@@ -71,6 +71,12 @@ class Details:
     install_scripts: list[str] = field(default_factory=list)
 
 
+def _version_text(version: str) -> str:
+    """A version as shown: "commit abc1234" for a commit, else the tag as it is."""
+    is_commit = len(version) == 40 and all(c in "0123456789abcdef" for c in version)
+    return f"commit {version[:7]}" if is_commit else version
+
+
 def _whole_number(value) -> int | None:
     """A number from the window (which may arrive as 24.0), or None for anything else."""
     try:
@@ -1164,6 +1170,11 @@ class Backend(QObject, Updating):
             "updateNoteKind": self._update_notes.get(repo_id, ("", ""))[0],
             "updateNote": self._update_notes.get(repo_id, ("", ""))[1],
             "installScripts": d.install_scripts,
+            # Whether you've started an install script from here: "" never, "current" at the version you have now,
+            # "older" before the clone last changed (its update may need installing).
+            "scriptRun": "" if not repo or not repo.script_run_at
+                         else "current" if repo.script_run_at == repo.installed else "older",
+            "scriptRunAt": _version_text(repo.script_run_at) if repo else "",
             "branches": [
                 {"name": b.name, "sha": b.sha[:7], "isDefault": b.name == d.default_branch,
                  "selected": b.name == current_branch}
@@ -1197,8 +1208,7 @@ class Backend(QObject, Updating):
                 return {}
             newest = shown[0].tag
             # A clone that isn't at a release tag: its commit.
-            looks_like_commit = len(installed) == 40 and all(c in "0123456789abcdef" for c in installed)
-            newest_text, yours_text = newest, f"commit {installed[:7]}" if looks_like_commit else installed
+            newest_text, yours_text = newest, _version_text(installed)
             newer_text, update_headline = f"Newer version available: {newest}", "Update available"
         if installed == NOT_INSTALLED:
             text, status, kind, headline = "Not installed", f"The newest is {newest_text}.", STATUS_NOT_INSTALLED, \

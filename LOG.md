@@ -4,6 +4,9 @@ Newest first.
 
 ## 2026-10-11
 
+- The install-script button says what it's for now: "Show and Run install.sh…" (never run from the app), "Run
+  install.sh Again…" (run at the version you have), or "Install the Update: Run install.sh…" (the clone changed since;
+  highlighted), with when it was last run. The app can only tell that it started the script, not that it worked.
 - Stage 6, packaging: an app icon, and the app's own RPM (`devtools/build_rpm.sh`). Installed, it runs as
   `repoproject`, uses the system's menu entry and icon, and the background timer points at it. Tested by unpacking the
   RPM into a temporary folder and opening the window from there.

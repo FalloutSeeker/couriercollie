@@ -344,4 +344,9 @@ class Updating:
         except updater.UpdateError as e:
             return str(e)
         started, _pid = QProcess.startDetached(program, args, repo.local_path)
-        return "" if started else f"Couldn\u2019t open {Path(program).name}."
+        if not started:
+            return f"Couldn\u2019t open {Path(program).name}."
+        if repo.script_run_at != repo.installed:
+            repo.script_run_at = repo.installed
+            self._changed(repo_id)
+        return ""

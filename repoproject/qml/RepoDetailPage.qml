@@ -697,11 +697,25 @@ Kirigami.ScrollablePage {
                             required property string modelData
 
                             objectName: "showScript:" + modelData
-                            text: `Show and Run ${modelData}\u2026`
+                            // What it's for now: first install, an update to install, or running it again.
+                            text: page.details.scriptRun === "older" ? `Install the Update: Run ${modelData}\u2026`
+                                : page.details.scriptRun === "current" ? `Run ${modelData} Again\u2026`
+                                : `Show and Run ${modelData}\u2026`
+                            highlighted: page.details.scriptRun === "older"
                             icon.name: "run-build"
                             onClicked: scriptDialog.show(modelData)
                         }
                     }
+                }
+
+                QQC2.Label {
+                    objectName: "scriptRunAt"
+                    Layout.fillWidth: true
+                    visible: (page.details.scriptRun || "") !== ""
+                    text: page.details.scriptRun === "older"
+                          ? `Last run from here at ${page.details.scriptRunAt}; the clone has changed since, so the update may need installing.`
+                          : `Last run from here at ${page.details.scriptRunAt}, the version you have.`
+                    wrapMode: Text.Wrap
                 }
 
                 QQC2.Label {

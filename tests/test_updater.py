@@ -256,6 +256,20 @@ class UpdateClickedTest(UpstreamCase):
         self.assertEqual(self.backend._checks.results[self.id].status, self.checker.UP_TO_DATE)
         self.assertFalse(self.backend.repo(self.id)["updateAvailable"])
 
+    def test_the_install_script_remembers_the_version_it_was_last_run_at(self):
+        (self.clone / "install.sh").write_text("echo hi\n")
+        self.backend._details[self.id].install_scripts = ["install.sh"]
+        saved = updater.terminal_command
+        updater.terminal_command = lambda path, name: ("/bin/true", [])  # instead of a terminal window
+        self.addCleanup(setattr, updater, "terminal_command", saved)
+        self.assertEqual(self.backend.details(self.id)["scriptRun"], "")  # never: "Show and Run"
+        self.assertEqual(self.backend.runInstallScript(self.id, "install.sh"), "")
+        d = self.backend.details(self.id)
+        self.assertEqual((d["scriptRun"], d["scriptRunAt"]), ("current", f"commit {self.start[:7]}"))  # "Run Again"
+        self.assertEqual(self.config.load(self.path).repos[0].script_run_at, self.start)  # kept
+        self.backend.updateRepo(self.id)
+        self.assertEqual(self.backend.details(self.id)["scriptRun"], "older")  # "Install the Update"
+
     def test_refresh_or_a_check_clears_the_note(self):
         from repoproject import sources
 

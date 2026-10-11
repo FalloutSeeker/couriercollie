@@ -121,6 +121,9 @@ h.run([
     (0, lambda: h.click("text:Run in Terminal")),
     h.until(lambda: (clone / "installed.txt").exists(), 10000),
     (300, lambda: h.check("Run in Terminal runs it, in the clone's folder", (clone / "installed.txt").exists())),
+    (300, lambda: h.check("…and the button then offers to run it again",
+                          h.find("text:Run install.sh Again\u2026") is not None)),
+    (0, lambda: h.shot("update-clone-2b-script-ran")),
     # From the list, an update that's refused (the clone was switched to another branch) opens the page to say why.
     (0, lambda: (git("switch", "-q", "-c", "mine", cwd=clone), git("reset", "-q", "--hard", start, cwd=clone))),
     (0, lambda: (setattr(b._config.find(ID), "installed", start), checked_once(), h.win.closeRepo())),

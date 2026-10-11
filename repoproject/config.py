@@ -68,6 +68,9 @@ class TrackedRepo:
     category: str = ""
     # For a release archive with several programs in it: the one to run (its file name). Empty: worked out.
     program: str = ""
+    # For a clone: your version (as `installed`) when you last started its install script from the app. Empty if
+    # never. The app can't see whether the script worked, only that it was started.
+    script_run_at: str = ""
 
 
 @dataclass
