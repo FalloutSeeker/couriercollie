@@ -24,40 +24,24 @@ couriercollie does all of it in one app.
 
 ## Install
 
-**Fedora KDE** already has everything it needs:
+Download the package for your distro from [Releases](https://github.com/FalloutSeeker/couriercollie/releases), then:
+
+| Distro | Command |
+| --- | --- |
+| Fedora | `sudo dnf install ./couriercollie-*.fc*.noarch.rpm` |
+| openSUSE | `sudo zypper install --allow-unsigned-rpm ./couriercollie-*.noarch.rpm` |
+| Ubuntu, Debian | `sudo apt install ./couriercollie_*_all.deb` |
+| Arch | `sudo pacman -U ./couriercollie-*-any.pkg.tar.zst` |
+
+Your package manager installs everything else it needs. Then open **couriercollie** from your app menu.
+
+**Or run it straight from the source** (Fedora KDE already has everything it needs):
 
 ```sh
 git clone https://github.com/FalloutSeeker/couriercollie
 cd couriercollie
 ./run.sh
 ```
-
-To put it in your app menu, build and install the package:
-
-```sh
-devtools/build_rpm.sh
-sudo dnf install dist/couriercollie-*.noarch.rpm
-```
-
-**Other distros:** install the packages below first, then run the same three commands.
-
-<details>
-<summary>Packages to install</summary>
-
-| For | Fedora | Ubuntu / Debian | Arch | openSUSE |
-| --- | --- | --- | --- | --- |
-| The window | `python3-pyside6` | `python3-pyside6.qtquick python3-pyside6.qtwidgets python3-pyside6.qtdbus python3-pyside6.qtnetwork python3-pyside6.qtsvg` | `pyside6` | `python313-pyside6` |
-| KDE's toolkit | `kf6-kirigami` | `qml6-module-org-kde-kirigami qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts` | `kirigami` | `kf6-kirigami-imports` |
-| KDE's look (optional) | `kf6-qqc2-desktop-style` | `qml6-module-org-kde-desktop` | `qqc2-desktop-style` | `kf6-qqc2-desktop-style` |
-| Icons | `breeze-icon-theme` | `kf6-breeze-icon-theme` | `breeze-icons` | `kf6-breeze-icons` |
-| Notifications | `libnotify` | `libnotify-bin` | `libnotify` | `libnotify-tools` |
-| Git | `git-core` | `git` | `git` | `git-core` |
-| Password prompts | `polkit` | `pkexec` | `polkit` | `polkit` |
-| GitHub sign-in | `libsecret` | `libsecret-tools` | `libsecret` | `secret-tool` |
-
-Needs Python 3.13 or newer.
-
-</details>
 
 ## Use it
 

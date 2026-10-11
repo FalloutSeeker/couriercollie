@@ -16,5 +16,6 @@ The first version: everything is new.
 - **Install scripts** are shown before they run, in a terminal.
 - **Categories** you can drag repos into, and a filter for GitHub or GitLab.
 - **Optional, read-only GitHub sign-in**, kept in your desktop's password store.
-- **Works beyond Fedora KDE:** Fusion style and Breeze icons where KDE's are missing. Packages for Fedora (RPM) and
-  Arch (PKGBUILD).
+- **Works beyond Fedora KDE:** Qt's Fusion style where KDE's is missing, and its own icons. Packages for Fedora,
+  openSUSE, Ubuntu/Debian and Arch, which install everything they need.
+- **Repo icons:** the project's own picture when it's certain, else a letter on a colour of its own.
