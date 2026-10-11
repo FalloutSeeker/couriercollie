@@ -1,6 +1,6 @@
 # couriercollie
 
-Keep the software you got from GitHub and GitLab up to date, in one simple window.
+Inspired by Obtainium, keep the software you got from GitHub and GitLab up to date, in one simple window.
 
 ![couriercollie showing an update for LocalSend](docs/screenshot.png)
 
@@ -20,7 +20,7 @@ Each existing tool covers one piece:
 | nvchecker | Tells you about new versions | Doesn't update anything |
 | Discover | Packages and Flatpaks | What you downloaded yourself |
 
-couriercollie does all of it in one app. (Obtainium is the same idea, for Android.)
+couriercollie does all of it in one app.
 
 ## Install
 
