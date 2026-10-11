@@ -27,6 +27,12 @@ class ClassifyTest(unittest.TestCase):
         self.check("someapp-1.5.2.src.rpm", KIND_OTHER, False)
         self.check("checksums.sha256", KIND_OTHER, False)
 
+    def test_files_that_belong_to_another_systems_package(self):
+        # Obtainium (an Android app) ships signature files next to each .apk; "x86_64" in the name mustn't count.
+        self.assertIn("Android", self.check("app-x86_64-release.apk.idsig", KIND_OTHER, False).note)
+        self.check("app-x86_64-release.apk.sha256.sig", KIND_OTHER, False)
+        self.check("app-release.apk.idsig", KIND_OTHER, False)
+
     def test_arm_computer(self):
         self.check("LocalSend-1.18.2-linux-arm64.AppImage", KIND_APPIMAGE, True, machine="aarch64")
         self.check("LocalSend-1.18.2-linux-x86-64.AppImage", KIND_APPIMAGE, False, machine="aarch64")

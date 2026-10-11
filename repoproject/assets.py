@@ -24,7 +24,7 @@ _FOREIGN_EXT = {
     ".flatpakref": "Flatpak (install it from Discover instead)",
 }
 _NOT_SOFTWARE = (".sha256", ".sha512", ".sha256sum", ".sha512sum", ".sig", ".asc", ".minisig", ".pem", ".sbom",
-                 ".json", ".txt", ".md5", ".spdx", ".intoto.jsonl")
+                 ".json", ".txt", ".md5", ".spdx", ".intoto.jsonl", ".idsig", ".cert", ".crt", ".pub")
 # Whole words only, so "studios" isn't read as "iOS".
 _FOREIGN_OS = re.compile(
     r"(?<![a-z])(windows|win32|win64|darwin|macos|osx|mac|android|ios|freebsd|openbsd|netbsd)(?![a-z])", re.I
@@ -58,6 +58,11 @@ def classify(name: str, url: str = "", machine: str | None = None) -> AssetInfo:
 
 
 def _classify_name(lower: str, machine: str) -> AssetInfo:
+    # A file belonging to another system's package, e.g. "app-x86_64.apk.idsig": check before the processor type,
+    # or "x86_64" would make it look like it fits this PC.
+    for ext, system in _FOREIGN_EXT.items():
+        if ext + "." in lower:
+            return AssetInfo(KIND_OTHER, False, f"for {system}")
     if lower.endswith(_NOT_SOFTWARE):
         return AssetInfo(KIND_OTHER, False, "checksum or signature")
     if lower.endswith(".src.rpm"):

@@ -356,12 +356,20 @@ class Backend(QObject):
                 "hasSelected": any(f["selected"] for f in files),
             })
         current_branch = (repo.branch if repo else "") or d.default_branch
+        # The one place to choose which file to follow: the newest release's files, those for this PC first.
+        latest = releases[0] if releases else None
+        choices = sorted(latest["assets"], key=lambda f: not f["suits"]) if latest else []
         return {
             "state": d.state,
             "error": d.error,
             "description": repo.description if repo else "",
             "hasReleases": bool(d.releases),
             "releases": releases,
+            "latestTag": latest["tag"] if latest else "",
+            "fileChoices": choices,
+            "anyFileSuits": any(f["suits"] for f in choices),
+            # A file was picked, but the newest release doesn't have it (renamed or dropped by the project).
+            "yourFileMissing": bool(pattern) and latest is not None and not latest["hasSelected"],
             "hiddenPrereleases": sum(1 for r in d.releases if r.prerelease) if repo and not repo.prereleases else 0,
             "branchError": d.branch_error,
             "branches": [

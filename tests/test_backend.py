@@ -49,6 +49,26 @@ class BackendTest(unittest.TestCase):
                          ["LocalSend-1.18.2-linux-x86-64.AppImage"])
         self.assertTrue(latest["hasSelected"])
 
+    def test_one_picker_from_the_newest_release(self):
+        d = self.backend.details(LOCALSEND)
+        self.assertEqual(d["latestTag"], "v1.18.2")
+        names = [f["name"] for f in d["fileChoices"]]
+        self.assertEqual(len(names), 20)
+        # Files for this PC come first.
+        self.assertTrue(all(f["suits"] for f in d["fileChoices"][:3]))
+        self.assertTrue(d["anyFileSuits"])
+        self.assertFalse(d["yourFileMissing"])
+
+    def test_file_missing_from_the_newest_release(self):
+        repo = self.backend._config.find(LOCALSEND)
+        repo.asset_pattern = "LocalSend-*-linux-x86-64.flatpak"
+        self.assertTrue(self.backend.details(LOCALSEND)["yourFileMissing"])
+
+    def test_project_with_nothing_for_this_pc(self):
+        self.backend._details[LOCALSEND].releases[0].assets = [
+            sources.Asset("app-x86_64-release.apk", "u"), sources.Asset("app-x86_64-release.apk.idsig", "u")]
+        self.assertFalse(self.backend.details(LOCALSEND)["anyFileSuits"])
+
     def test_files_for_this_pc_are_marked(self):
         latest = self.backend.details(LOCALSEND)["releases"][0]
         suits = {a["name"] for a in latest["assets"] if a["suits"]}

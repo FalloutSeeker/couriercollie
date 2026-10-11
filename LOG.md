@@ -4,6 +4,12 @@ Newest first.
 
 ## 2026-10-10
 
+- Repo page redesign, after testing with Obtainium: every release had its own radio buttons, and because the same
+  file appears in each release, a button showed as picked in every release at once. Choosing a file now happens in
+  one place, "Your build file", listing the newest release's files. The releases list is read-only, with a ✓ on
+  your file. Warnings show when the newest release lacks your file, or has nothing for this computer.
+- Classification fix: `app-x86_64-release.apk.idsig` (an Android signature file) counted as fitting this PC because
+  of "x86_64". Files belonging to another system's package (`.apk.`, `.exe.`, …) and `.idsig` files are now excluded.
 - Cleaned up terminal warnings:
   - "Could not register app ID: App info not found for 'repoproject'": the app told KDE its menu-entry name, but no
     menu entry exists yet (stage 6). The name is now only sent once the entry is installed.

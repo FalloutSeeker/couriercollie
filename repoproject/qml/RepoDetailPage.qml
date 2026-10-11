@@ -144,14 +144,6 @@ Kirigami.ScrollablePage {
                 opacity: 0.7
             }
 
-            QQC2.Label {
-                Kirigami.FormData.label: "Build file:"
-                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
-                visible: page.followsReleases
-                text: page.repo.assetPattern ? page.repo.assetPattern : "Not picked yet. Choose the file you use from a release below."
-                wrapMode: Text.WrapAnywhere
-            }
-
             QQC2.CheckBox {
                 Kirigami.FormData.label: "Pre-releases:"
                 visible: page.followsReleases
@@ -161,20 +153,99 @@ Kirigami.ScrollablePage {
             }
         }
 
-        // ---- Releases -----------------------------------------------------------------------------------------------
+        // ---- Your build file: the one place to choose -----------------------------------------------------------
+
+        ColumnLayout {
+            id: picker
+
+            property bool othersShown: false
+            readonly property var choices: page.details.fileChoices || []
+            readonly property var forThisPC: choices.filter(f => f.suits || f.selected)
+
+            Layout.fillWidth: true
+            visible: page.followsReleases && page.ready && choices.length > 0
+            spacing: 0
+
+            Kirigami.Heading {
+                level: 3
+                text: "Your build file"
+            }
+
+            QQC2.Label {
+                Layout.fillWidth: true
+                Layout.bottomMargin: Kirigami.Units.smallSpacing
+                text: `A release can come in several files. Choose the one you use; from then on, each new release's version of that same file is followed. These are the files in ${page.details.latestTag}, the newest release.`
+                wrapMode: Text.Wrap
+                opacity: 0.7
+            }
+
+            Kirigami.InlineMessage {
+                Layout.fillWidth: true
+                visible: page.details.yourFileMissing === true
+                type: Kirigami.MessageType.Warning
+                text: `The newest release doesn't include your file (${page.repo.assetPattern}). The project may have renamed it. Choose it again below.`
+            }
+
+            Kirigami.InlineMessage {
+                Layout.fillWidth: true
+                visible: page.details.anyFileSuits === false
+                type: Kirigami.MessageType.Information
+                text: "None of the newest release's files are for this computer. This project may only make software for other systems, such as Android or Windows."
+            }
+
+            Repeater {
+                model: picker.othersShown ? picker.choices : picker.forThisPC
+
+                delegate: QQC2.RadioDelegate {
+                    id: choice
+
+                    required property var modelData
+
+                    objectName: "asset:" + modelData.name
+                    Layout.fillWidth: true
+                    // Shows the saved choice only; a click asks the app, and its answer decides what's marked.
+                    checkable: false
+                    checked: modelData.selected
+                    opacity: modelData.suits || modelData.selected ? 1 : 0.5
+                    onClicked: backend.pickAsset(page.repoId, page.details.latestTag, modelData.name)
+
+                    contentItem: ColumnLayout {
+                        spacing: 0
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: choice.modelData.name
+                            font.bold: choice.modelData.selected
+                            elide: Text.ElideMiddle
+                        }
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            visible: text !== ""
+                            text: choice.modelData.details
+                            font: Kirigami.Theme.smallFont
+                            opacity: 0.8
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+            }
+
+            QQC2.Button {
+                visible: picker.choices.length > picker.forThisPC.length
+                flat: true
+                icon.name: picker.othersShown ? "go-up-symbolic" : "view-more-symbolic"
+                text: picker.othersShown ? "Hide files for other systems" : `Show ${picker.choices.length - picker.forThisPC.length} files for other systems`
+                onClicked: picker.othersShown = !picker.othersShown
+            }
+        }
+
+        // ---- Releases (for reading; the file is chosen above) ------------------------------------------------------
 
         Kirigami.Heading {
             visible: page.followsReleases && page.ready
             level: 3
             text: "Releases"
-        }
-
-        QQC2.Label {
-            Layout.fillWidth: true
-            visible: page.followsReleases && page.ready
-            text: "Each release can have several build files. Pick the one you use, and the newest version of that same file is followed from then on."
-            wrapMode: Text.Wrap
-            opacity: 0.7
         }
 
         Repeater {
@@ -263,19 +334,26 @@ Kirigami.ScrollablePage {
                     Repeater {
                         model: release.othersShown ? release.modelData.assets : release.forThisPC
 
-                        delegate: QQC2.RadioDelegate {
+                        delegate: RowLayout {
                             id: file
 
                             required property var modelData
 
-                            objectName: "asset:" + modelData.name
+                            objectName: "releaseFile:" + release.modelData.tag + ":" + modelData.name
                             Layout.fillWidth: true
-                            checkable: false
-                            checked: modelData.selected
+                            Layout.topMargin: Kirigami.Units.smallSpacing
+                            Layout.bottomMargin: Kirigami.Units.smallSpacing
+                            spacing: Kirigami.Units.smallSpacing
                             opacity: modelData.suits || modelData.selected ? 1 : 0.5
-                            onClicked: backend.pickAsset(page.repoId, release.modelData.tag, modelData.name)
 
-                            contentItem: ColumnLayout {
+                            Kirigami.Icon {
+                                source: file.modelData.selected ? "emblem-checked" : ""
+                                Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                                Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
                                 spacing: 0
 
                                 QQC2.Label {
@@ -288,7 +366,7 @@ Kirigami.ScrollablePage {
                                 QQC2.Label {
                                     Layout.fillWidth: true
                                     visible: text !== ""
-                                    text: [file.modelData.selected ? "✓ the one you use" : "", file.modelData.details].filter(s => s).join(" · ")
+                                    text: [file.modelData.selected ? "your file" : "", file.modelData.details].filter(s => s).join(" · ")
                                     font: Kirigami.Theme.smallFont
                                     opacity: 0.8
                                     elide: Text.ElideRight

@@ -47,9 +47,10 @@ Clicking a tracked repo shows:
 - **Installed version** and **latest version**, with when it was last checked.
 - **Releases list**: every version, newest first, with its date and release notes. Pre-releases are hidden unless
   you turn them on for that repo.
-- **Build files per release**: one project often publishes several files for the same version (an `.rpm`, an
-  AppImage, ARM and Intel builds, etc.). They're listed under each release; you pick the one you use and the app
-  remembers it for future updates (it matches by pattern, so `app-1.2-x86_64.rpm` → `app-1.3-x86_64.rpm` still matches).
+- **Your build file**: one project often publishes several files for the same version (an `.rpm`, an AppImage, ARM
+  and Intel builds, etc.). You pick the one you use in one place, from the newest release's files, and the app
+  follows that same file in future releases (it matches by pattern, so `app-1.2-x86_64.rpm` → `app-1.3-x86_64.rpm`
+  still matches). The releases list is for reading, with a ✓ on your file in each release.
 - **Branches**, for repos that don't publish releases (common for git clones): the app follows new commits on a
   branch instead, e.g. `Plasma/6.7`.
 - **Update** and **Open project page** buttons.
