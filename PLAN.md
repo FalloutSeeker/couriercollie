@@ -13,7 +13,7 @@ AeroThemePlasma and ultrakanban repos), and nothing in a stage can change your s
 | 6     | Old-version cleanup, GitHub sign-in, app icon, installable package    | No                   |
 | 7     | The app tracks its own updates, added on first launch                 | No                   |
 
-**Progress:** stages 1–4 done (2026-10-10). Stage 5: git clones, AppImages, programs and RPMs done (2026-10-11); Undo left. The menu entry was pulled forward from stage 6 (notifications and the badge need it).
+**Progress:** stages 1–4 done (2026-10-10), stage 5 done (2026-10-11). The menu entry was pulled forward from stage 6 (notifications and the badge need it).
 
 ## Stage 1: Skeleton (done)
 
@@ -48,7 +48,7 @@ AeroThemePlasma and ultrakanban repos), and nothing in a stage can change your s
 - "GitHub's hourly limit was reached" bar.
 - Settings page: automatic checks, interval, toasts on/off.
 
-## Stage 5: Updating
+## Stage 5: Updating (done)
 
 Built kind by kind, simplest first:
 
@@ -60,7 +60,7 @@ Built kind by kind, simplest first:
    version.
 4. **RPMs** (done): download, verify, install through dnf, which asks for your password.
 
-Plus **Undo last update** for AppImages and programs while the old version is still kept.
+Plus **Undo last update** (done) for AppImages and programs while the old version is still kept.
 
 ## Stage 6: Finishing
 

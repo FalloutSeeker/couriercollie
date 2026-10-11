@@ -64,6 +64,15 @@ def updated():
     h.check("up to date", details()["statusKind"] == "current", details()["statusKind"])
 
 
+def undone():
+    repo = b._config.find(ID)
+    h.check("the older one is back in place", Path(repo.local_path) == state["older"] and state["older"].is_file())
+    h.check("…as your version", repo.installed == "v1.18.0" and details()["statusKind"] == "update")
+    h.check("…with the menu entry", updater.menu_entry_for(state["older"]))
+    h.check("the newer one is kept", any(updater.kept_dir(ID).glob("LocalSend-*")))
+    h.check("Undo gone (nothing more to undo)", h.find("undoUpdate") is None)
+
+
 def mid_download():
     p = details()["progress"]
     if 0.2 < p < 0.8 and "mid" not in state:
@@ -95,4 +104,10 @@ h.run([
     h.until(lambda: not details()["updating"], 600000),
     (500, updated),
     (0, lambda: h.shot("appimage-3-updated")),
+    (0, lambda: h.check("Undo offered, back to v1.18.0", h.find("undoUpdate") is not None
+                        and details()["previousVersion"] == "v1.18.0")),
+    (0, lambda: h.click("undoUpdate")),
+    h.until(lambda: not details()["updating"], 60000),
+    (500, undone),
+    (0, lambda: h.shot("appimage-4-undone")),
 ])

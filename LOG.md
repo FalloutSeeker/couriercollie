@@ -10,6 +10,9 @@ Newest first.
   Konsole in the clone's folder. Tested against real git repos made for the tests; your own clones weren't touched.
   - Also: a branch whose newest commit is your version is no longer asked about (it's the same, no request).
   - The scanned-repo window check now waits for each comparison to come back, rather than a fixed time.
+- Stage 5 finished with Undo Last Update for AppImages and programs: back to the kept version (AppImage file moved
+  back with its menu entry; a program's link pointed back), nothing deleted, kept across restarts. Tested in unit
+  tests and at the end of the real LocalSend and ripgrep window checks.
 - Stage 5, RPMs: Install… / Update… download the release's .rpm, check it (checksum, that it's an RPM, the same
   package you have, this processor), then `dnf install` through polkit, one password prompt; the download is deleted
   after. Tested with a stand-in dnf, and with bottom's real .rpm up to the dnf step (nothing installed).

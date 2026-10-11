@@ -640,3 +640,37 @@ def install_rpm(asset, others: list, package: str = "", progress=None, installin
     finally:
         part.unlink(missing_ok=True)
         file.unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Undo: back to what the last update replaced, while it's still kept.
+
+
+def undo_appimage(repo_id: str, current: Path, previous: Path) -> Path:
+    """Puts the kept `previous` AppImage back where `current` is, and keeps `current` in its place (nothing is
+    deleted). Menu entries follow. Returns where the previous one is now."""
+    if not previous.is_file():
+        raise UpdateError("The previous version isn\u2019t kept any more, so there\u2019s nothing to go back to.")
+    target = current.parent / previous.name
+    if target.exists() and target != current:
+        raise UpdateError(f"{target} is in the way, so the previous version wasn\u2019t put back.")
+    if current.is_file():
+        keep = kept_dir(repo_id)
+        keep.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(current), keep / current.name)
+    shutil.move(str(previous), target)
+    repoint_menu_entries(current, target)
+    return target
+
+
+def undo_program(repo_id: str, link: Path, previous: Path) -> None:
+    """Points the program's link back at the version it started before the last update. Both versions stay."""
+    home = (programs_dir() / _folder_name(repo_id)).resolve()
+    if not previous.is_file() or not previous.resolve().is_relative_to(home):
+        raise UpdateError("The previous version isn\u2019t kept any more, so there\u2019s nothing to go back to.")
+    if not (link.is_symlink() and link.resolve().is_relative_to(home)):
+        raise UpdateError(f"{link} isn\u2019t RepoProject\u2019s link any more, so it wasn\u2019t changed.")
+    new_link = link.with_name(f".{link.name}.repoproject")
+    new_link.unlink(missing_ok=True)
+    new_link.symlink_to(previous)
+    os.replace(new_link, link)

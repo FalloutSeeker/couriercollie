@@ -71,6 +71,10 @@ class TrackedRepo:
     category: str = ""
     # For a release archive with several programs in it: the one to run (its file name). Empty: worked out.
     program: str = ""
+    # What the last update replaced, kept so it can be undone: the old AppImage (in the kept folder) or the program
+    # the link pointed at, and its version. Empty when there's nothing to undo.
+    previous: str = ""
+    previous_version: str = ""
 
 
 @dataclass

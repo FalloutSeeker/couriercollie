@@ -185,6 +185,13 @@ your password, which the page says beforehand):
 - A command in `~/.local/bin` that RepoProject didn't put there is **never replaced**: the update stops and says so.
 - No menu entry: these are mostly command-line tools. The page shows the command under Tracking.
 
+**Undo Last Update (built 2026-10-11).** For AppImages and programs, while the version an update replaced is kept:
+the status box offers "Undo Last Update (back to v1.18.0)". An AppImage's kept file goes back where yours was (the
+newer file is kept in its place, and menu entries follow); a program's link points back at the older version's
+folder. Nothing is deleted. Your version is then the older one, so Update is offered again (it downloads the newer
+one again). What was replaced is saved with the repo, so Undo works after a restart; it's forgotten when you choose
+a different file or switch what the repo follows. Not for clones or RPMs.
+
 **Install scripts.** A clone's `install.sh`, `install` or `setup.sh` (never `uninstall.sh`) gets a "Show and Run…"
 button under Tracking. The script is shown in full first; Run in Terminal opens Konsole in the clone's folder, as
 you, kept open afterwards so its output can be read. The script asks for a password itself if it needs one. Update

@@ -87,4 +87,10 @@ h.run([
     h.until(lambda: not details()["updating"], 300000),
     (500, updated),
     (0, lambda: h.shot("program-2-updated")),
+    (0, lambda: h.click("undoUpdate")),
+    h.until(lambda: not details()["updating"], 60000),
+    (500, lambda: h.check("Undo: the link is back on the older version",
+                          updater.program_version(state["link"]) == "13.0.0" and runs(state["link"]).startswith("ripgrep "))),
+    (0, lambda: h.check("…which is your version, with Update offered again",
+                        b._config.find(ID).installed == "13.0.0" and h.find("text:Update") is not None)),
 ])

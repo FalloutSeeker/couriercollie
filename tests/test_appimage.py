@@ -251,6 +251,18 @@ class ProgramTest(AppImageCase):
                 self.install("v1", name)
         self.assertFalse(any(Path(self.dir.name).rglob("escaped")))
 
+    def test_undo_points_the_link_back(self):
+        self.install("v1.0", "tool-1.0.tar.gz")
+        link, _, before = self.install("v2.0", "tool-2.0.tar.gz")
+        updater.undo_program("github.com/a/tool", link, before)
+        self.assertEqual((link.read_bytes(), updater.program_version(link)), (ELF + b"1.0", "v1.0"))
+        self.assertTrue((updater.programs_dir() / "github.com_a_tool" / "v2.0").is_dir())  # newer one kept
+        # A link that isn't RepoProject's any more is left alone.
+        link.unlink()
+        link.write_text("someone else's")
+        with self.assertRaisesRegex(updater.UpdateError, "isn\u2019t RepoProject\u2019s link"):
+            updater.undo_program("github.com/a/tool", link, before)
+
     def test_no_program_inside(self):
         _Files.files["docs.tar.gz"] = _archive("tar", {"docs/README": (b"text", 0o644)})
         with self.assertRaisesRegex(updater.UpdateError, "no program for Linux"):
@@ -372,3 +384,48 @@ class RpmTest(AppImageCase):
         repo = config.load(path).repos[0]
         self.assertEqual((repo.installed, repo.local_path), ("v2.0", "RPM package “tool”"))
         self.assertIn("Installed v2.0 with dnf", backend.details("github.com/a/tool")["updateNote"])
+
+
+
+class UndoTest(AppImageCase):
+    def test_an_appimage_goes_back_and_the_newer_one_is_kept(self):
+        menu = updater.menu_dir()
+        menu.mkdir(parents=True)
+        old = self.folder / "App-1.0-x86_64.AppImage"
+        old.write_bytes(b"old version")
+        (menu / "app.desktop").write_text(f"[Desktop Entry]\nExec={old}\n")
+        new, _, kept = updater.install_appimage("github.com/a/app", self.asset(), [], self.folder, old)
+        back = updater.undo_appimage("github.com/a/app", new, kept)
+        self.assertEqual((back, back.read_bytes()), (old, b"old version"))
+        self.assertEqual((updater.kept_dir("github.com/a/app") / NAME).read_bytes(), APP)  # newer one kept
+        self.assertIn(f"Exec={old}", (menu / "app.desktop").read_text())  # the menu follows
+        with self.assertRaisesRegex(updater.UpdateError, "isn\u2019t kept any more"):
+            updater.undo_appimage("github.com/a/app", back, kept)
+
+    def test_clicked(self):
+        from repoproject.backend import Backend
+
+        old = self.folder / "App-1.0-x86_64.AppImage"
+        old.write_bytes(b"old version")
+        path = Path(self.dir.name) / "repos.toml"
+        rid = "github.com/a/app"
+        config.save(config.Config(repos=[config.TrackedRepo(
+            id=rid, name="App", url="", host="github", asset_pattern="App-*-x86_64.AppImage", kind="AppImage",
+            source="scanned", local_path=str(old), installed="v1.0")]), path)
+        backend = Backend(path)
+        self.addCleanup(backend.shutdown)
+        backend._run = lambda work, done: done(*InstallClickedTest._attempt(work))
+        release = Release("v2.0", "v2.0", None, False, "", "", [self.asset()])
+        saved = sources.releases
+        sources.releases = lambda ref, host: [release]
+        self.addCleanup(setattr, sources, "releases", saved)
+        backend.updateRepo(rid)
+        d = backend.details(rid)
+        self.assertEqual((d["canUndo"], d["previousVersion"]), (True, "v1.0"))
+        backend.undoUpdate(rid)
+        repo = config.load(path).repos[0]
+        self.assertEqual((repo.installed, repo.local_path, repo.previous), ("v1.0", str(old), ""))
+        self.assertEqual(old.read_bytes(), b"old version")
+        d = backend.details(rid)
+        self.assertFalse(d["canUndo"])
+        self.assertIn("Back to v1.0", d["updateNote"])

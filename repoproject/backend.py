@@ -1111,6 +1111,8 @@ class Backend(QObject):
             "isProgram": bool(repo) and _is_program(repo),
             "isDownload": bool(repo) and (_is_appimage(repo) or _is_program(repo) or _is_rpm(repo)),
             "programChoices": self._program_choices.get(repo_id, []),
+            "canUndo": bool(repo) and self._can_undo(repo),
+            "previousVersion": repo.previous_version if repo else "",
             "program": repo.program if repo else "",
             # The command an installed program is run as, and where its link is.
             "command": Path(repo.local_path).name if repo and _is_program(repo) and repo.local_path else "",
@@ -1227,6 +1229,7 @@ class Backend(QObject):
             return
         clone = _is_clone(repo)
         repo.follow = follow
+        repo.previous, repo.previous_version = "", ""
         # The last check's result and update message were about what it followed before.
         self._update_notes.pop(repo_id, None)
         if self._checks.results.pop(repo_id, None):
@@ -1371,6 +1374,7 @@ class Backend(QObject):
         menu entry; a program is unpacked into its own folder, with a link in ~/.local/bin."""
         repo_id, d = repo.id, self._details.get(repo.id)
         is_program, is_rpm, package = _is_program(repo), _is_rpm(repo), _rpm_package(repo)
+        was = repo.installed  # the version an Undo would go back to
         here_link = Path(repo.local_path) if is_program and repo.local_path else None
         wanted = repo.program or (here_link.name if here_link and here_link.is_symlink() else "")
         hints = [RepoRef.from_id(repo.id).name, repo.name, repo.asset_pattern.split("-")[0].split("*")[0]]
@@ -1445,6 +1449,9 @@ class Backend(QObject):
             elif repo:
                 tag, new, verified, kept = result
                 repo.source, repo.local_path, repo.installed = config.SOURCE_SCANNED, str(new), tag
+                # What this update replaced, for Undo (nothing, for a first install).
+                undoable = bool(kept) and was not in ("", NOT_INSTALLED)
+                repo.previous, repo.previous_version = (str(kept), was) if undoable else ("", "")
                 self._version_changed(repo)
                 self._changed(repo_id)
                 if is_program:
@@ -1462,6 +1469,49 @@ class Backend(QObject):
             self.detailsChanged.emit(repo_id)
             if repo and error:
                 self.updateFailed.emit(repo_id)
+
+        self._run(work, done)
+
+    def _can_undo(self, repo: TrackedRepo) -> bool:
+        return (_is_appimage(repo) or _is_program(repo)) and bool(repo.previous) and Path(repo.previous).exists() \
+            and repo.id not in self._updating
+
+    @Slot(str)
+    def undoUpdate(self, repo_id):
+        """Back to the version the last update replaced (updater.undo_appimage, undo_program). Nothing is deleted:
+        the newer version is kept too, and Update brings it back."""
+        repo = self._config.find(repo_id)
+        if not repo or not self._can_undo(repo):
+            return
+        current, previous, version = Path(repo.local_path), Path(repo.previous), repo.previous_version
+        is_program = _is_program(repo)
+        self._updating.add(repo_id)
+        self._phases[repo_id] = "undoing"
+        self._update_notes.pop(repo_id, None)
+        self.reposChanged.emit()
+        self.detailsChanged.emit(repo_id)
+
+        def work():
+            if is_program:
+                updater.undo_program(repo_id, current, previous)
+                return current
+            return updater.undo_appimage(repo_id, current, previous)
+
+        def done(result, error):
+            self._updating.discard(repo_id)
+            self._phases.pop(repo_id, None)
+            repo = self._config.find(repo_id)
+            if repo and error:
+                self._update_notes[repo_id] = ("error", self._error_text(error))
+            elif repo:
+                repo.local_path, repo.installed = str(result), version
+                repo.previous, repo.previous_version = "", ""
+                self._version_changed(repo)
+                self._changed(repo_id)
+                self._update_notes[repo_id] = ("done", f"Back to {version}. Update installs the newer version "
+                                                       "again when you want it.")
+            self.reposChanged.emit()
+            self.detailsChanged.emit(repo_id)
 
         self._run(work, done)
 
@@ -1526,7 +1576,10 @@ class Backend(QObject):
         asset = next((a for a in rel.assets if a.name == asset_name), None) if rel else None
         if not repo or not asset or not assets.classify(asset.name, asset.url).suits:
             return
-        repo.asset_pattern = assets.pattern_for(asset.name, tag)
+        pattern = assets.pattern_for(asset.name, tag)
+        if pattern != repo.asset_pattern:
+            repo.previous, repo.previous_version = "", ""  # a different file now: the kept one isn't its old version
+        repo.asset_pattern = pattern
         repo.kind = assets.classify(asset.name, asset.url).kind
         self._changed(repo_id)
 
