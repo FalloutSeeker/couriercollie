@@ -30,6 +30,10 @@ Kirigami.ScrollablePage {
     function reload() {
         repo = backend.repo(repoId);
         details = backend.details(repoId);
+        // Let go while open (a check found something newer than the page had): load it again. Does nothing if it's
+        // already loading or loaded.
+        if (details.state === "loading")
+            backend.loadDetails(repoId, false);
     }
 
     function isExpanded(tag, index) {

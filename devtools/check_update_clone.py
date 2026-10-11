@@ -72,6 +72,13 @@ def tag_release():
                                     [sources.Asset("project.tar.gz", "https://example.invalid/project.tar.gz")]))
 
 
+def newer_release_checked():
+    releases.insert(0, sources.Release("v4", "v4", None, False, "", "", []))
+    checker.check_all = lambda repos, previous: (checker.State(results={ID: checker.Result(
+        checker.UPDATE, "Update available: v4", "v4")}), [])
+    b.checkNow()
+
+
 def checked_once():
     b._checks.results[ID] = checker.Result(checker.UPDATE, "Update available", newest)
     b.checksChanged.emit()
@@ -140,4 +147,8 @@ h.run([
     (0, lambda: h.check("says your branch is kept", "Your branch mine is unchanged" in details()["updateNote"],
                         details()["updateNote"])),
     (0, lambda: h.shot("update-clone-5-release")),
+    # With the page open, a check finds a newer release: the page loads it again rather than waiting forever.
+    (0, newer_release_checked),
+    h.until(lambda: details()["state"] == "ready" and details()["newestText"] == "v4", 10000),
+    (300, lambda: h.check("an open page follows a check that found something newer", details()["newestText"] == "v4")),
 ])

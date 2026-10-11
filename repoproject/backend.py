@@ -204,8 +204,8 @@ def _rpm_package(repo: TrackedRepo) -> str:
 
 
 def _can_update(repo: TrackedRepo) -> bool:
-    """Whether Update can do anything for this repo yet. Stage 5 so far: git clones found by a scan, following a branch
-    (pulled) or releases (moved to the newest release's tag); and AppImages (downloaded and swapped in)."""
+    """Whether Update can do anything for this repo: a git clone found by a scan (pulled, or moved to the newest
+    release's tag), or a release's AppImage, program archive or RPM (downloaded, checked and put in place)."""
     return _is_clone(repo) or _is_appimage(repo) or _is_program(repo) or _is_rpm(repo)
 
 
@@ -249,13 +249,14 @@ class Backend(QObject):
         self._find_icons = find_icons
         # How long a branch must stay chosen before what's new on it is asked for (_refresh_whats_new).
         self.compare_delay_ms = 400
-        # Updates running now, and how the last one for each repo went: (kind, text), kind "done" or "error".
+        # Updates running now, and how the last one for each repo went: (kind, text), kind "done", "warning" or
+        # "error".
         self._updating: set[str] = set()
         self._update_notes: dict[str, tuple[str, str]] = {}
         self._progress: dict[str, float] = {}  # a download's progress, 0 to 1, per repo
-        self._unsupported_hosts: set[str] = set()
-        self._program_choices: dict[str, list[str]] = {}
-        self._phases: dict[str, str] = {}  # "installing" once an RPM's download is done and dnf runs  # programs to choose from, when an archive has several  # sites a scan found the app can't talk to, while it's open
+        self._unsupported_hosts: set[str] = set()  # sites a scan found the app can't talk to, while it's open
+        self._program_choices: dict[str, list[str]] = {}  # programs to choose from, when an archive has several
+        self._phases: dict[str, str] = {}  # "installing" once an RPM's download is done and dnf runs
         self._desktop = desktop
         self._icons_pending: set[str] = set()
         self._path = config_path
@@ -291,6 +292,7 @@ class Backend(QObject):
         if self._desktop and not self._config_error:
             integration.set_background_checks(self._config.settings.auto_check)
             self._update_badge()
+
     def shutdown(self):
         self._pool.shutdown(wait=False, cancel_futures=True)
 
