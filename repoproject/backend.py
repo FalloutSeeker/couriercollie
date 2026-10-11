@@ -45,9 +45,18 @@ class Details:
     commits_base: str = ""
     commits_head: str = ""
     comparing: bool = False  # a comparison for a newly chosen branch is on its way
+    compare_request: int = 0  # numbers each comparison request, so a late answer to an older one is ignored
     # A scanned repo that's no longer where the scan found it, and the branch checked out where it was found.
     local_missing: bool = False
     branch_on_disk: str = ""
+
+
+def _whole_number(value) -> int | None:
+    """A number from the window (which may arrive as 24.0), or None for anything else."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _size_text(size: int | None) -> str:
@@ -67,10 +76,14 @@ def _date_text(date: datetime | None) -> str:
 def _newest_version(repo: TrackedRepo, d: Details) -> str:
     """The newest version of what the repo follows: the newest full release, or the latest commit on the branch."""
     if repo.follow == FOLLOW_BRANCH:
-        branch = next((b for b in d.branches if b.name == (repo.branch or d.default_branch)), None)
-        return branch.sha if branch else ""
+        return _head(repo, d)
     release = next((r for r in d.releases if not r.prerelease), d.releases[0] if d.releases else None)
     return release.tag if release else ""
+
+
+def _head(repo: TrackedRepo, d: Details) -> str:
+    """The newest commit on the branch the repo follows, or "" if it isn't known."""
+    return next((b.sha for b in d.branches if b.name == (repo.branch or d.default_branch)), "")
 
 
 def _set_baseline(repo: TrackedRepo, d: Details) -> bool:
@@ -157,12 +170,14 @@ class Backend(QObject):
     detailsChanged = Signal(str)  # repo id
     settingsChanged = Signal()
     scanChanged = Signal()
+    saveErrorChanged = Signal()
     _deliver = Signal(object)
 
     def __init__(self, config_path: Path | None = None, parent=None):
         super().__init__(parent)
         self._path = config_path
         self._config_error = ""
+        self._save_error = ""
         try:
             self._config = config.load(config_path)
         except ConfigError as e:
@@ -198,8 +213,18 @@ class Backend(QObject):
         self._pool.submit(task)
 
     def _save(self):
-        if not self._config_error:
+        if self._config_error:
+            return
+        try:
             config.save(self._config, self._path)
+            error = ""
+        except OSError as e:
+            path = self._path or config.default_path()
+            error = (f"Couldn\u2019t save to {path.parent} ({e.strerror or e}). Changes are kept while RepoProject is "
+                     "open, and saved once that folder can be written to.")
+        if error != self._save_error:
+            self._save_error = error
+            self.saveErrorChanged.emit()
 
     def _changed(self, repo_id: str | None = None):
         self._save()
@@ -225,15 +250,12 @@ class Backend(QObject):
             "id": r.id,
             "name": r.name,
             "url": r.url,
-            "host": r.host,
             "hostLabel": HOST_LABELS.get(r.host, r.host),
             "domain": ref.domain,
             "path": ref.path,
             "follow": r.follow,
-            "branch": r.branch,
             "assetPattern": r.asset_pattern,
             "prereleases": r.prereleases,
-            "kind": r.kind,
             "icon": KIND_ICONS.get(r.kind, "package-x-generic"),
             "followText": follow_text,
             "scanned": r.source == config.SOURCE_SCANNED,
@@ -266,6 +288,10 @@ class Backend(QObject):
     @Property(str, constant=True)
     def configError(self):
         return self._config_error
+
+    @Property(str, notify=saveErrorChanged)
+    def saveError(self):
+        return self._save_error
 
     @Property(bool, notify=addingChanged)
     def adding(self):
@@ -311,10 +337,10 @@ class Backend(QObject):
         for key, attr in bools.items():
             if isinstance(changes.get(key), bool):
                 setattr(s, attr, changes[key])
-        if int(changes.get("checkIntervalHours", 0) or 0) in config.CHECK_INTERVALS_HOURS:
-            s.check_interval_hours = int(changes["checkIntervalHours"])
-        if int(changes.get("deleteOldDays", 0) or 0) in config.DELETE_AFTER_DAYS:
-            s.delete_old_days = int(changes["deleteOldDays"])
+        if (hours := _whole_number(changes.get("checkIntervalHours"))) in config.CHECK_INTERVALS_HOURS:
+            s.check_interval_hours = hours
+        if (days := _whole_number(changes.get("deleteOldDays"))) in config.DELETE_AFTER_DAYS:
+            s.delete_old_days = days
         self._save()
         self.settingsChanged.emit()
 
@@ -637,12 +663,10 @@ class Backend(QObject):
             "releases": releases,
             "latestTag": latest["tag"] if latest else "",
             "fileChoices": choices,
-            "anyFileSuits": bool(choices),
             # Nothing in the newest release runs on this computer: tracked by version only.
             "versionOnly": latest is not None and not choices,
             # A file was picked, but the newest release doesn't have it (renamed or dropped by the project).
             "yourFileMissing": bool(pattern) and latest is not None and not latest["hasSelected"],
-            "hiddenPrereleases": sum(1 for r in d.releases if r.prerelease) if repo and not repo.prereleases else 0,
             "branchError": d.branch_error,
             "branches": [
                 {"name": b.name, "sha": b.sha[:7], "isDefault": b.name == d.default_branch,
@@ -654,8 +678,7 @@ class Backend(QObject):
     @staticmethod
     def _current_comparison(repo: TrackedRepo, d: Details) -> sources.Comparison | None:
         """The comparison, if it's for your version and the followed branch's newest commit as they are now."""
-        head = next((b.sha for b in d.branches if b.name == (repo.branch or d.default_branch)), "")
-        if d.comparing or d.commits_base != repo.installed or d.commits_head != head:
+        if d.comparing or d.commits_base != repo.installed or d.commits_head != _head(repo, d):
             return None
         return d.comparison
 
@@ -664,7 +687,7 @@ class Backend(QObject):
         installed = repo.installed
         if repo.follow == FOLLOW_BRANCH:
             branch = repo.branch or d.default_branch
-            newest = next((b.sha for b in d.branches if b.name == branch), "")
+            newest = _head(repo, d)
             if not newest:
                 return {}
             yours_text = f"commit {installed[:7]}"
@@ -770,8 +793,10 @@ class Backend(QObject):
             return
         ref, host = RepoRef.from_id(repo_id), repo.host
         scanned, local_path, installed = repo.source == config.SOURCE_SCANNED, repo.local_path, repo.installed
-        head = next((b.sha for b in d.branches if b.name == (repo.branch or d.default_branch)), "")
+        head = _head(repo, d)
         d.comparing = True
+        d.compare_request += 1
+        request = d.compare_request
         self.detailsChanged.emit(repo_id)
 
         def work():
@@ -781,8 +806,8 @@ class Backend(QObject):
 
         def done(result, error):
             repo, d = self._config.find(repo_id), self._details.get(repo_id)
-            if not repo or not d:
-                return
+            if not repo or not d or d.compare_request != request:
+                return  # removed, reloaded, or a newer comparison was asked for since
             d.comparing = False
             if error:
                 self.detailsChanged.emit(repo_id)

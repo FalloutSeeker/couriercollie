@@ -63,7 +63,7 @@ class BackendTest(unittest.TestCase):
         self.assertEqual([f["name"] for f in d["fileChoices"]],
                          ["LocalSend-1.18.2-linux-x86-64.AppImage", "LocalSend-1.18.2-linux-x86-64.tar.gz",
                           "LocalSend-CLI-1.18.2-linux-x86-64.tar.gz"])
-        self.assertTrue(d["anyFileSuits"])
+        self.assertFalse(d["versionOnly"])
         self.assertFalse(d["versionOnly"])
         self.assertFalse(d["yourFileMissing"])
 
@@ -102,7 +102,7 @@ class BackendTest(unittest.TestCase):
     def test_project_with_nothing_for_this_pc(self):
         self.backend._details[LOCALSEND].releases[0].assets = [
             sources.Asset("app-x86_64-release.apk", "u"), sources.Asset("app-x86_64-release.apk.idsig", "u")]
-        self.assertFalse(self.backend.details(LOCALSEND)["anyFileSuits"])
+        self.assertTrue(self.backend.details(LOCALSEND)["versionOnly"])
 
     def test_hand_added_repos_start_not_installed(self):
         # Adding a repo doesn't mean you have it (e.g. "aerial", added by hand to watch it).
@@ -152,6 +152,23 @@ class BackendTest(unittest.TestCase):
         d = self.backend.details(LOCALSEND)
         self.assertEqual(d["versionText"], "v1.0.0")
         self.assertTrue(d["updateAvailable"])
+
+    def test_quick_branch_clicks_answered_out_of_order(self):
+        # Click "old", then "dev" before the first answer is back; the first answer then arrives late.
+        pending = []
+        self.backend._run = lambda work, done: pending.append((work, done))
+        self.relations["b" * 40] = sources.BEHIND
+        d = self.backend._details[LOCALSEND]
+        d.branches.append(sources.Branch("old", "c" * 40))
+        repo = self.backend._config.find(LOCALSEND)
+        repo.follow, repo.installed = "branch", "a" * 40
+        self.backend.setBranch(LOCALSEND, "old")
+        self.backend.setBranch(LOCALSEND, "dev")
+        (work_old, done_old), (work_dev, done_dev) = pending
+        done_old(work_old(), None)
+        self.assertEqual(self.backend.details(LOCALSEND)["status"], "Checking\u2026")
+        done_dev(work_dev(), None)
+        self.assertEqual(self.backend.details(LOCALSEND)["status"], "Newer commits on dev (you have commit aaaaaaa)")
 
     def test_branch_with_no_shared_history(self):
         # Added by hand on "main"; "dev" was started from scratch.
@@ -337,6 +354,80 @@ class ScannedClonePageTest(unittest.TestCase):
         self.backend.setInstalled(smod, self.head)
         self.assertEqual(config.load(self.path).repos[0].installed, self.on_disk)
         self.assertEqual(self.backend.details(smod)["newCommitsTotal"], 1)
+
+
+class OfflineTest(unittest.TestCase):
+    """No internet: every action says so plainly, nothing is lost, and trying again works."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.path = Path(self.dir.name) / "repos.toml"
+        config.save(config.Config(settings=config.Settings(scanning=True), repos=[
+            TrackedRepo(id=LOCALSEND, name="LocalSend", url="", host="github", installed="v1.18.0")]), self.path)
+        self.backend = Backend(self.path)
+        self.backend._run = lambda work, done: self._finish(work, done)
+        self.saved = (sources.project_info, sources.releases, sources.branches, sources.compare)
+        self.offline = True
+
+        def unreachable(*_args, **_kw):
+            raise sources.SourceError("Couldn\u2019t reach github.com. Check your internet connection.")
+
+        def releases(*a):
+            if self.offline:
+                unreachable()
+            return sources.parse_github_releases(json.loads((FIXTURES / "github_releases.json").read_text()))
+
+        sources.project_info = unreachable
+        sources.releases = releases
+        sources.branches = lambda ref: unreachable() if self.offline else ("main", [sources.Branch("main", "a" * 40)])
+
+    def _finish(self, work, done):
+        try:
+            result, error = work(), None
+        except Exception as e:  # noqa: BLE001
+            result, error = None, e
+        done(result, error)
+
+    def tearDown(self):
+        sources.project_info, sources.releases, sources.branches, sources.compare = self.saved
+        self.backend.shutdown()
+        self.dir.cleanup()
+
+    def test_adding(self):
+        failures = []
+        self.backend.addFailed.connect(failures.append)
+        self.backend.addRepo("", "https://github.com/someone/thing")
+        self.assertEqual(failures, ["Couldn\u2019t reach github.com. Check your internet connection."])
+        self.assertFalse(self.backend.adding)
+        self.assertEqual(len(config.load(self.path).repos), 1)
+
+    def test_repo_page_then_try_again(self):
+        self.backend.loadDetails(LOCALSEND, False)
+        d = self.backend.details(LOCALSEND)
+        self.assertEqual(d["state"], "error")
+        self.assertIn("Couldn\u2019t reach", d["error"])
+        self.assertEqual(config.load(self.path).repos[0].installed, "v1.18.0")  # nothing lost
+        self.offline = False
+        self.backend.loadDetails(LOCALSEND, True)  # "Try Again"
+        self.assertEqual(self.backend.details(LOCALSEND)["state"], "ready")
+
+    def test_scan(self):
+        # A tracked repo is still updated from disk; a new find explains why it couldn't be checked.
+        finds = [scan.Found(id=LOCALSEND, name="localsend", url="", host="", path="/x/LocalSend-1.18.2.AppImage",
+                            kind="AppImage", version="1.18.2"),
+                 scan.Found(id="github.com/new/thing", name="thing", url="", host="", path="/x/thing", kind="git",
+                            version="abc")]
+        saved_find_all = scan.find_all
+        scan.find_all = lambda folders: finds
+        try:
+            self.backend.startScan()
+        finally:
+            scan.find_all = saved_find_all
+        self.assertEqual(self.backend.scanState, "done")
+        self.assertEqual(self.backend.scanUpdated, ["LocalSend"])
+        [item] = self.backend.scanItems
+        self.assertEqual(item["status"], "problem")
+        self.assertIn("Couldn\u2019t reach", item["note"])
 
 
 class ScanFlowTest(unittest.TestCase):

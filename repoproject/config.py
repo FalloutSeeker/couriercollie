@@ -5,7 +5,7 @@ Lives at ~/.config/repoproject/repos.toml (or $REPOPROJECT_CONFIG). Plain text, 
 
 import os
 import tomllib
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import MISSING, asdict, dataclass, field, fields
 from datetime import datetime
 from pathlib import Path
 
@@ -92,10 +92,29 @@ def default_path() -> Path:
     return base / "repoproject" / "repos.toml"
 
 
+def _fits(value, like) -> bool:
+    """Whether a value from the file is the same kind as a field's default (a list of text for lists)."""
+    if isinstance(like, bool):
+        return isinstance(value, bool)
+    if isinstance(like, int):
+        return isinstance(value, int) and not isinstance(value, bool)
+    if isinstance(like, list):
+        return isinstance(value, list) and all(isinstance(v, str) for v in value)
+    return isinstance(value, type(like))
+
+
 def _from_dict(cls, data: dict):
-    # Ignore keys we don't know (e.g. from a newer version); missing keys get defaults.
-    known = {f.name for f in fields(cls)}
-    return cls(**{k: v for k, v in data.items() if k in known})
+    # Keys we don't know (e.g. from a newer version) are ignored. Missing keys, and values of the wrong kind (e.g. a
+    # hand-edited file), get the default. A required field (no default) that's missing or wrong makes the file
+    # unreadable, so it's never overwritten.
+    values = {}
+    for f in fields(cls):
+        if f.name not in data:
+            continue
+        like = f.default if f.default is not MISSING else f.default_factory() if f.default_factory is not MISSING else ""
+        if _fits(data[f.name], like):
+            values[f.name] = data[f.name]
+    return cls(**values)
 
 
 def _nearest_interval(hours) -> int:
@@ -113,9 +132,13 @@ def load(path: Path | None = None) -> Config:
         return Config()
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
-        settings = _from_dict(Settings, data.get("settings", {}))
+        settings_data, repos_data = data.get("settings", {}), data.get("repos", [])
+        if not isinstance(settings_data, dict) or not isinstance(repos_data, list) \
+                or not all(isinstance(r, dict) for r in repos_data):
+            raise TypeError("the settings or repos section isn\u2019t laid out as expected")
+        settings = _from_dict(Settings, settings_data)
         settings.check_interval_hours = _nearest_interval(settings.check_interval_hours)
-        repos = [_from_dict(TrackedRepo, r) for r in data.get("repos", [])]
+        repos = [_from_dict(TrackedRepo, r) for r in repos_data]
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, TypeError) as e:
         raise ConfigError(f"Couldn’t read {path}: {e}") from e
     return Config(settings=settings, repos=repos)

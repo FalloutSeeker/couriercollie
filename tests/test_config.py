@@ -73,6 +73,26 @@ class ConfigTest(unittest.TestCase):
         self.assertTrue(cfg.settings.auto_check)
         self.assertEqual(cfg.repos[0].follow, config.FOLLOW_RELEASES)
 
+    def test_values_of_the_wrong_kind_get_defaults(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text('[settings]\nscanning = "yes"\nscan_folders = "/opt"\ncheck_interval_hours = true\n\n'
+                             '[[repos]]\nid = "github.com/a/b"\nname = "B"\nurl = ""\nhost = "github"\n'
+                             'installed = 5\naliases = ["ok", 3]\nprereleases = "no"\n')
+        cfg = config.load(self.path)
+        self.assertEqual((cfg.settings.scanning, cfg.settings.scan_folders, cfg.settings.check_interval_hours),
+                         (False, ["~", "/opt", "/usr/local", "/srv"], 24))
+        repo = cfg.repos[0]
+        self.assertEqual((repo.installed, repo.aliases, repo.prereleases), ("", [], False))
+
+    def test_unusable_required_field_makes_the_file_unreadable(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text('[[repos]]\nid = 5\nname = "B"\nurl = ""\nhost = "github"\n')
+        with self.assertRaises(ConfigError):
+            config.load(self.path)
+        self.path.write_text('settings = "not a table"\n')
+        with self.assertRaises(ConfigError):
+            config.load(self.path)
+
     def test_broken_file_raises_instead_of_being_replaced(self):
         self.path.parent.mkdir(parents=True)
         self.path.write_text("this is [not toml")

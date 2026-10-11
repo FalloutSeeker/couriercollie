@@ -170,7 +170,8 @@ def http_get_json(url: str, headers: dict | None = None):
                 raise BadAnswer(f"{domain} sent an answer that isn’t from a GitHub or GitLab site.") from e
             raise NotFound("Project not found. Check the address, and that the project is public.") from e
         remaining = e.headers.get("x-ratelimit-remaining") or e.headers.get("ratelimit-remaining")
-        if e.code == 429 or (e.code == 403 and remaining == "0"):
+        # GitHub's hourly limit is a 403 with nothing remaining; its "secondary" limit is a 403 with retry-after.
+        if e.code == 429 or (e.code == 403 and (remaining == "0" or e.headers.get("retry-after"))):
             reset = _reset_time(e.headers)
             when = f" Try again after {reset.astimezone():%H:%M}." if reset else " Try again later."
             raise RateLimited(f"{domain} says too many requests were made.{when}", reset) from e
@@ -179,7 +180,7 @@ def http_get_json(url: str, headers: dict | None = None):
         raise SourceError(f"Couldn’t reach {domain}. Check your internet connection.") from e
     except (TimeoutError, OSError) as e:
         raise SourceError(f"{domain} took too long to answer. Try again later.") from e
-    except json.JSONDecodeError as e:
+    except ValueError as e:  # not JSON, or not text at all
         raise BadAnswer(f"{domain} sent an answer that isn’t from a GitHub or GitLab site.") from e
 
 

@@ -48,6 +48,53 @@ class ParseUrlTest(unittest.TestCase):
         self.assertEqual(ref.id, "gitgud.io/aeroshell/atp/aerothemeplasma")
 
 
+class HttpErrorsTest(unittest.TestCase):
+    """What the user is told when a site answers badly. Uses a fake urlopen, no network."""
+
+    def answer(self, code=200, body=b"{}", headers=None):
+        import io
+        import urllib.error
+        import urllib.request
+        from email.message import Message
+
+        msg = Message()
+        for k, v in (headers or {}).items():
+            msg[k] = v
+
+        def fake_urlopen(req, timeout=None):
+            if code != 200:
+                raise urllib.error.HTTPError(req.full_url, code, "x", msg, io.BytesIO(body))
+            return io.BytesIO(body)
+
+        saved = urllib.request.urlopen
+        urllib.request.urlopen = fake_urlopen
+        try:
+            return sources.http_get_json("https://api.github.com/x")
+        finally:
+            urllib.request.urlopen = saved
+
+    def test_hourly_limit(self):
+        with self.assertRaisesRegex(sources.RateLimited, "too many requests"):
+            self.answer(403, b"{}", {"x-ratelimit-remaining": "0", "x-ratelimit-reset": "2000000000"})
+
+    def test_secondary_limit(self):
+        with self.assertRaises(sources.RateLimited):
+            self.answer(403, b"{}", {"retry-after": "60"})
+
+    def test_other_errors(self):
+        with self.assertRaisesRegex(sources.BadAnswer, r"\(500\)"):
+            self.answer(500)
+        with self.assertRaises(sources.NotFound):
+            self.answer(404, b'{"message": "Not Found"}')
+        with self.assertRaisesRegex(sources.BadAnswer, "isn’t from a GitHub or GitLab site"):
+            self.answer(404, b"<html>nope</html>")
+
+    def test_answers_that_arent_json(self):
+        for body in (b"<html>", b"\xff\xfe\x00garbage"):
+            with self.assertRaises(sources.BadAnswer):
+                self.answer(200, body)
+
+
 class GitHubTest(unittest.TestCase):
     def test_project(self):
         info = sources.parse_github_project(fixture("github_project.json"))

@@ -1,5 +1,6 @@
 import os
 import subprocess
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -225,6 +226,7 @@ class ScanFoldersTest(unittest.TestCase):
         self.assertEqual(len(scan.find_all(["~"], rpms=list)), 1)
         self.assertEqual(scan.find_all([str(self.root / "elsewhere")], rpms=list), [])
 
+    @unittest.skipIf(os.geteuid() == 0, "root can write to read-only folders")
     def test_folders_this_user_cant_change_need_a_password_to_update(self):
         opt = self.root / "opt"
         make_clone(opt / "system-tool", "https://github.com/someone/system-tool")

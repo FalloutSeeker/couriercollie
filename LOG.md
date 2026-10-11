@@ -4,6 +4,22 @@ Newest first.
 
 ## 2026-10-10
 
+- Review and test pass across stages 1–3:
+  - Bug: clicking two branches quickly could show "Couldn't compare…" when the first answer arrived late. Each
+    comparison is now numbered; late answers to older ones are ignored.
+  - Settings file: values of the wrong kind (hand-edited or damaged) now fall back to defaults instead of loading
+    as-is; a file whose sections are the wrong shape is treated as unreadable (never overwritten). If settings can't
+    be saved (e.g. read-only folder), the main window shows a warning instead of the save silently failing; it clears
+    once a save works.
+  - Sites: GitHub's secondary rate limit (403 with retry-after) is reported as "too many requests"; answers that
+    aren't text are reported as not from a GitHub/GitLab site.
+  - Faster: checking scan finds with their sites runs 4 at a time (10 finds here: 3.7 s → 1.8 s). Measured and left
+    alone: finding things on disk (0.2 s) and preparing a repo page (under 1 ms for 245 files).
+  - Cleanup: one helper for "the followed branch's newest commit" instead of four copies; values sent to the
+    window that nothing used were removed.
+  - Tests: 121 → 132, including offline behaviour (adding, a repo page then Try Again, scanning), HTTP errors, quick
+    branch clicks, and bad settings files. A scan test was quietly reaching GitHub; all tests now pass with the
+    network switched off (`unshare -rn`), where the two permission tests skip since they'd run as root.
 - Repos added by hand now start as "Not installed" instead of assuming the newest version (the user added "aerial"
   to watch it and it claimed v1.2.1; the "Test" repo's "fake commit" had the same cause). "Set as My Version" or
   "Mark as Up to Date" records a version once you have it. Scanned repos still read theirs from disk.

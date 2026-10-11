@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -57,6 +58,7 @@ class SettingsTest(unittest.TestCase):
 
     def test_values_outside_the_choices_are_ignored(self):
         self.backend.updateSettings({"checkIntervalHours": 5, "deleteOldDays": 1, "autoCheck": "yes", "bogus": 1})
+        self.backend.updateSettings({"checkIntervalHours": "abc", "deleteOldDays": None})
         self.assertEqual(self.backend.settings["checkIntervalHours"], 24)
         self.assertEqual(self.backend.settings["deleteOldDays"], 30)
         self.assertFalse(self.backend.settings["autoCheck"])
@@ -84,6 +86,21 @@ class SettingsTest(unittest.TestCase):
     def test_older_settings_files_get_the_default_folders(self):
         self.path.write_text("[settings]\nscanning = true\n")
         self.assertEqual(config.load(self.path).settings.scan_folders, ["~", "/opt", "/usr/local", "/srv"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root can write to read-only folders")
+    def test_a_folder_that_cant_be_written_shows_a_warning_and_recovers(self):
+        import os
+        self.backend.updateSettings({"toasts": False})  # the file exists
+        os.chmod(self.path.parent, 0o555)
+        try:
+            self.backend.updateSettings({"toasts": True})
+            self.assertIn("Couldn\u2019t save", self.backend.saveError)
+            self.assertTrue(self.backend.settings["toasts"])  # kept while the app is open
+        finally:
+            os.chmod(self.path.parent, 0o755)
+        self.backend.updateSettings({"scanning": True})
+        self.assertEqual(self.backend.saveError, "")
+        self.assertTrue(config.load(self.path).settings.toasts)  # saved once it could be
 
     def test_one_change_leaves_the_rest(self):
         self.backend.updateSettings({"toasts": False})

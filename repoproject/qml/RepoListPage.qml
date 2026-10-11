@@ -50,6 +50,14 @@ Kirigami.ScrollablePage {
             text: backend.configError + "\nChanges won’t be saved until that file is fixed or moved away."
         }
 
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
+            visible: backend.saveError !== ""
+            type: Kirigami.MessageType.Warning
+            position: Kirigami.InlineMessage.Position.Header
+            text: backend.saveError
+        }
+
         QQC2.ToolBar {
             Layout.fillWidth: true
 

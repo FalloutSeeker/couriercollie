@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 from collections.abc import Callable, Iterable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -250,31 +251,34 @@ class Checked:
     problem: str = ""  # why it can't be tracked, for the user; empty if it can
 
 
+LOOKUPS_AT_ONCE = 4
+
+
+def _identify_one(item: Found, lookup: Callable[[RepoRef], sources.ProjectInfo]) -> Checked:
+    try:
+        info = lookup(RepoRef.from_id(item.id))
+    except sources.NotFound:
+        return Checked(item, "Not found on its site. It may be private, or have been removed.")
+    except SourceError as e:
+        return Checked(item, str(e))
+    if info.ref.id.lower() != item.id.lower():
+        item.aliases.append(item.id)
+    item.id, item.url, item.host = info.ref.id, info.ref.web_url, info.host
+    item.description = info.description
+    if item.kind == assets.KIND_GIT:
+        item.name = info.name or item.name
+    return Checked(item)
+
+
 def identify(items: list[Found], known: Callable[[str], bool],
-             lookup: Callable[[RepoRef], sources.ProjectInfo] = sources.project_info) -> list[Checked]:
+             lookup: Callable[[RepoRef], sources.ProjectInfo] | None = None) -> list[Checked]:
     """Ask each find's site which project it is now. `known(id)` says if an address is already on the list: those
-    aren't looked up, so a scan of things you already track uses no requests."""
-    checked = []
-    for item in items:
-        if known(item.id):
-            checked.append(Checked(item))
-            continue
-        try:
-            info = lookup(RepoRef.from_id(item.id))
-        except sources.NotFound:
-            checked.append(Checked(item, "Not found on its site. It may be private, or have been removed."))
-            continue
-        except SourceError as e:
-            checked.append(Checked(item, str(e)))
-            continue
-        if info.ref.id.lower() != item.id.lower():
-            item.aliases.append(item.id)
-        item.id, item.url, item.host = info.ref.id, info.ref.web_url, info.host
-        item.description = info.description
-        if item.kind == assets.KIND_GIT:
-            item.name = info.name or item.name
-        checked.append(Checked(item))
-    return checked
+    aren't looked up, so a scan of things you already track uses no requests. Lookups run a few at a time; results
+    keep the order of `items`."""
+    lookup = lookup or sources.project_info
+    with ThreadPoolExecutor(max_workers=LOOKUPS_AT_ONCE) as pool:
+        futures = [None if known(item.id) else pool.submit(_identify_one, item, lookup) for item in items]
+        return [Checked(item) if f is None else f.result() for item, f in zip(items, futures)]
 
 
 def _plain(text: str) -> str:
