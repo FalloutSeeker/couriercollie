@@ -264,6 +264,15 @@ class BackendTest(unittest.TestCase):
         self.assertTrue(d["releases"][0]["isInstalled"])
         self.assertEqual(self.backend.repo(LOCALSEND)["checkText"], "Up to date")
 
+    def test_odd_input_from_the_window(self):
+        self.backend.setInstalled(LOCALSEND, "  v1.18.2 ")
+        self.assertEqual(self.backend._config.find(LOCALSEND).installed, "v1.18.2")
+        folders = list(self.backend._config.settings.scan_folders)
+        self.backend.addScanFolder("relative/path")
+        self.backend.addScanFolder("")
+        self.assertEqual(self.backend._config.settings.scan_folders, folders)
+        self.backend.trackFound(["nope", ""])  # nothing to track, and no error
+
     def test_branch_with_no_shared_history(self):
         # Added by hand on "main"; "dev" was started from scratch.
         self.relations["b" * 40] = sources.DIVERGED

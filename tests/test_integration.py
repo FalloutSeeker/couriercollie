@@ -128,6 +128,26 @@ class RunningAppTest(TempHome):
         self.assertEqual(listener.received, ["check"])
 
 
+class ResetCommandTest(TempHome):
+    def test_not_while_the_app_is_open(self):
+        # The open window would save its settings again, undoing the reset.
+        import sys
+
+        from couriercollie import app, config
+
+        path = config.default_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("categories = []\n")
+        listener = Listener(integration.socket_path())
+        saved = sys.argv
+        sys.argv = ["couriercollie", "--reset"]
+        self.addCleanup(setattr, sys, "argv", saved)
+        self.assertEqual(app.main(), 1)
+        listener.close()
+        self.assertTrue(path.exists())
+        self.assertEqual(listener.received, ["ping"])
+
+
 class CheckCommandTest(TempHome):
     """`run.sh --check [--if-due]`, what the background timer runs."""
 

@@ -89,8 +89,12 @@ def fill_in_icons() -> None:
 def main() -> int:
     args = sys.argv[1:]
     if "--reset" in args:
-        from . import config
+        from . import config, integration
 
+        # The open window would save its settings again, undoing the reset.
+        if integration.tell_running_app("ping"):
+            print("couriercollie is open. Close it (and its window), then reset.")
+            return 1
         backup = config.reset()
         print(f"Settings reset. The old ones were saved as {backup}." if backup else "Nothing to reset.")
         args.remove("--reset")

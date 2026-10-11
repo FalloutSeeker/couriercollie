@@ -128,7 +128,8 @@ class ProjectInfo:
 # ---------------------------------------------------------------------------------------------------------------------
 # URLs
 
-_SSH_URL = re.compile(r"^(?:ssh://)?git@([^:/]+)[:/](.+)$")
+# git@host:group/project, or ssh://git@host[:port]/group/project. SSH's port isn't the site's web port, so it's dropped.
+_SSH_URL = re.compile(r"^(?:ssh://git@([^:/]+)(?::\d+)?/|git@([^:/]+):)(.+)$")
 
 
 def parse_url(text: str) -> RepoRef:
@@ -138,14 +139,21 @@ def parse_url(text: str) -> RepoRef:
     if not text:
         raise ValueError("Enter the project’s web address, e.g. https://github.com/owner/project")
     if m := _SSH_URL.match(text):
-        domain, path = m.group(1), m.group(2)
+        domain, path = m.group(1) or m.group(2), m.group(3)
     else:
         if "://" not in text:
             text = "https://" + text
         parsed = urllib.parse.urlparse(text)
-        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        try:
+            port = parsed.port
+        except ValueError:  # "host:abc"
+            port = -1
+        if parsed.scheme not in ("http", "https") or not parsed.hostname or port == -1:
             raise ValueError("That doesn’t look like a web address.")
         domain, path = parsed.hostname.lower(), parsed.path
+        # A self-hosted site on a port of its own (gitlab.example.com:8443) is asked there, always over https.
+        if port and port not in (80, 443):
+            domain = f"{domain}:{port}"
     domain = domain.lower().removeprefix("www.")
     path = path.strip("/")
     # Addresses GitHub serves a project's files and API from: the project's own address is what's tracked.

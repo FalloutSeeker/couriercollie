@@ -35,7 +35,7 @@ Download the package for your distro from [Releases](https://github.com/FalloutS
 
 Your package manager installs everything else it needs. Then open **couriercollie** from your app menu.
 
-**Or run it from the source**, on any distro, once PySide6 and Kirigami are installed:
+**Or run it from the source**, on any distro, once [PySide6](https://github.com/pyside/pyside-setup) and [Kirigami](https://github.com/KDE/kirigami) are installed:
 
 ```sh
 git clone https://github.com/FalloutSeeker/couriercollie
@@ -94,9 +94,7 @@ without signing in, and 5,000 with.
 **What does a scan find?** Only what your package manager can't update:
 
 - Git clones and AppImages in your scan folders.
-- Packages installed from a downloaded file that no repository you have offers. On Fedora that's two checks: it
-  came from a file (`@commandline`), and no enabled repository offers it (some packages add their own repository
-  when installed).
+- Packages installed from a downloaded file that no repository you have offers.
 - Flatpak bundles installed from a file.
 
 The scan folders are your home folder, `/opt`, `/usr/local` and `/srv`, where software installed by hand lives. The

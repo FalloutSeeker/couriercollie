@@ -164,6 +164,9 @@ def load(path: Path | None = None) -> Config:
         repos = [_from_dict(TrackedRepo, r) for r in repos_data]
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, TypeError) as e:
         raise ConfigError(f"Couldn’t read {path}: {e}") from e
+    # A hand-edited file may list a repo twice: the first is kept (two rows for one address would act as one).
+    seen: set[str] = set()
+    repos = [r for r in repos if not (r.id.lower() in seen or seen.add(r.id.lower()))]
     if "categories" not in data:
         # Saved before categories existed, when the list was sorted by name. Keep that order; it can be dragged from
         # here on.

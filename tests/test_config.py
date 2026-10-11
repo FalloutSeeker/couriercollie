@@ -132,6 +132,13 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(cfg.categories, ["Tools", "Games"])
         self.assertEqual([r.category for r in cfg.repos], ["Tools", "Games"])
 
+    def test_a_repo_listed_twice_by_hand_is_kept_once(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text('categories = []\n\n'
+                             '[[repos]]\nid = "github.com/a/b"\nname = "First"\nurl = ""\nhost = "github"\n\n'
+                             '[[repos]]\nid = "github.com/A/B"\nname = "Again"\nurl = ""\nhost = "github"\n')
+        self.assertEqual([r.name for r in config.load(self.path).repos], ["First"])
+
     def test_find(self):
         cfg = Config(repos=[TrackedRepo(id="a/b/c", name="C", url="", host="github")])
         self.assertEqual(cfg.find("a/b/c").name, "C")

@@ -132,7 +132,7 @@ def socket_path() -> Path:
 
 
 def tell_running_app(message: str) -> bool:
-    """Send "show" or "check" to the running app. False if it isn't running."""
+    """Send "show" or "check" to the running app, or "ping" (nothing; whether it's open). False if it isn't running."""
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
             s.settimeout(2)

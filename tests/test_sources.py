@@ -39,6 +39,17 @@ class ParseUrlTest(unittest.TestCase):
         self.check("https://gitlab.com/veloren/veloren.git", "gitlab.com", "veloren/veloren")
         self.check("ssh://git@gitlab.com/group/sub/proj.git", "gitlab.com", "group/sub/proj")
 
+    def test_ports(self):
+        # A self-hosted GitLab on a port of its own is asked there; the usual ports, and SSH's, aren't kept.
+        ref = sources.parse_url("http://gitlab.example.com:8443/g/p/-/releases")
+        self.assertEqual((ref.id, ref.git_url), ("gitlab.example.com:8443/g/p", "https://gitlab.example.com:8443/g/p.git"))
+        self.assertEqual(sources.RepoRef.from_id(ref.id), ref)
+        self.assertEqual(sources.parse_url("https://gitlab.com:443/g/p").id, "gitlab.com/g/p")
+        self.assertEqual(sources.parse_url("ssh://git@gitlab.com:2222/g/p.git").id, "gitlab.com/g/p")
+        self.assertEqual(sources.parse_url("git@gitlab.com:g/p.git").id, "gitlab.com/g/p")
+        with self.assertRaises(ValueError):
+            sources.parse_url("https://gitlab.com:abc/g/p")
+
     def test_rejects_incomplete_addresses(self):
         for text in ["", "   ", "https://github.com/onlyowner", "https://github.com", "ftp://x.org/a/b"]:
             with self.assertRaises(ValueError, msg=text):

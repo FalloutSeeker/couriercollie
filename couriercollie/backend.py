@@ -831,7 +831,7 @@ class Backend(QObject, Updating, Account):
     def addScanFolder(self, folder):
         """Add a folder to scan. Takes a path or a file:// link (from the folder picker)."""
         path = urllib.parse.unquote(folder.removeprefix("file://"))
-        if not path:
+        if not os.path.isabs(os.path.expanduser(path)):  # nothing, or relative to wherever the app was started
             return
         path = updater.shown(path)  # "~/…": stays right if the home folder moves
         if path not in self._config.settings.scan_folders:
@@ -1029,7 +1029,7 @@ class Backend(QObject, Updating, Account):
     @Slot("QVariantList")
     def trackFound(self, keys):
         """Track the scan finds the user ticked. A find that looks like a tracked repo is linked to it, not added."""
-        keys = {int(k) for k in keys}
+        keys = {int(k) for k in keys if str(k).isdigit()}
         chosen = []
         for item in self._scan_items:
             if item["key"] not in keys or item["status"] == "problem":
@@ -1360,6 +1360,7 @@ class Backend(QObject, Updating, Account):
 
     @Slot(str, str)
     def setInstalled(self, repo_id, version):
+        version = version.strip()
         if (repo := self._config.find(repo_id)) and version and version != repo.installed:
             repo.installed = version
             self._version_changed(repo)

@@ -480,13 +480,16 @@ Kirigami.ScrollablePage {
                                      label: row.modelData.label })
                         }
 
+                        // A long name is cut short; its count stays beside it.
                         Kirigami.Heading {
                             objectName: "categoryName:" + row.modelData.category
                             Layout.fillWidth: true
+                            // Rounded up: a fraction of a pixel short would cut off the name's last letters.
+                            Layout.maximumWidth: Math.ceil(implicitWidth)
                             visible: !heading.editing
                             level: 4
-                            text: `${Labels.escaped(row.modelData.label)} <font color="${Kirigami.Theme.disabledTextColor}">${row.modelData.count}</font>`
-                            textFormat: Text.StyledText
+                            text: row.modelData.label
+                            textFormat: Text.PlainText
                             elide: Text.ElideRight
 
                             // Double-click the name to rename it.
@@ -494,6 +497,16 @@ Kirigami.ScrollablePage {
                                 enabled: row.modelData.category !== ""
                                 onDoubleTapped: page.startRename(row.modelData.category)
                             }
+                        }
+
+                        // Takes the room left over, so the name only shrinks when there isn't enough.
+                        Kirigami.Heading {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: implicitWidth
+                            visible: !heading.editing
+                            level: 4
+                            text: row.modelData.count
+                            color: Kirigami.Theme.disabledTextColor
                         }
 
                         // Enter saves, Esc cancels.
@@ -655,13 +668,17 @@ Kirigami.ScrollablePage {
                                 horizontalAlignment: Text.AlignRight
                                 // Bold through the text itself: setting font.bold here would replace the small font.
                                 // Narrow, an update says what and which on a line each ("Update available" over
-                                // "v1.18.2"), rather than breaking wherever the line runs out.
+                                // "v1.18.2", "3 new commits" over "on main"), rather than breaking wherever the line
+                                // runs out.
                                 text: {
                                     const t = Labels.escaped(row.modelData.checkText);
                                     if (!row.modelData.updateAvailable)
                                         return t;
-                                    const at = t.indexOf(": ");
-                                    return narrow && at > 0 ? `<b>${t.slice(0, at)}</b><br>${t.slice(at + 2)}` : `<b>${t}</b>`;
+                                    const colon = t.indexOf(": "), on = t.indexOf(" on ");
+                                    return !narrow ? `<b>${t}</b>`
+                                        : colon > 0 ? `<b>${t.slice(0, colon)}</b><br>${t.slice(colon + 2)}`
+                                        : on > 0 ? `<b>${t.slice(0, on)}</b><br>${t.slice(on + 1)}`
+                                        : `<b>${t}</b>`;
                                 }
                                 readonly property bool narrow: row.width < Kirigami.Units.gridUnit * 26
                                 textFormat: Text.StyledText
