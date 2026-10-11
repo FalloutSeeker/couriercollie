@@ -122,11 +122,14 @@ def _yours(repo: TrackedRepo) -> str:
 CHECK_RELEASES = 5
 
 
-def releases_result(shown: list[sources.Release], yours: str) -> Result:
-    """The result for a repo following releases, from the releases it shows (newest first) and your version."""
+def releases_result(shown: list[sources.Release], yours: str, managed_by: str = "") -> Result:
+    """The result for a repo following releases, from the releases it shows (newest first) and your version.
+    `managed_by`: what else installed it and keeps it updated ("dnf"), when you haven't set a version of your own."""
     if not shown:
         return Result(NO_RELEASES, "No releases yet")
     newest = shown[0].tag
+    if (not yours or yours == NOT_INSTALLED) and managed_by:
+        return Result(OTHER, f"Installed with {managed_by}", newest)
     if not yours or yours == NOT_INSTALLED:
         return Result(NOT_INSTALLED_YET, f"Not installed · newest {newest}", newest)
     if assets.version_of(yours) == assets.version_of(newest) or yours == newest:
@@ -134,9 +137,12 @@ def releases_result(shown: list[sources.Release], yours: str) -> Result:
     return Result(UPDATE, f"Update available: {newest}", newest)
 
 
-def branch_result(branch: str, head: str, yours: str, c: sources.Comparison | None, disk: str = "") -> Result:
+def branch_result(branch: str, head: str, yours: str, c: sources.Comparison | None, disk: str = "",
+                  managed_by: str = "") -> Result:
     """The result for a repo following a branch, from its newest commit, your version, how they compare (None: they
-    couldn't be compared) and, for a clone, the branch it's on."""
+    couldn't be compared), for a clone the branch it's on, and what else installed it (as for releases_result)."""
+    if (not yours or yours == NOT_INSTALLED) and managed_by:
+        return Result(OTHER, f"Installed with {managed_by}", head)
     if not yours or yours == NOT_INSTALLED:
         return Result(NOT_INSTALLED_YET, f"Not installed · following {branch}", head)
     if yours == head or (c and c.relation == sources.SAME):
@@ -155,7 +161,7 @@ def branch_result(branch: str, head: str, yours: str, c: sources.Comparison | No
 
 def _check_releases(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
     rels = sources.newest_releases(ref, repo.host, CHECK_RELEASES, repo.prereleases)
-    return releases_result([r for r in rels if repo.prereleases or not r.prerelease], yours)
+    return releases_result([r for r in rels if repo.prereleases or not r.prerelease], yours, repo.managed_by)
 
 
 def _check_branch(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
@@ -173,7 +179,7 @@ def _check_branch(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
         except SourceError:
             pass  # "couldn't compare"
     disk = scan.branch_on_disk(repo.local_path) if repo.source == SOURCE_SCANNED and repo.local_path else ""
-    return branch_result(branch, head, yours, c, disk)
+    return branch_result(branch, head, yours, c, disk, repo.managed_by)
 
 
 def check_repo(repo: TrackedRepo, github_limited: threading.Event | None = None) -> Result:

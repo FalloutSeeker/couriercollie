@@ -167,20 +167,19 @@ def offered_by_a_repository(name: str, run=_out) -> bool:
     return False
 
 
-def managed_by_system(repo_ids: list[str], run=_out) -> tuple[str, str] | None:
-    """(package manager, package) if the project behind these addresses is installed as a package that a repository
-    you have enabled offers: the package manager keeps it up to date. Matched by the package's homepage, never by a
-    similar name."""
+def managed_by_system(repo_ids: list[str], run=_out) -> tuple[str, str, str] | None:
+    """(package manager, package, its version) if the project behind these addresses is installed as a package that
+    a repository you have enabled offers: the package manager keeps it up to date. Matched by the package's homepage
+    (sources.same_project), never by a similar name."""
     from . import sources
 
-    wanted = {i.lower() for i in repo_ids}
-    for name, homepage in installed_homepages(run):
-        try:
-            if sources.parse_url(homepage).id.lower() not in wanted:
-                continue
-        except ValueError:
-            continue
+    # Several packages can share a project's homepage (dolphin, dolphin-libs): the one named like the project first.
+    names = {i.rsplit("/", 1)[-1].lower() for i in repo_ids}
+    matches = sorted((name for name, homepage in installed_homepages(run) if sources.same_project(homepage, repo_ids)),
+                     key=lambda name: name.lower() not in names)
+    for name in matches:
         if offered_by_a_repository(name, run):
             tool = next((t for t in ("dnf", "zypper", "apt", "pacman") if assets.has(t)), "")
-            return tool, name
+            kind = {"apt": assets.KIND_DEB, "pacman": assets.KIND_ARCH}.get(tool, assets.KIND_RPM)
+            return tool, name, installed_version(kind, name)[0]
     return None

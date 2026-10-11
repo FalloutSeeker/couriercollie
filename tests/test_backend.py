@@ -473,7 +473,7 @@ class ScannedClonePageTest(unittest.TestCase):
         import couriercollie.backend as backend_module
 
         saved = backend_module._managed_elsewhere
-        backend_module._managed_elsewhere = lambda ids: "Your package manager also keeps this up to date."
+        backend_module._managed_elsewhere = lambda ids: ("Your package manager also keeps this up to date.", "dnf", "1.0")
         self.addCleanup(setattr, backend_module, "_managed_elsewhere", saved)
         self.backend.loadDetails("gitgud.io/aeroshell/smod", True)
         self.assertEqual(self.backend.details("gitgud.io/aeroshell/smod")["managedElsewhere"],

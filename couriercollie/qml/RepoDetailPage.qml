@@ -17,8 +17,9 @@ Kirigami.ScrollablePage {
     readonly property string currentBranch: ((details.branches || []).find(b => b.selected) || {}).name || ""
     readonly property bool ready: details.state === "ready"
     // A scanned repo's version is read from disk, so it isn't set by hand.
+    // Not for what the package manager (or Flatpak) installed: its version is theirs to change.
     readonly property bool canMarkUpToDate: ready && !details.versionFromDisk && !details.updating && details.status !== ""
-                                            && details.status !== "Up to date"
+                                            && details.status !== "Up to date" && details.statusKind !== "managed"
     readonly property bool canMarkNotInstalled: ready && !details.versionFromDisk && !details.updating && details.versionText !== ""
                                                 && details.installed !== "-"
     // Update pulls a clone's new commits or moves it to the newest release; for an AppImage it downloads the newest,
@@ -318,7 +319,8 @@ Kirigami.ScrollablePage {
                         Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                         Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
                         source: ({ update: "update-low", current: "update-none", problem: "dialog-warning",
-                                   ahead: "go-up", checking: "view-refresh", notInstalled: "package-x-generic" })[statusBox.kind] || ""
+                                   ahead: "go-up", checking: "view-refresh", notInstalled: "package-x-generic",
+                                   managed: "package-x-generic" })[statusBox.kind] || ""
                     }
 
                     Kirigami.Heading {
@@ -673,6 +675,7 @@ Kirigami.ScrollablePage {
                 QQC2.Label {
                     Layout.fillWidth: true
                     text: page.repo.scanned ? page.repo.shownPath
+                        : page.details.statusKind === "managed" ? "Your version is the one your package manager installed."
                         : page.followsReleases ? "You set your version: with the buttons above, or Set as My Version on a release."
                         : "You set your version, with the buttons above."
                     font: Kirigami.Theme.smallFont

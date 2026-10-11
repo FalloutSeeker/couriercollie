@@ -217,11 +217,21 @@ class ManagedElsewhereTest(unittest.TestCase):
             found = packages.managed_by_system(["github.com/Facebook/ZSTD"], run=lambda *a: answers.get(a[0], ""))
             self.assertIsNotNone(found, tool)
             self.assertEqual(found[0], tool)
+
         # Installed from a downloaded file (apt says "local"): nothing else updates it.
         assets.PACKAGE_TOOLS = {"apt"}
         answers = {"dpkg-query": "tool|https://github.com/a/tool\n",
                    "apt": "Listing...\ntool/now 1.0 all [installed,local]\n"}
         self.assertIsNone(packages.managed_by_system(["github.com/a/tool"], run=lambda *a: answers.get(a[0], "")))
+
+    def test_kde_and_gnome_mirrors_are_the_same_project(self):
+        from couriercollie import sources
+
+        self.assertTrue(sources.same_project("https://invent.kde.org/system/dolphin", ["github.com/KDE/dolphin"]))
+        self.assertTrue(sources.same_project("https://apps.kde.org/dolphin/", ["github.com/KDE/dolphin"]))
+        self.assertTrue(sources.same_project("https://gitlab.gnome.org/GNOME/nautilus", ["github.com/GNOME/nautilus"]))
+        # Another project with the same name isn't it: no guessing by name.
+        self.assertFalse(sources.same_project("https://invent.kde.org/system/dolphin", ["github.com/dolphin-emu/dolphin"]))
 
     def test_flathub_but_not_a_bundle(self):
         import subprocess
@@ -241,8 +251,11 @@ class ManagedElsewhereTest(unittest.TestCase):
         flatpaks.homepage = lambda app_id, where="": {"org.example.App": "https://github.com/e/app",
                                                        "org.example.Bundle": "https://github.com/e/bundle"}[app_id]
         self.addCleanup(lambda: (setattr(flatpaks, "_flatpak", saved[0]), setattr(flatpaks, "homepage", saved[1])))
-        self.assertEqual(flatpaks.managed_by_flatpak(["github.com/e/app"]), "org.example.App")
-        self.assertEqual(flatpaks.managed_by_flatpak(["github.com/e/bundle"]), "")  # Flatpak never updates a bundle
+        saved_version = flatpaks.installed_version
+        flatpaks.installed_version = lambda app_id: ("2.0", True)
+        self.addCleanup(setattr, flatpaks, "installed_version", saved_version)
+        self.assertEqual(flatpaks.managed_by_flatpak(["github.com/e/app"]), ("org.example.App", "2.0"))
+        self.assertIsNone(flatpaks.managed_by_flatpak(["github.com/e/bundle"]))  # Flatpak never updates a bundle
 
 
 if __name__ == "__main__":

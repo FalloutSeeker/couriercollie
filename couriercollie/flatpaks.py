@@ -111,21 +111,16 @@ def from_bundles() -> list[tuple[str, str]]:
     return [(app_id, where) for app_id, where, updatable in _installed_apps() if not updatable]
 
 
-def managed_by_flatpak(repo_ids: list[str]) -> str:
-    """The app ID if the project behind these addresses is installed as a Flatpak from a repository (Flathub, …),
-    which Flatpak keeps up to date. Matched by the app's homepage, never by a similar name."""
+def managed_by_flatpak(repo_ids: list[str]) -> tuple[str, str] | None:
+    """(app ID, its version) if the project behind these addresses is installed as a Flatpak from a repository
+    (Flathub, etc.), which Flatpak keeps up to date. Matched by the app's homepage (sources.same_project), never by a
+    similar name."""
     from . import sources
 
-    wanted = {i.lower() for i in repo_ids}
     for app_id, where, updatable in _installed_apps():
-        if not updatable:
-            continue
-        try:
-            if sources.parse_url(homepage(app_id, where)).id.lower() in wanted:
-                return app_id
-        except ValueError:
-            continue
-    return ""
+        if updatable and sources.same_project(homepage(app_id, where), repo_ids):
+            return app_id, installed_version(app_id)[0]
+    return None
 
 
 def install(path: Path) -> subprocess.CompletedProcess | None:

@@ -159,6 +159,34 @@ def parse_url(text: str) -> RepoRef:
     return RepoRef(domain, "/".join(parts))
 
 
+# KDE and GNOME keep their projects on their own GitLab sites and mirror them to GitHub (github.com/KDE/dolphin is
+# invent.kde.org/system/dolphin). Their packages may give either address, or KDE's app page, as the homepage.
+def _project_key(url: str) -> tuple[str, str] | None:
+    """A project's address, as one key for all the addresses it's known by: ("kde", "dolphin") for KDE's own site,
+    its GitHub mirror and apps.kde.org; likewise for GNOME. None for an address that isn't a project's."""
+    parsed = urllib.parse.urlparse(url if "://" in url else "https://" + url)
+    host, parts = (parsed.hostname or "").lower(), [p for p in parsed.path.lower().split("/") if p]
+    if host == "apps.kde.org" and parts:
+        return "kde", parts[0]
+    try:
+        ref = parse_url(url)
+    except ValueError:
+        return None
+    owner, name = ref.path.lower().split("/")[0], ref.name.lower()
+    if ref.domain == "invent.kde.org" or (ref.domain == "github.com" and owner == "kde"):
+        return "kde", name
+    if (ref.domain == "gitlab.gnome.org" and owner == "gnome") or (ref.domain == "github.com" and owner == "gnome"):
+        return "gnome", name
+    return ref.domain, ref.path.lower()
+
+
+def same_project(url: str, repo_ids: list[str]) -> bool:
+    """Whether `url` (e.g. a package's homepage) is one of these projects: the same address, or the same KDE or GNOME
+    project by another of its official addresses. Never by a similar name."""
+    key = _project_key(url)
+    return key is not None and key in {_project_key(i) for i in repo_ids}
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # The GitHub login (github_login.py): sent with requests to GitHub's API, and nowhere else
 

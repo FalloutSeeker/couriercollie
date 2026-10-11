@@ -58,8 +58,12 @@ Details:
 - **Loading:** a page loads once per app start. After that, only on Refresh, or when a check found something newer.
   When a page learns something newer than the last check (a new commit, say), the list's result updates too.
 - **Also updated elsewhere:** if the project is installed from a repository your package manager uses, or as a
-  Flatpak from Flathub (matched by homepage), the page says so. Nothing is stopped; updating it here too is your
-  call, but the two copies can mix.
+  Flatpak from Flathub, the page says so. Nothing is stopped; updating it here too is your call, but the two copies
+  can mix.
+  - **Matched by homepage, never by name.** KDE's and GNOME's GitHub mirrors count as the same project as their own
+    sites (github.com/KDE/dolphin is invent.kde.org/system/dolphin).
+  - **If you haven't set a version of your own:** the page and the list say "Installed with dnf" (or apt, pacman,
+    zypper, Flatpak), with its version. Install isn't offered, since it would add a second copy.
 - **Install script:** a clone's `install.sh` / `install` / `setup.sh` gets a button. The button reads "Show and Run"
   (never run from here), "Run Again" (run at this version) or "Install the Update" (run before the clone changed).
   The script is always shown first, then runs in a terminal.

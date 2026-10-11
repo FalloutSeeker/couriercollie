@@ -34,6 +34,7 @@ FILTERS = ("all", "github", "gitlab")
 # How your version compares with the newest, for the repo page's status box (colour and icon).
 STATUS_UPDATE, STATUS_CURRENT, STATUS_NOT_INSTALLED = "update", "current", "notInstalled"
 STATUS_AHEAD, STATUS_CHECKING, STATUS_PROBLEM = "ahead", "checking", "problem"
+STATUS_MANAGED = "managed"  # not yours to update: the package manager (or Flatpak) installed it
 # The heading for repos that aren't in one of your categories.
 UNCATEGORIZED = "Uncategorized"
 # Releases a repo's page loads at first; Show Older Releases loads a full page (sources.RELEASES_PER_PAGE).
@@ -67,8 +68,10 @@ class Details:
     branch_on_disk: str = ""
     # A scanned clone's install scripts (updater.install_scripts), offered to run by hand.
     install_scripts: list[str] = field(default_factory=list)
-    # The project is also installed from a repository the package manager or Flatpak updates (_managed_elsewhere).
+    # The project is also installed from a repository the package manager or Flatpak updates (_managed_elsewhere):
+    # the page's note, and that installed version.
     managed_elsewhere: str = ""
+    managed_version: str = ""
 
 
 def _monogram(name: str, repo_id: str) -> dict:
@@ -233,19 +236,20 @@ def _scan_note(f: scan.Found, problem: str, similar: TrackedRepo | None) -> str:
     return " ".join(notes)
 
 
-def _managed_elsewhere(repo_ids: list[str]) -> str:
-    """A note if the project is also installed in a way something else keeps up to date: a package from a repository
-    you have enabled, or a Flatpak from a Flatpak repository. Nothing is stopped: updating it here as well is up to
-    you, but it's good to know."""
+def _managed_elsewhere(repo_ids: list[str]) -> tuple[str, str, str]:
+    """If the project is also installed in a way something else keeps up to date (a package from a repository you
+    have enabled, or a Flatpak from a Flatpak repository): (a note for its page, what keeps it updated, the installed
+    version). Nothing is stopped: updating it here as well is up to you, but it's good to know."""
     if found := packages.managed_by_system(repo_ids):
-        tool, name = found
+        tool, name, version = found
         return (f"Your package manager also keeps this up to date: it\u2019s installed as the package \u201c{name}\u201d "
                 f"from a repository you have enabled, so {packages.UPGRADE[tool]} updates it. Updating it here as well "
-                "can mix the two versions.")
-    if app_id := flatpaks.managed_by_flatpak(repo_ids):
+                "can mix the two versions.", tool, version)
+    if found := flatpaks.managed_by_flatpak(repo_ids):
+        app_id, version = found
         return (f"Flatpak also keeps this up to date: it\u2019s installed as \u201c{app_id}\u201d from a Flatpak "
-                "repository. Updating it here as well adds a second copy.")
-    return ""
+                "repository. Updating it here as well adds a second copy.", "Flatpak", version)
+    return "", "", ""
 
 
 def _fetch_branches(ref: RepoRef) -> tuple[str, list[sources.Branch], str]:
@@ -521,12 +525,13 @@ class Backend(QObject, Updating, Account):
             head, c = _head(repo, d), self._current_comparison(repo, d)
             if not head or (c is None and repo.installed not in ("", NOT_INSTALLED, head)):
                 return  # not compared (yet): nothing better to say than the last check
-            new = checker.branch_result(repo.branch or d.default_branch, head, repo.installed, c, d.branch_on_disk)
+            new = checker.branch_result(repo.branch or d.default_branch, head, repo.installed, c, d.branch_on_disk,
+                                        repo.managed_by)
         else:
             shown = [r for r in d.releases if repo.prereleases or not r.prerelease]
             if not shown:
                 return
-            new = checker.releases_result(shown, repo.installed)
+            new = checker.releases_result(shown, repo.installed, repo.managed_by)
         old = self._checks.results.get(repo.id)
         if old and (old.status, old.text, old.newest) == (new.status, new.text, new.newest) and not old.not_rechecked:
             return
@@ -1067,8 +1072,8 @@ class Backend(QObject, Updating, Account):
             head = next((b.sha for b in branches if b.name == (branch or default)), "")
             comparison = _compare(ref, host, yours, head) if follow == FOLLOW_BRANCH else None
             scripts = updater.install_scripts(local_path) if scanned and (Path(local_path) / ".git").exists() else []
-            elsewhere = _managed_elsewhere(addresses)
-            return on_disk, Details(managed_elsewhere=elsewhere,
+            note, managed_by, managed_version = _managed_elsewhere(addresses)
+            return on_disk, managed_by, Details(managed_elsewhere=note, managed_version=managed_version,
                 state="ready", releases=rels, more_releases=len(rels) == PAGE_RELEASES, default_branch=default,
                 branches=branches, branch_error=branch_error, comparison=comparison, commits_base=yours,
                 commits_head=head, local_missing=bool(on_disk) and not on_disk[1], branch_on_disk=branch_on_disk,
@@ -1080,8 +1085,10 @@ class Backend(QObject, Updating, Account):
             if error:
                 self._details[repo_id] = Details(state="error", error=self._error_text(error))
             else:
-                on_disk, self._details[repo_id] = result
+                on_disk, managed_by, self._details[repo_id] = result
                 if repo := self._config.find(repo_id):
+                    managed_changed = managed_by != repo.managed_by
+                    repo.managed_by = managed_by
                     # A scanned repo's version is whatever's on disk now (e.g. after a `git pull` outside the app).
                     from_disk = bool(on_disk and on_disk[0] and on_disk[0] != repo.installed)
                     if from_disk:
@@ -1089,7 +1096,8 @@ class Backend(QObject, Updating, Account):
                         self._version_changed(repo)
                     baseline_set = _set_baseline(repo, self._details[repo_id])
                     tag_matched = _match_tag(repo, self._details[repo_id])
-                    if _fit_files(repo, self._details[repo_id]) or baseline_set or tag_matched or from_disk:
+                    if _fit_files(repo, self._details[repo_id]) or baseline_set or tag_matched or from_disk \
+                            or managed_changed:
                         self._changed()
                     self._check_from_page(repo)
             self.detailsChanged.emit(repo_id)
@@ -1208,13 +1216,15 @@ class Backend(QObject, Updating, Account):
             # A file was picked, but the newest release doesn't have it (renamed or dropped by the project).
             "yourFileMissing": bool(pattern) and latest is not None and not latest["hasSelected"],
             "branchError": d.branch_error,
-            "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing and not follow_disk,
+            # Not Install for what the package manager already installed: that would add a second copy.
+            "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing and not follow_disk
+                         and not (repo.managed_by and repo.installed in ("", NOT_INSTALLED)),
             "followDiskBranch": follow_disk,
             "isClone": bool(repo) and _is_clone(repo),
             # Install, for an AppImage or program you have but couriercollie doesn't know where (added by hand).
             "newCopy": bool(repo) and _new_copy(repo),
             # Install clones the project into clonesFolder.
-            "installClones": bool(repo) and _can_clone(repo),
+            "installClones": bool(repo) and _can_clone(repo) and not repo.managed_by,
             "clonesFolder": updater.shown(updater.clones_dir()),
             "updateNeedsPassword": bool(repo) and _needs_password(repo),
             "isPackage": bool(repo) and _is_package(repo),
@@ -1279,7 +1289,11 @@ class Backend(QObject, Updating, Account):
             # A clone that isn't at a release tag: its commit.
             newest_text, yours_text = newest, _version_text(installed)
             newer_text, update_headline = f"Newer version available: {newest}", "Update available"
-        if installed == NOT_INSTALLED:
+        if installed in ("", NOT_INSTALLED) and repo.managed_by:
+            text, status, kind, headline = d.managed_version or "Installed", \
+                f"{repo.managed_by} installed it, and keeps it up to date. The newest here is {newest_text}.", \
+                STATUS_MANAGED, f"Installed with {repo.managed_by}"
+        elif installed == NOT_INSTALLED:
             text, status, kind, headline = "Not installed", f"The newest is {newest_text}.", STATUS_NOT_INSTALLED, \
                 "Not installed"
         elif installed == newest:
