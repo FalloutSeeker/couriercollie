@@ -580,6 +580,8 @@ Kirigami.ScrollablePage {
                 spacing: Kirigami.Units.smallSpacing
 
                 QQC2.ComboBox {
+                    // As wide as its longest choice, in every style.
+                    implicitContentWidthPolicy: QQC2.ComboBox.WidestText
                     model: ["Releases", "A branch (new commits)"]
                     currentIndex: page.followsReleases ? 0 : 1
                     enabled: page.ready && page.details.hasReleases
@@ -762,25 +764,38 @@ Kirigami.ScrollablePage {
                     checkable: false
                     checked: modelData.selected
                     onClicked: backend.pickAsset(page.repoId, page.details.latestTag, modelData.name)
+                    // The style's own indicator is replaced by one at the row's start: some styles (Fusion) draw
+                    // theirs on the right, over the row's content.
+                    indicator: Item {}
 
-                    contentItem: ColumnLayout {
-                        spacing: 0
-
-                        QQC2.Label {
-                            Layout.fillWidth: true
-                            text: choice.modelData.name
-                            textFormat: Text.PlainText
-                            font.bold: choice.modelData.selected
-                            elide: Text.ElideMiddle
+                    contentItem: RowLayout {
+                        QQC2.RadioButton {
+                            checkable: false
+                            checked: choice.checked
+                            focusPolicy: Qt.NoFocus
+                            onClicked: choice.clicked()
                         }
 
-                        QQC2.Label {
+                        ColumnLayout {
                             Layout.fillWidth: true
-                            visible: text !== ""
-                            text: choice.modelData.details
-                            font: Kirigami.Theme.smallFont
-                            opacity: 0.8
-                            elide: Text.ElideRight
+                            spacing: 0
+
+                            QQC2.Label {
+                                Layout.fillWidth: true
+                                text: choice.modelData.name
+                                textFormat: Text.PlainText
+                                font.bold: choice.modelData.selected
+                                elide: Text.ElideMiddle
+                            }
+
+                            QQC2.Label {
+                                Layout.fillWidth: true
+                                visible: text !== ""
+                                text: choice.modelData.details
+                                font: Kirigami.Theme.smallFont
+                                opacity: 0.8
+                                elide: Text.ElideRight
+                            }
                         }
                     }
                 }
@@ -1009,8 +1024,18 @@ Kirigami.ScrollablePage {
                 checkable: false
                 checked: modelData.selected
                 onClicked: backend.setBranch(page.repoId, modelData.name)
+                // The style's own indicator is replaced by one at the row's start: some styles (Fusion) draw
+                // theirs on the right, over the row's content.
+                indicator: Item {}
 
                 contentItem: RowLayout {
+                    QQC2.RadioButton {
+                        checkable: false
+                        checked: branch.checked
+                        focusPolicy: Qt.NoFocus
+                        onClicked: branch.clicked()
+                    }
+
                     QQC2.Label {
                         Layout.fillWidth: true
                         text: branch.modelData.name

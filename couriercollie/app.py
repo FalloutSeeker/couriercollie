@@ -63,25 +63,27 @@ def choose_style() -> None:
 
 
 def fill_in_icons() -> None:
-    """After the app starts: icons the desktop's theme lacks (GNOME's Adwaita has far fewer than KDE's Breeze) come
-    from Breeze, if it's installed, so none show blank. With no icon theme at all, Breeze is the theme."""
+    """After the app starts: icons the desktop's theme lacks (GNOME's Adwaita has far fewer than KDE's Breeze) still
+    show. From Breeze if it's installed; otherwise from the copies of the icons the app uses that come with it
+    (couriercollie/icons), so Breeze needn't be installed."""
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QGuiApplication, QIcon
 
+    dark = QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
     # Where icon themes are installed (XDG); some platforms don't tell Qt.
     data_dirs = [os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share"),
                  *(os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share").split(os.pathsep)]
-    folders = [*QIcon.themeSearchPaths(), *(str(Path(d) / "icons") for d in data_dirs if d)]
-    folders = list(dict.fromkeys(folders))
-    if not any((Path(f) / "breeze").is_dir() for f in folders):
-        return
-    QIcon.setThemeSearchPaths(folders)
-    dark = QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
-    breeze = "breeze-dark" if dark else "breeze"
-    # KDE's style picks the theme from KDE's settings itself.
-    if QIcon.themeName() in ("", "hicolor") and os.environ.get("QT_QUICK_CONTROLS_STYLE") != "org.kde.desktop":
-        QIcon.setThemeName(breeze)
-    QIcon.setFallbackThemeName(breeze)
+    folders = list(dict.fromkeys([*QIcon.themeSearchPaths(), *(str(Path(d) / "icons") for d in data_dirs if d)]))
+    if any((Path(f) / "breeze").is_dir() for f in folders):
+        QIcon.setThemeSearchPaths(folders)
+        breeze = "breeze-dark" if dark else "breeze"
+        # KDE's style picks the theme from KDE's settings itself.
+        if QIcon.themeName() in ("", "hicolor") and os.environ.get("QT_QUICK_CONTROLS_STYLE") != "org.kde.desktop":
+            QIcon.setThemeName(breeze)
+        QIcon.setFallbackThemeName(breeze)
+    else:
+        own = Path(__file__).parent / "icons" / ("dark" if dark else "light")
+        QIcon.setFallbackSearchPaths([str(own), *QIcon.fallbackSearchPaths()])
 
 
 def main() -> int:

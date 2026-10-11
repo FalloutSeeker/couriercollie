@@ -153,9 +153,20 @@ Kirigami.Dialog {
                 checkable: false
                 checked: !!dialog.picked[modelData.key]
                 onClicked: dialog.toggle(modelData.key)
+                // The style's own indicator is replaced by one at the row's start: some styles (Fusion) draw
+                // theirs on the right, over the row's content.
+                indicator: Item {}
 
                 contentItem: RowLayout {
                     spacing: Kirigami.Units.largeSpacing
+
+                    QQC2.CheckBox {
+                        checkable: false
+                        checked: row.checked
+                        enabled: row.enabled
+                        focusPolicy: Qt.NoFocus
+                        onClicked: row.clicked()
+                    }
 
                     RepoIcon {
                         source: ""  // finds have no picture yet: it's looked up once one is tracked
