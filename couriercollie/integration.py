@@ -151,18 +151,41 @@ def _unit_dir() -> Path:
     return _config_home() / "systemd" / "user"
 
 
+def _stamp_path() -> Path:
+    """Where systemd notes when the timer last fired (Persistent=true), to catch up on a check missed while the
+    computer was off. Turning the timer off leaves it, so it's removed with the timer's files."""
+    return _data_home() / "systemd" / "timers" / f"stamp-{TIMER}.timer"
+
+
+def _unit_arg(value: str | Path) -> str:
+    """A path as one argument on a systemd Exec line: quoted, with systemd's own $ and % escaped."""
+    text = str(value).replace("\\", "\\\\").replace('"', '\\"').replace("$", "$$").replace("%", "%%")
+    return f'"{text}"'
+
+
+# Before each check: if couriercollie is gone (the package removed, or its project folder deleted), the timer turns
+# itself off and removes its files, and those of a menu entry written for a project folder. Uninstalling a package
+# can't reach files in your home folder, so this is how they don't outlive it. Exits 1: the check is skipped quietly.
+_CLEANUP = ('test -e "$$1" && exit 0; units=$$2; shift 2; systemctl --user disable --now {timer}.timer; '
+            'rm -f -- "$$units/{timer}.timer" "$$units/{timer}.service" "$$@"; systemctl --user daemon-reload; exit 1')
+
+
 def unit_texts() -> dict[str, str]:
     """The timer wakes up hourly, after a missed hour (the computer was off), and 3 minutes after login (by then the
     network is usually up, so the check doesn't fail for want of a connection). The
     checker then only checks if the chosen interval has passed since the last check (checker.due), so the interval
     is counted from the last check, and a missed check happens soon after the next login."""
+    # The menu entry and icon only if couriercollie wrote them (run from a project folder): a package removes its own.
+    leftovers = (_stamp_path(),) if INSTALLED else (_stamp_path(), menu_entry_path(), icon_path())
+    cleanup = " ".join(_unit_arg(a) for a in (LAUNCHER, _unit_dir(), *leftovers))
     return {
         f"{TIMER}.service": (
             "[Unit]\n"
             "Description=couriercollie: check tracked repos for updates\n\n"
             "[Service]\n"
             "Type=oneshot\n"
-            f"ExecStart={LAUNCHER} --check --if-due\n"
+            f"ExecCondition=/bin/sh -c '{_CLEANUP.format(timer=TIMER)}' sh {cleanup}\n"
+            f"ExecStart={_unit_arg(LAUNCHER)} --check --if-due\n"
             # When the check finishes, stop only the checker: the notification it showed keeps a small helper
             # waiting for a click (to open the app), which systemd would otherwise stop too.
             "KillMode=process\n"
@@ -200,5 +223,6 @@ def set_background_checks(on: bool, systemctl=_systemctl) -> bool:
     stopped = systemctl("disable", "--now", f"{TIMER}.timer")
     for name in unit_texts():
         (folder / name).unlink(missing_ok=True)
+    _stamp_path().unlink(missing_ok=True)
     systemctl("daemon-reload")
     return stopped

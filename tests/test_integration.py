@@ -1,5 +1,6 @@
 import os
 import socket
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -72,13 +73,65 @@ class TimerTest(TempHome):
         service = (folder / "couriercollie-check.service").read_text()
         self.assertIn("Persistent=true", timer)
         self.assertIn("OnCalendar=hourly", timer)
-        self.assertIn(f"ExecStart={integration.LAUNCHER} --check --if-due", service)
+        self.assertIn(f'ExecStart="{integration.LAUNCHER}" --check --if-due', service)
         self.assertIn("KillMode=process", service)  # the notification's click helper outlives the check
         self.assertIn(("enable", "--now", "couriercollie-check.timer"), calls)
         calls.clear()
+        stamp = self.root / "data/systemd/timers/stamp-couriercollie-check.timer"
+        stamp.parent.mkdir(parents=True)
+        stamp.touch()
         integration.set_background_checks(False, systemctl=ok)
         self.assertFalse((folder / "couriercollie-check.timer").exists())
+        self.assertFalse(stamp.exists())
         self.assertIn(("disable", "--now", "couriercollie-check.timer"), calls)
+
+
+class CleanupAfterUninstallTest(TempHome):
+    """Before each check, the timer looks for couriercollie. Gone (the package removed, or its project folder
+    deleted): the timer turns itself off and removes its files and a project folder's menu entry. Runs the unit's own
+    command, with a stand-in systemctl. (devtools/check_uninstall.sh does it for real, with systemd.)"""
+
+    def run_condition(self, launcher: Path) -> int:
+        import shlex
+
+        saved = integration.LAUNCHER, integration.INSTALLED
+        integration.LAUNCHER, integration.INSTALLED = launcher, False
+        self.addCleanup(lambda: (setattr(integration, "LAUNCHER", saved[0]),
+                                 setattr(integration, "INSTALLED", saved[1])))
+        self.assertTrue(integration.set_background_checks(True, systemctl=lambda *a: True))
+        integration.install_menu_entry()
+        stamp = self.root / "data/systemd/timers/stamp-couriercollie-check.timer"  # systemd's, after a first run
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.touch()
+        service = (self.root / "config/systemd/user/couriercollie-check.service").read_text()
+        line = next(l for l in service.splitlines() if l.startswith("ExecCondition="))
+        # systemd's quoting, as far as this line uses it: "$$" is "$", "%%" is "%".
+        args = shlex.split(line.removeprefix("ExecCondition=").replace("$$", "$").replace("%%", "%"))
+        bin_dir = self.root / "bin"
+        bin_dir.mkdir(exist_ok=True)
+        (bin_dir / "systemctl").write_text(f'#!/bin/sh\necho "$@" >> "{self.root}/systemctl.log"\n')
+        (bin_dir / "systemctl").chmod(0o755)
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+        return subprocess.run(args, env=env, capture_output=True).returncode
+
+    def leftovers(self):
+        return sorted(str(p.relative_to(self.root)) for p in self.root.rglob("*couriercollie*"))
+
+    def test_still_there_the_check_runs(self):
+        folder = self.root / "my project $HOME 100%"  # a folder name systemd and the shell would both misread
+        folder.mkdir()
+        (folder / "run.sh").write_text("#!/bin/sh\n")
+        self.assertEqual(self.run_condition(folder / "run.sh"), 0)
+        self.assertIn("config/systemd/user/couriercollie-check.timer", self.leftovers())
+        self.assertFalse((self.root / "systemctl.log").exists())
+
+    def test_gone_the_timer_removes_itself(self):
+        folder = self.root / "my project $HOME 100%"
+        self.assertEqual(self.run_condition(folder / "run.sh"), 1)  # skipped quietly, not failed
+        self.assertEqual([l for l in self.leftovers() if "systemd" in l or "applications" in l or "icons" in l], [])
+        log = (self.root / "systemctl.log").read_text()
+        self.assertIn("--user disable --now couriercollie-check.timer", log)
+        self.assertIn("--user daemon-reload", log)
 
 
 class MessageTest(unittest.TestCase):

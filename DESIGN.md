@@ -90,6 +90,9 @@ Details:
   - It checks only if the interval has passed since the last check.
   - If the app is open, the check is handed to it.
   - Opening the app never checks on its own.
+  - **After an uninstall** (the package removed, or the project folder deleted), the timer's next wake finds
+    couriercollie gone: it turns itself off and removes its files, and a project folder's menu entry, rather than
+    failing every hour. Uninstalling a package can't reach your home folder; this can.
 - **Telling you:** a notification for updates not announced before, only when the window isn't in front. The taskbar
   icon shows the number of updates.
 - **Results** live in `~/.local/state/couriercollie/checks.json`, apart from the settings. That way the background

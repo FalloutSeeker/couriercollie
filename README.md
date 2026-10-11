@@ -106,6 +106,11 @@ supported, but need feedback. Tried it somewhere? Please
 
 **Start over:** `./run.sh --reset` brings the welcome screen back. Your old settings are kept as a dated backup.
 
+**Uninstall:** remove the package (e.g. `sudo dnf remove couriercollie`), or delete the folder if you ran it from
+source. Background checks turn themselves off the next time they'd run. Your settings, results and cache stay
+behind; delete `~/.config/couriercollie`, `~/.local/state/couriercollie` and `~/.cache/couriercollie` to remove
+everything.
+
 <details>
 <summary>Where it keeps things</summary>
 
