@@ -210,6 +210,57 @@ class BackendTest(unittest.TestCase):
 
 
 
+class ScannedClonePageTest(unittest.TestCase):
+    """Opening a scanned clone's page: its version comes from disk, and what's new is listed."""
+
+    def setUp(self):
+        from tests.test_scan import make_clone
+
+        self.dir = tempfile.TemporaryDirectory()
+        self.path = Path(self.dir.name) / "repos.toml"
+        clone = Path(self.dir.name) / "smod"
+        self.on_disk = make_clone(clone, "https://gitgud.io/aeroshell/smod.git", "Plasma/6.7")
+        self.head = "b" * 40
+        config.save(config.Config(repos=[TrackedRepo(
+            id="gitgud.io/aeroshell/smod", name="SMOD", url="", host="gitlab", follow="branch", branch="Plasma/6.7",
+            kind="git", source="scanned", local_path=str(clone),
+            installed=self.head)]), self.path)  # e.g. marked up to date earlier, while the clone stayed behind
+        self.backend = Backend(self.path)
+        self.backend._run = lambda work, done: done(work(), None)  # no threads in tests
+        self.fakes = {
+            "releases": lambda ref, host: [],
+            "branches": lambda ref: ("Plasma/6.7", [sources.Branch("Plasma/6.7", self.head)]),
+            "new_commits": lambda ref, host, base, head: (1, [sources.Commit(head, "Button: fallback textures")]),
+        }
+        self.saved = (sources.releases, sources.branches, sources.new_commits)
+        sources.releases, sources.branches, sources.new_commits = (self.fakes["releases"], self.fakes["branches"],
+                                                                     self.fakes["new_commits"])
+
+    def tearDown(self):
+        sources.releases, sources.branches, sources.new_commits = self.saved
+        self.backend.shutdown()
+        self.dir.cleanup()
+
+    def test_version_comes_from_disk_and_whats_new_is_listed(self):
+        self.backend.loadDetails("gitgud.io/aeroshell/smod", True)
+        d = self.backend.details("gitgud.io/aeroshell/smod")
+        self.assertEqual(config.load(self.path).repos[0].installed, self.on_disk)
+        self.assertTrue(d["updateAvailable"])
+        self.assertTrue(d["versionFromDisk"])
+        self.assertEqual((d["newCommitsTotal"], d["newCommits"][0]["title"]), (1, "Button: fallback textures"))
+
+    def test_up_to_date_clone(self):
+        self.head = self.on_disk
+        self.backend.loadDetails("gitgud.io/aeroshell/smod", True)
+        d = self.backend.details("gitgud.io/aeroshell/smod")
+        self.assertEqual((d["status"], d["newCommitsTotal"]), ("Up to date", 0))
+
+    def test_list_hidden_once_it_no_longer_applies(self):
+        self.backend.loadDetails("gitgud.io/aeroshell/smod", True)
+        self.backend.setInstalled("gitgud.io/aeroshell/smod", self.head)
+        self.assertEqual(self.backend.details("gitgud.io/aeroshell/smod")["newCommits"], [])
+
+
 class ScanFlowTest(unittest.TestCase):
     """What the Scan button does with results, using prepared finds instead of the disk and network."""
 

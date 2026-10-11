@@ -125,6 +125,35 @@ class ProjectInfoTest(unittest.TestCase):
             sources.project_info(RepoRef("github.com", "a/b"), get)
 
 
+class CompareTest(unittest.TestCase):
+    """What's new between two commits; both sites list oldest first, the app shows newest first."""
+
+    def test_github(self):
+        data = {"ahead_by": 3, "commits": [
+            {"sha": "aaa1111", "commit": {"message": "first\n\nbody"}},
+            {"sha": "bbb2222", "commit": {"message": "second"}},
+            {"sha": "ccc3333", "commit": {"message": ""}},
+        ]}
+        total, commits = sources.parse_github_compare(data)
+        self.assertEqual(total, 3)
+        self.assertEqual([(c.sha, c.title) for c in commits], [("ccc3333", ""), ("bbb2222", "second"), ("aaa1111", "first")])
+
+    def test_gitlab(self):
+        data = {"commits": [{"id": "145d046", "title": "Do even more hidpi corrections"},
+                            {"id": "ba963d7", "title": "Button: fallback textures to lower DPIs on failure"}]}
+        total, commits = sources.parse_gitlab_compare(data)
+        self.assertEqual((total, commits[0].sha), (2, "ba963d7"))
+
+    def test_requests(self):
+        urls = []
+        sources.new_commits(RepoRef("gitgud.io", "aeroshell/smod"), "gitlab", "145d046", "ba963d7",
+                            get=lambda url, headers=None: urls.append(url) or {"commits": []})
+        sources.new_commits(RepoRef("github.com", "a/b"), "github", "x", "y",
+                            get=lambda url, headers=None: urls.append(url) or {"commits": []})
+        self.assertEqual(urls, ["https://gitgud.io/api/v4/projects/aeroshell%2Fsmod/repository/compare?from=145d046&to=ba963d7",
+                                "https://api.github.com/repos/a/b/compare/x...y"])
+
+
 class LsRemoteTest(unittest.TestCase):
     def test_parse(self):
         output = (

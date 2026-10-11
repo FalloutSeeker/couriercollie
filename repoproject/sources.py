@@ -90,6 +90,12 @@ class Branch:
 
 
 @dataclass
+class Commit:
+    sha: str
+    title: str  # the first line of the commit message
+
+
+@dataclass
 class ProjectInfo:
     ref: RepoRef  # canonical: follows renames and moves
     host: str  # "github" or "gitlab"
@@ -287,6 +293,27 @@ def releases(ref: RepoRef, host: str, get=http_get_json) -> list[Release]:
         return parse_github_releases(data)
     data = get(f"{_gitlab_api(ref.domain, ref.path)}/releases?per_page={RELEASES_PER_PAGE}")
     return parse_gitlab_releases(ref.domain, ref.path, data)
+
+
+def parse_github_compare(data: dict) -> tuple[int, list[Commit]]:
+    commits = [Commit(c["sha"], (c["commit"]["message"] or "").splitlines()[0] if c["commit"]["message"] else "")
+               for c in data.get("commits", [])]
+    return data.get("ahead_by", len(commits)), commits[::-1]
+
+
+def parse_gitlab_compare(data: dict) -> tuple[int, list[Commit]]:
+    commits = [Commit(c["id"], c.get("title") or "") for c in data.get("commits", [])]
+    return len(commits), commits[::-1]
+
+
+def new_commits(ref: RepoRef, host: str, base: str, head: str, get=http_get_json) -> tuple[int, list[Commit]]:
+    """Commits on the site between `base` (yours) and `head` (the branch's newest): how many, newest first. One
+    request."""
+    if host == "github":
+        return parse_github_compare(get(f"https://api.github.com/repos/{ref.path}/compare/{base}...{head}",
+                                        _GITHUB_HEADERS))
+    query = urllib.parse.urlencode({"from": base, "to": head})
+    return parse_gitlab_compare(get(f"{_gitlab_api(ref.domain, ref.path)}/repository/compare?{query}"))
 
 
 def parse_ls_remote(output: str) -> tuple[str, list[Branch]]:

@@ -1,0 +1,40 @@
+"""Open a scanned clone's page (SMOD, from a copy of your settings) and check: the version is read from the clone on
+disk, what's new on the branch is listed, and the "Mark as…" buttons are hidden. Reads the clone; asks gitgud.io.
+
+    python3 -I devtools/check_scanned_repo.py [repo address]
+"""
+
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import harness  # noqa: E402
+
+REPO = sys.argv[1] if len(sys.argv) > 1 else "gitgud.io/aeroshell/smod"
+h = harness.start(copy_settings_from=Path.home() / ".config/repoproject/repos.toml")
+b = h.backend
+repo = b._config.find(REPO)
+if not repo or repo.source != "scanned":
+    sys.exit(f"{REPO} isn't a scanned repo in your settings; scan first.")
+on_disk = subprocess.run(["git", "-C", repo.local_path, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+print(f"  saved version: {repo.installed[:7]}   on disk: {on_disk[:7]}")
+
+
+def report():
+    d = b.details(REPO)
+    print(f"  page: your version {d['versionText']!r}; status {d['status']!r}")
+    for c in d["newCommits"]:
+        print(f"    {c['sha']}  {c['title']}")
+    h.check("version read from disk", b._config.find(REPO).installed == on_disk)
+    h.check("no Mark buttons for a scanned repo", h.find("markUpToDate") is None and h.find("markNotInstalled") is None)
+    if d["updateAvailable"]:
+        h.check("what's new is listed", d["newCommitsTotal"] > 0)
+    h.shot("scanned-repo")
+
+
+h.run([
+    (300, lambda: h.win.openRepo(REPO)),
+    h.until(lambda: b.details(REPO)["state"] == "ready"),
+    (800, report),
+])

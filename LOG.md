@@ -4,6 +4,14 @@ Newest first.
 
 ## 2026-10-10
 
+- SMOD showed "Newer commits" while the user believed it was current. It was right: the clone last fetched at 16:13,
+  and a commit was pushed at 21:52; `git status` can't show that without a fetch. But "Mark as Up to Date" had been
+  clicked, so the app's saved version no longer matched the clone. Fixed by:
+  - Scanned repos' versions are read from disk each time their page opens (clone commit, AppImage version, RPM
+    version), with a note saying so, and a warning if the folder is gone.
+  - "Mark as Up to Date" / "Mark as Not Installed" hidden for scanned repos.
+  - What's new: the commits between your version and the branch's newest, by title (one request).
+  - `devtools/check_scanned_repo.py` checks this against a real scanned clone.
 - Scan locations: was the home folder only. Now the home folder, `/opt`, `/usr/local` and `/srv` by default, with git
   clones and AppImages looked for in all their subfolders (plus `~/.local/bin`). Settings has a "Folders to scan" list
   with defaults marked "Default", Add Folder…, remove buttons and Restore Defaults; the welcome screen and scan dialog

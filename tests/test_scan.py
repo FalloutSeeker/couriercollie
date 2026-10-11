@@ -235,6 +235,30 @@ class ScanFoldersTest(unittest.TestCase):
         self.assertFalse(found["github.com/someone/mine"].needs_password)
 
 
+class VersionOnDiskTest(unittest.TestCase):
+    """A scanned repo's version is re-read from where it was found, each time its page opens."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.dir.name)
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def test_clone(self):
+        commit = make_clone(self.root / "smod", "https://gitgud.io/aeroshell/smod.git")
+        self.assertEqual(scan.version_on_disk(str(self.root / "smod")), (commit, True))
+
+    def test_appimage(self):
+        app = self.root / "LocalSend-1.19.0-linux-x86-64.AppImage"
+        app.write_bytes(APPIMAGE_BYTES)
+        self.assertEqual(scan.version_on_disk(str(app)), ("1.19.0", True))
+
+    def test_gone(self):
+        self.assertEqual(scan.version_on_disk(str(self.root / "deleted")), ("", False))
+        self.assertEqual(scan.version_on_disk("RPM package \u201cno-such-package-xyz\u201d"), ("", False))
+
+
 def info(repo_id, host="gitlab", name="", description=""):
     ref = RepoRef.from_id(repo_id)
     return ProjectInfo(ref=ref, host=host, name=name or ref.name, description=description, default_branch="main")

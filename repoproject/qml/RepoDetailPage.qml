@@ -15,8 +15,11 @@ Kirigami.ScrollablePage {
     property var expanded: ({})
     readonly property bool followsReleases: repo.follow === "releases"
     readonly property bool ready: details.state === "ready"
-    readonly property bool canMarkUpToDate: ready && details.status !== "" && details.status !== "Up to date"
-    readonly property bool canMarkNotInstalled: ready && details.versionText !== "" && details.installed !== "-"
+    // A scanned repo's version is read from disk, so it isn't set by hand.
+    readonly property bool canMarkUpToDate: ready && !details.versionFromDisk && details.status !== ""
+                                            && details.status !== "Up to date"
+    readonly property bool canMarkNotInstalled: ready && !details.versionFromDisk && details.versionText !== ""
+                                                && details.installed !== "-"
 
     function reload() {
         repo = backend.repo(repoId);
@@ -176,6 +179,23 @@ Kirigami.ScrollablePage {
                 font.bold: true
             }
 
+            QQC2.Label {
+                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+                visible: page.ready && page.details.versionFromDisk === true && !page.details.localMissing
+                text: "Read from this computer each time this page opens, so it changes when the folder does."
+                font: Kirigami.Theme.smallFont
+                wrapMode: Text.Wrap
+                opacity: 0.7
+            }
+
+            Kirigami.InlineMessage {
+                Layout.fillWidth: true
+                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+                visible: page.ready && page.details.localMissing === true
+                type: Kirigami.MessageType.Warning
+                text: `It\u2019s no longer at ${page.repo.localPath}. If it moved, scan again; if it was removed, stop tracking it.`
+            }
+
             RowLayout {
                 Kirigami.FormData.label: "Status:"
                 Layout.maximumWidth: Kirigami.Units.gridUnit * 26
@@ -194,6 +214,40 @@ Kirigami.ScrollablePage {
                     text: page.details.status
                     font.bold: page.details.updateAvailable
                     wrapMode: Text.Wrap
+                }
+            }
+
+            // What's new on the branch since your version.
+            ColumnLayout {
+                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+                visible: page.ready && page.details.newCommitsTotal > 0
+                spacing: 0
+
+                QQC2.Label {
+                    text: page.details.newCommitsTotal === 1 ? "1 new commit:" : `${page.details.newCommitsTotal} new commits, newest first:`
+                    font: Kirigami.Theme.smallFont
+                }
+
+                Repeater {
+                    model: page.details.newCommits
+
+                    delegate: QQC2.Label {
+                        required property var modelData
+
+                        Layout.fillWidth: true
+                        Layout.leftMargin: Kirigami.Units.largeSpacing
+                        text: `${modelData.sha}  ${modelData.title}`
+                        font: Kirigami.Theme.smallFont
+                        elide: Text.ElideRight
+                    }
+                }
+
+                QQC2.Label {
+                    Layout.leftMargin: Kirigami.Units.largeSpacing
+                    visible: page.details.newCommitsTotal > page.details.newCommits.length
+                    text: `and ${page.details.newCommitsTotal - page.details.newCommits.length} more`
+                    font: Kirigami.Theme.smallFont
+                    opacity: 0.7
                 }
             }
 

@@ -217,6 +217,24 @@ def find_all(folders: Iterable[str] = DEFAULT_SCAN_FOLDERS, rpms: Callable[[], l
     return list(by_id.values())
 
 
+def version_on_disk(path: str) -> tuple[str, bool]:
+    """What's on this computer now for a scanned repo, read from where the scan found it: (version, still there).
+    A clone's commit, an AppImage's version from its file name, or an RPM's installed version."""
+    if m := re.fullmatch(r"RPM package \u201c(.+)\u201d", path):
+        try:
+            result = subprocess.run(["rpm", "-q", "--qf", "%{VERSION}", m.group(1)], capture_output=True, text=True,
+                                    timeout=20)
+        except (OSError, subprocess.TimeoutExpired):
+            return "", True  # can't tell; assume it's still there
+        return (result.stdout.strip(), True) if result.returncode == 0 else ("", False)
+    p = Path(path)
+    if (p / ".git").exists():
+        return _git(path, "rev-parse", "HEAD"), True
+    if p.is_file() and p.suffix.lower() == ".appimage":
+        return appimage_version(p.name), True
+    return "", False
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # 2. Checking finds with their site
 
