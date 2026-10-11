@@ -528,8 +528,10 @@ Kirigami.ScrollablePage {
 
         // ---- Tracking: what's followed, and where the repo came from ------------------------------------------------
 
+        // Only once the page has loaded: what it says depends on the project's releases and branches.
         Kirigami.Heading {
             Layout.topMargin: Kirigami.Units.largeSpacing
+            visible: page.ready
             level: 3
             text: "Tracking"
         }
@@ -538,6 +540,7 @@ Kirigami.ScrollablePage {
         // or hidden together, so the two columns stay paired.
         GridLayout {
             Layout.fillWidth: true
+            visible: page.ready
             Layout.maximumWidth: Kirigami.Units.gridUnit * 34
             Layout.leftMargin: Kirigami.Units.largeSpacing
             columns: 2
