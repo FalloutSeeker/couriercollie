@@ -282,6 +282,20 @@ class BackendTest(unittest.TestCase):
         self.backend.moveCategory("C", "")
         self.assertEqual(config.load(self.path).categories, ["A", "B", "C"])
 
+    def test_renaming_a_category(self):
+        self.backend.addCategory("Themes")
+        self.backend.addCategory("Tools")
+        self.backend.moveRepo(AERO, "Themes", "")
+        self.assertEqual(self.backend.renameCategory("Themes", " Desktop "), "")
+        self.assertEqual(config.load(self.path).categories, ["Desktop", "Tools"])  # same place
+        self.assertEqual(self.saved(AERO).category, "Desktop")  # repos go with it
+        self.assertIn("already", self.backend.renameCategory("Desktop", "tools"))
+        self.assertIn("Uncategorized", self.backend.renameCategory("Desktop", "Uncategorized"))
+        self.assertIn("name", self.backend.renameCategory("Desktop", ""))
+        self.assertEqual(self.backend.renameCategory("Desktop", "DESKTOP"), "")  # only the case changes
+        self.assertEqual(self.backend.categories, ["DESKTOP", "Tools"])
+        self.assertEqual(self.saved(AERO).category, "DESKTOP")
+
     def test_deleting_a_category_keeps_its_repos(self):
         self.backend.addCategory("Themes")
         self.backend.addCategory("Tools")

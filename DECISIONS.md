@@ -178,8 +178,11 @@ Your own categories for sorting the list, e.g. "Themes" and "Tools".
 - **New Category…** (right of the filters) adds one at the bottom. Names are unique, ignoring upper/lower case.
 - **Drag** a repo by its handle onto a category's heading (to the top of it) or above/below another repo. Drag a
   category by its handle to move it, with its repos. A line shows where it will land.
-- **Delete** (the heading's button) never removes repos: they move to the end of Uncategorized, and stay tracked. A
-  category with repos asks first; an empty one goes straight away.
+- **⋮ on each heading** (or right-click it) has **Rename** and **Delete Category…**. Rename turns the name into a text
+  box in place (Enter saves, Esc cancels); double-clicking the name does the same. A name that's taken says so and
+  stays open. Delete sits in the menu rather than alone on the heading, so it isn't one stray click away.
+- **Delete** never removes repos: they move to the end of Uncategorized, and stay tracked. A category with repos asks
+  first; an empty one goes straight away.
 - A repo is in one category at most. Repos in none are under **Uncategorized**, which is always first and can't be
   moved or deleted. Until there's a category, there are no headings and the list looks as before.
 - The order is yours: it's the order in the settings file. Files from before categories keep their order by name; new

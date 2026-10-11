@@ -108,6 +108,18 @@ class Harness:
             return
         QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, QPoint(int(where[0]), int(where[1])))
 
+    def double_click(self, name, window=None):
+        # Not two click()s: QTest spaces separate clicks apart so they never count as a double-click.
+        from PySide6.QtCore import QPoint, Qt
+        from PySide6.QtTest import QTest
+
+        window = window or self.win
+        where = self.find(name, window)
+        if not where:
+            self.fail(f"not visible: {name}")
+            return
+        QTest.mouseDClick(window, Qt.LeftButton, Qt.NoModifier, QPoint(int(where[0]), int(where[1])))
+
     def drag(self, name, onto, where=0.5, window=None, before_letting_go=None):
         """Press on `name`, move in steps to the item `onto` (at `where` of its height: 0.25 for its top half, 0.75
         for its bottom half), and let go there. `before_letting_go()` runs while it's still held (e.g. a screenshot)."""

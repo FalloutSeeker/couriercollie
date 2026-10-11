@@ -522,17 +522,43 @@ class Backend(QObject):
 
     # -- categories -------------------------------------------------------------------------------------------------
 
-    @Slot(str, result=str)
-    def addCategory(self, name):
-        """Adds a category at the end of the list. Returns why it couldn't, or "" if it was added."""
+    @Slot(str, str, result=str)
+    def categoryNameProblem(self, name, renaming=""):
+        """Why `name` can't be used for a new category (or for `renaming` one), or "" if it can."""
         name = name.strip()
         if not name:
             return "Type a name for the category."
         if name.lower() == UNCATEGORIZED.lower():
             return f"\u201c{UNCATEGORIZED}\u201d is where repos without a category go. Choose another name."
-        if any(name.lower() == c.lower() for c in self._config.categories):
-            return f"There\u2019s already a category called \u201c{name}\u201d."
-        self._config.categories.append(name)
+        if taken := next((c for c in self._config.categories if c != renaming and c.lower() == name.lower()), None):
+            return f"There\u2019s already a category called \u201c{taken}\u201d."
+        return ""
+
+    @Slot(str, result=str)
+    def addCategory(self, name):
+        """Adds a category at the end of the list. Returns why it couldn't, or "" if it was added."""
+        if problem := self.categoryNameProblem(name):
+            return problem
+        self._config.categories.append(name.strip())
+        self._changed()
+        return ""
+
+    @Slot(str, str, result=str)
+    def renameCategory(self, name, new_name):
+        """Renames a category, keeping its place and its repos. Returns why it couldn't, or "" if it was renamed (or
+        the name didn't change)."""
+        if name not in self._config.categories:
+            return ""
+        if problem := self.categoryNameProblem(new_name, name):
+            return problem
+        new_name = new_name.strip()
+        if new_name == name:
+            return ""
+        cats = self._config.categories
+        cats[cats.index(name)] = new_name
+        for r in self._config.repos:
+            if r.category == name:
+                r.category = new_name
         self._changed()
         return ""
 

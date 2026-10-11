@@ -1,5 +1,6 @@
 """Categories in the list, with a simulated mouse: make one in the New Category dialog, drag repos into and around
-categories, drag a category above another, and delete one (its repos stay, in Uncategorized). No network needed.
+categories, drag a category above another, rename one from its ⋮ menu and by double-clicking its name, and delete one
+(its repos stay, in Uncategorized). No network needed.
 
     python3 -I devtools/check_categories.py
 """
@@ -26,8 +27,8 @@ def in_category(name):
     return [r.name for r in b._config.repos if r.category == name]
 
 
-def type_name(text):
-    """Types into whatever has focus, then presses Enter. "\b" is Backspace."""
+def type_name(text, then="Enter"):
+    """Types into whatever has focus, then presses Enter (or `then`: "Esc", or "" for nothing). "\b" is Backspace."""
     from PySide6.QtCore import QEvent, Qt
     from PySide6.QtGui import QGuiApplication, QKeyEvent
 
@@ -40,7 +41,8 @@ def type_name(text):
             press(Qt.Key_Backspace)
         else:
             press(Qt.Key_A + ord(char.upper()) - ord("A") if char.isalpha() else Qt.Key_unknown, char)
-    press(Qt.Key_Return)
+    if then:
+        press({"Enter": Qt.Key_Return, "Esc": Qt.Key_Escape}[then])
 
 
 h.run([
@@ -77,11 +79,30 @@ h.run([
     (0, lambda: h.drag("dragCategory:Tools", "category:Uncategorized")),
     (500, lambda: h.check("Uncategorized stays first", b.rows[0]["label"] == "Uncategorized")),
     (0, lambda: h.shot("categories-1-sorted")),
+    # Rename from the ⋮ menu: the name turns into a text box with the old name selected.
+    (0, lambda: h.click("categoryMenu:Tools")),
+    (400, lambda: h.click("renameCategory:Tools")),
+    (400, lambda: h.check("rename shows a text box", h.find("renameField:Tools") is not None)),
+    (0, lambda: type_name("Utilities")),
+    (500, lambda: h.check("renamed from the menu, in the same place", b.categories == ["Utilities", "Themes"],
+                          f"got {b.categories}")),
+    (0, lambda: h.check("…with its repos", in_category("Utilities") == ["Alpha"])),
+    # Double-click the name; a name that's taken is refused and says why; Esc gives up.
+    (0, lambda: h.double_click("categoryName:Themes")),
+    (400, lambda: h.check("double-click renames", h.find("renameField:Themes") is not None)),
+    (0, lambda: type_name("utilities")),
+    (400, lambda: h.check("taken name refused, and says why", h.find("renameError") is not None
+                          and b.categories == ["Utilities", "Themes"])),
+    (0, lambda: h.shot("categories-rename-refused")),
+    (0, lambda: type_name("", then="Esc")),
+    (400, lambda: h.check("Esc cancels", h.find("renameField:Themes") is None and b.categories == ["Utilities", "Themes"])),
+    (0, lambda: h.click("categoryMenu:Themes")),
+    (400, lambda: h.shot("categories-menu")),
     (0, lambda: h.click("deleteCategory:Themes")),
     (500, lambda: h.check("asks before deleting a category with repos", h.visible("deleteCategoryDialog"))),
     (0, lambda: h.shot("categories-2-delete")),
     (0, lambda: h.call("deleteCategoryDialog", "accept")),
-    (500, lambda: h.check("Themes deleted", b.categories == ["Tools"], f"got {b.categories}")),
+    (500, lambda: h.check("Themes deleted", b.categories == ["Utilities"], f"got {b.categories}")),
     (0, lambda: h.check("its repos kept, in Uncategorized", in_category("") == ["Charlie", "Delta", "Bravo"],
                         f"{in_category('')}")),
     (0, lambda: h.check("all 4 still tracked", len(b._config.repos) == 4)),

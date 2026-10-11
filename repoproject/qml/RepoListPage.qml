@@ -13,6 +13,32 @@ Kirigami.ScrollablePage {
     actions: backend.settings.scanning ? [addAction, scanAction, checkAction, settingsAction]
                                        : [addAction, checkAction, settingsAction]
 
+    // The category whose name is being edited in its heading, and why the typed name can't be used.
+    property string renaming: ""
+    property string renameError: ""
+
+    function startRename(category) {
+        renameError = "";
+        renaming = category;
+    }
+
+    // Enter saves the name, or says why it can't. Clicking elsewhere saves it if it can, and otherwise gives up.
+    function finishRename(text, pressedEnter) {
+        const from = renaming;
+        if (!from)
+            return;
+        const problem = backend.categoryNameProblem(text, from);
+        if (problem && pressedEnter) {
+            renameError = problem;
+            return;
+        }
+        renaming = "";
+        renameError = "";
+        // Later, as the rows are rebuilt with the new name and this field is one of them.
+        if (!problem)
+            Qt.callLater(backend.renameCategory, from, text);
+    }
+
     function askDelete(heading) {
         // An empty category goes straight away; one with repos asks first. Later, so the heading's button isn't
         // deleted with the list's rows while it's still handling the click.
@@ -359,8 +385,37 @@ Kirigami.ScrollablePage {
                 id: headingRow
 
                 ColumnLayout {
+                    id: heading
+
+                    readonly property bool editing: page.renaming !== "" && page.renaming === row.modelData.category
+
                     objectName: "category:" + row.modelData.label
                     spacing: 0
+
+                    // Right-click a heading for the same menu as its ⋮ button.
+                    TapHandler {
+                        acceptedButtons: Qt.RightButton
+                        enabled: row.modelData.category !== "" && !heading.editing
+                        onTapped: menu.popup()
+                    }
+
+                    QQC2.Menu {
+                        id: menu
+
+                        QQC2.MenuItem {
+                            objectName: "renameCategory:" + row.modelData.category
+                            text: "Rename"
+                            icon.name: "edit-rename"
+                            onTriggered: page.startRename(row.modelData.category)
+                        }
+
+                        QQC2.MenuItem {
+                            objectName: "deleteCategory:" + row.modelData.category
+                            text: "Delete Category…"
+                            icon.name: "edit-delete"
+                            onTriggered: page.askDelete(row.modelData)
+                        }
+                    }
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -379,24 +434,65 @@ Kirigami.ScrollablePage {
                         }
 
                         Kirigami.Heading {
+                            objectName: "categoryName:" + row.modelData.category
                             Layout.fillWidth: true
+                            visible: !heading.editing
                             level: 4
                             text: `${row.modelData.label} <font color="${Kirigami.Theme.disabledTextColor}">${row.modelData.count}</font>`
                             textFormat: Text.StyledText
                             elide: Text.ElideRight
+
+                            // Double-click the name to rename it.
+                            TapHandler {
+                                enabled: row.modelData.category !== ""
+                                onDoubleTapped: page.startRename(row.modelData.category)
+                            }
+                        }
+
+                        // Enter saves, Esc cancels.
+                        QQC2.TextField {
+                            objectName: "renameField:" + row.modelData.category
+                            Layout.fillWidth: true
+                            visible: heading.editing
+                            onVisibleChanged: {
+                                if (visible) {
+                                    text = row.modelData.category;
+                                    selectAll();
+                                    forceActiveFocus();
+                                }
+                            }
+                            onTextEdited: page.renameError = ""
+                            onAccepted: page.finishRename(text, true)
+                            onActiveFocusChanged: {
+                                if (!activeFocus && visible)
+                                    page.finishRename(text, false);
+                            }
+                            Keys.onEscapePressed: page.renaming = ""
                         }
 
                         QQC2.ToolButton {
-                            objectName: "deleteCategory:" + row.modelData.category
-                            visible: row.modelData.category !== ""
-                            icon.name: "edit-delete"
-                            text: "Delete Category"
+                            objectName: "categoryMenu:" + row.modelData.category
+                            visible: row.modelData.category !== "" && !heading.editing
+                            icon.name: "overflow-menu"
+                            text: "Rename or Delete"
                             display: QQC2.AbstractButton.IconOnly
                             QQC2.ToolTip.text: text
                             QQC2.ToolTip.visible: hovered
                             QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
-                            onClicked: page.askDelete(row.modelData)
+                            onClicked: menu.popup(this, 0, height)
                         }
+                    }
+
+                    QQC2.Label {
+                        objectName: "renameError"
+                        Layout.fillWidth: true
+                        Layout.leftMargin: Kirigami.Units.largeSpacing + Kirigami.Units.iconSizes.smallMedium + Kirigami.Units.smallSpacing
+                        Layout.bottomMargin: Kirigami.Units.smallSpacing
+                        visible: heading.editing && page.renameError !== ""
+                        text: page.renameError
+                        color: Kirigami.Theme.negativeTextColor
+                        font: Kirigami.Theme.smallFont
+                        wrapMode: Text.Wrap
                     }
 
                     QQC2.Label {
@@ -416,110 +512,110 @@ Kirigami.ScrollablePage {
                 }
             }
 
-        Component {
-            id: repoRow
+            Component {
+                id: repoRow
 
-            QQC2.ItemDelegate {
-                objectName: "repo:" + row.modelData.id
-                highlighted: applicationWindow().currentRepoId === row.modelData.id
-                onClicked: applicationWindow().openRepo(row.modelData.id)
+                QQC2.ItemDelegate {
+                    objectName: "repo:" + row.modelData.id
+                    highlighted: applicationWindow().currentRepoId === row.modelData.id
+                    onClicked: applicationWindow().openRepo(row.modelData.id)
 
-                contentItem: RowLayout {
-                    spacing: Kirigami.Units.largeSpacing
+                    contentItem: RowLayout {
+                        spacing: Kirigami.Units.largeSpacing
 
-                    DragHandle {
-                        objectName: "dragRepo:" + row.modelData.id
-                        view: list
-                        what: ({ kind: "repo", id: row.modelData.id, category: row.modelData.category,
-                                 label: row.modelData.name })
-                    }
-
-                    // The repo's icon (icons.py), with a corner mark when it was found on this computer by a scan.
-                    Item {
-                        Layout.preferredWidth: Kirigami.Units.iconSizes.medium
-                        Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-
-                        Kirigami.Icon {
-                            anchors.fill: parent
-                            source: row.modelData.icon
+                        DragHandle {
+                            objectName: "dragRepo:" + row.modelData.id
+                            view: list
+                            what: ({ kind: "repo", id: row.modelData.id, category: row.modelData.category,
+                                     label: row.modelData.name })
                         }
 
-                        Kirigami.Icon {
-                            objectName: "scannedMark:" + row.modelData.id
-                            visible: row.modelData.scanned
-                            source: "emblem-mounted"
-                            width: Kirigami.Units.iconSizes.small
-                            height: Kirigami.Units.iconSizes.small
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            anchors.rightMargin: -Kirigami.Units.smallSpacing
-                            anchors.bottomMargin: -Kirigami.Units.smallSpacing
-                        }
-                    }
+                        // The repo's icon (icons.py), with a corner mark when it was found on this computer by a scan.
+                        Item {
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.medium
+                            Layout.preferredHeight: Kirigami.Units.iconSizes.medium
 
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 0
-
-                        QQC2.Label {
-                            Layout.fillWidth: true
-                            text: row.modelData.name
-                            font.bold: true
-                            elide: Text.ElideRight
-                        }
-
-                        QQC2.Label {
-                            Layout.fillWidth: true
-                            text: `${row.modelData.hostLabel} · ${row.modelData.domain}/${row.modelData.path}`
-                            font: Kirigami.Theme.smallFont
-                            opacity: 0.7
-                            elide: Text.ElideMiddle
-                        }
-
-                        QQC2.Label {
-                            Layout.fillWidth: true
-                            text: row.modelData.followText
-                            font: Kirigami.Theme.smallFont
-                            opacity: 0.7
-                            elide: Text.ElideMiddle
-                        }
-                    }
-
-                    // The last check's result; an update gets the update icon.
-                    ColumnLayout {
-                        Layout.maximumWidth: Kirigami.Units.gridUnit * 10
-                        visible: row.modelData.checkText !== ""
-                        spacing: 0
-
-                        Kirigami.Icon {
-                            objectName: "updateIcon:" + row.modelData.id
-                            Layout.alignment: Qt.AlignRight
-                            visible: row.modelData.updateAvailable
-                            source: "update-low"
-                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                            Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
-                        }
-
-                        QQC2.Label {
-                            Layout.alignment: Qt.AlignRight
-                            Layout.maximumWidth: Kirigami.Units.gridUnit * 10
-                            horizontalAlignment: Text.AlignRight
-                            // Bold through the text itself: setting font.bold here would replace the small font.
-                            text: {
-                                const t = row.modelData.checkText.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-                                return row.modelData.updateAvailable ? `<b>${t}</b>` : t;
+                            Kirigami.Icon {
+                                anchors.fill: parent
+                                source: row.modelData.icon
                             }
-                            textFormat: Text.StyledText
-                            font: Kirigami.Theme.smallFont
-                            opacity: row.modelData.updateAvailable ? 1 : 0.7
-                            wrapMode: Text.Wrap
-                            maximumLineCount: 2
-                            elide: Text.ElideRight
+
+                            Kirigami.Icon {
+                                objectName: "scannedMark:" + row.modelData.id
+                                visible: row.modelData.scanned
+                                source: "emblem-mounted"
+                                width: Kirigami.Units.iconSizes.small
+                                height: Kirigami.Units.iconSizes.small
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                anchors.rightMargin: -Kirigami.Units.smallSpacing
+                                anchors.bottomMargin: -Kirigami.Units.smallSpacing
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+
+                            QQC2.Label {
+                                Layout.fillWidth: true
+                                text: row.modelData.name
+                                font.bold: true
+                                elide: Text.ElideRight
+                            }
+
+                            QQC2.Label {
+                                Layout.fillWidth: true
+                                text: `${row.modelData.hostLabel} · ${row.modelData.domain}/${row.modelData.path}`
+                                font: Kirigami.Theme.smallFont
+                                opacity: 0.7
+                                elide: Text.ElideMiddle
+                            }
+
+                            QQC2.Label {
+                                Layout.fillWidth: true
+                                text: row.modelData.followText
+                                font: Kirigami.Theme.smallFont
+                                opacity: 0.7
+                                elide: Text.ElideMiddle
+                            }
+                        }
+
+                        // The last check's result; an update gets the update icon.
+                        ColumnLayout {
+                            Layout.maximumWidth: Kirigami.Units.gridUnit * 10
+                            visible: row.modelData.checkText !== ""
+                            spacing: 0
+
+                            Kirigami.Icon {
+                                objectName: "updateIcon:" + row.modelData.id
+                                Layout.alignment: Qt.AlignRight
+                                visible: row.modelData.updateAvailable
+                                source: "update-low"
+                                Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                                Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                            }
+
+                            QQC2.Label {
+                                Layout.alignment: Qt.AlignRight
+                                Layout.maximumWidth: Kirigami.Units.gridUnit * 10
+                                horizontalAlignment: Text.AlignRight
+                                // Bold through the text itself: setting font.bold here would replace the small font.
+                                text: {
+                                    const t = row.modelData.checkText.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+                                    return row.modelData.updateAvailable ? `<b>${t}</b>` : t;
+                                }
+                                textFormat: Text.StyledText
+                                font: Kirigami.Theme.smallFont
+                                opacity: row.modelData.updateAvailable ? 1 : 0.7
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 2
+                                elide: Text.ElideRight
+                            }
                         }
                     }
                 }
-            }
-            }
+                }
         }
 
         // Where a dragged repo or category would go.
