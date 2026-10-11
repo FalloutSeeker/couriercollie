@@ -4,6 +4,11 @@ Newest first.
 
 ## 2026-10-10
 
+- Scan locations: was the home folder only. Now the home folder, `/opt`, `/usr/local` and `/srv` by default, with git
+  clones and AppImages looked for in all their subfolders (plus `~/.local/bin`). Settings has a "Folders to scan" list
+  with defaults marked "Default", Add Folder…, remove buttons and Restore Defaults; the welcome screen and scan dialog
+  name the folders. Finds in folders owned by the system get a note that updating will ask for the password. A scan
+  of all four folders here still takes about 0.2 s.
 - KDE HIG pass (app design, layout and navigation, displaying content, status changes, text and labels, icons),
   light compliance tweaks only:
   - Title case for buttons, actions, dialog titles and headings; sentence case kept for checkbox, radio and form

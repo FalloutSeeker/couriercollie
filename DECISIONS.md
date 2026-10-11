@@ -130,6 +130,11 @@ after 7 / 30 / 90 days.
 
 ## D12. Scanning the computer
 
+**Where:** the home folder, `/opt`, `/usr/local` and `/srv` by default (marked "Default" in Settings, which can add
+or remove folders). Home alone missed `/opt` and `/usr/local`, the standard places for software installed by hand.
+The rest of the system (`/usr`, …) isn't scanned: it's slow and doesn't hold hand-installed software. Decided
+2026-10-10.
+
 Global setting, **off by default**, because it looks through your files. Offered on first launch and in Settings.
 While it's off, the Scan button is hidden and tracking is manual: you add repos yourself and set which version
 you have, or mark it as up to date. Both places that offer the setting say so. With scanning
