@@ -4,6 +4,13 @@ Newest first.
 
 ## 2026-10-10
 
+- Bug: every SMOD branch said "Newer commits", because any difference from a branch's newest commit counted as an
+  update. Now the app asks the site how your commit relates to the branch's newest: behind (an update, with the
+  new commits listed), ahead ("Your version is newer than master"), split apart ("Not comparable with
+  hidpi-functionality: your clone is on Plasma/6.7."), or the same. GitHub's compare gives this in one request;
+  GitLab needs a second (the common ancestor) only when the branch has commits you don't. If your commit isn't on
+  the site, the page says it can't be compared. The branch checked out in a scanned clone is tagged "On this
+  computer". Changing your version by hand now re-compares too. Tests no longer make network requests by accident.
 - Bug: switching branch and back showed "Up to date" for SMOD while the clone was behind. Switching branch reset
   "your version" to the new branch's newest commit (a rule from earlier today). Now switching branch never changes
   your version: it only changes what it's compared with. Scanned repos re-read their version from disk, and the

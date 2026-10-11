@@ -38,14 +38,16 @@ class Details:
     default_branch: str = ""
     branches: list[sources.Branch] = field(default_factory=list)
     branch_error: str = ""
-    # Commits between your version and the branch's newest (newest first), for "what's new". Only shown while your
-    # version and the branch's newest are still `commits_base` and `commits_head`.
-    new_commits: list[sources.Commit] = field(default_factory=list)
-    new_commits_total: int = 0
+    # How your version relates to the followed branch's newest commit, and the commits you don't have. Only used
+    # while your version and the branch's newest are still `commits_base` and `commits_head`. None if it couldn't be
+    # compared (e.g. your commit isn't on the site).
+    comparison: sources.Comparison | None = None
     commits_base: str = ""
     commits_head: str = ""
-    # A scanned repo that's no longer where the scan found it.
+    comparing: bool = False  # a comparison for a newly chosen branch is on its way
+    # A scanned repo that's no longer where the scan found it, and the branch checked out where it was found.
     local_missing: bool = False
+    branch_on_disk: str = ""
 
 
 def _size_text(size: int | None) -> str:
@@ -120,14 +122,21 @@ def _join_folders(folders: list[str]) -> str:
     return ", ".join(names[:-1]) + ", and " + names[-1]
 
 
-def _whats_new(ref: RepoRef, host: str, yours: str, head: str) -> tuple[int, list[sources.Commit]]:
-    """The commits between your version and the branch's newest. One request, only if you're behind."""
-    if not head or not yours or yours in (head, NOT_INSTALLED):
-        return 0, []
+def _compare(ref: RepoRef, host: str, yours: str, head: str) -> sources.Comparison | None:
+    """How your version relates to a branch's newest commit. None if there's nothing to compare, or it couldn't be."""
+    if not head or not yours or yours == NOT_INSTALLED:
+        return None
     try:
-        return sources.new_commits(ref, host, yours, head)
+        return sources.compare(ref, host, yours, head)
     except SourceError:
-        return 0, []  # just leaves the list out
+        return None
+
+
+def _on_disk(scanned: bool, local_path: str) -> tuple[tuple[str, bool] | None, str]:
+    """A scanned repo's (version, still there) and checked-out branch, read from disk."""
+    if not scanned:
+        return None, ""
+    return scan.version_on_disk(local_path), scan.branch_on_disk(local_path)
 
 
 def _fetch_branches(ref: RepoRef) -> tuple[str, list[sources.Branch], str]:
@@ -541,13 +550,13 @@ class Backend(QObject):
         # One API request for the releases, and one for what's new on a branch you're behind on. Branches and the
         # version on disk come from git, which doesn't count against API limits.
         def work():
-            on_disk = scan.version_on_disk(local_path) if scanned else None
+            on_disk, branch_on_disk = _on_disk(scanned, local_path)
             rels = sources.releases(ref, host)
             default, branches, branch_error = _fetch_branches(ref)
             yours = on_disk[0] if on_disk and on_disk[0] else installed
             head = next((b.sha for b in branches if b.name == (branch or default)), "")
-            commits = _whats_new(ref, host, yours, head) if follow == FOLLOW_BRANCH else (0, [])
-            return rels, default, branches, branch_error, on_disk, yours, head, commits
+            comparison = _compare(ref, host, yours, head) if follow == FOLLOW_BRANCH else None
+            return rels, default, branches, branch_error, on_disk, branch_on_disk, yours, head, comparison
 
         def done(result, error):
             if not self._config.find(repo_id):
@@ -555,11 +564,11 @@ class Backend(QObject):
             if error:
                 self._details[repo_id] = Details(state="error", error=self._error_text(error))
             else:
-                rels, default, branches, branch_error, on_disk, yours, head, (total, commits) = result
+                rels, default, branches, branch_error, on_disk, branch_on_disk, yours, head, comparison = result
                 self._details[repo_id] = Details(
                     state="ready", releases=rels, default_branch=default, branches=branches, branch_error=branch_error,
-                    new_commits=commits, new_commits_total=total, commits_base=yours, commits_head=head,
-                    local_missing=bool(on_disk) and not on_disk[1],
+                    comparison=comparison, commits_base=yours, commits_head=head,
+                    local_missing=bool(on_disk) and not on_disk[1], branch_on_disk=branch_on_disk,
                 )
                 if repo := self._config.find(repo_id):
                     # A scanned repo's version is whatever's on disk now (e.g. after a `git pull` outside the app).
@@ -611,11 +620,12 @@ class Backend(QObject):
         # Only files that run on this computer can be chosen.
         choices = [f for f in latest["assets"] if f["suits"]] if latest else []
         version = self._version_info(repo, d, shown) if repo and d.state == "ready" else {}
-        head = next((b.sha for b in d.branches if repo and b.name == (repo.branch or d.default_branch)), "")
-        commits_current = bool(repo) and d.commits_base == repo.installed and d.commits_head == head
+        c = self._current_comparison(repo, d) if repo else None
+        behind = c is not None and c.relation == sources.BEHIND
         return {
-            "newCommits": [{"sha": c.sha[:7], "title": c.title} for c in d.new_commits[:5]] if commits_current else [],
-            "newCommitsTotal": d.new_commits_total if commits_current else 0,
+            "newCommits": [{"sha": x.sha[:7], "title": x.title} for x in c.commits[:5]] if behind else [],
+            "newCommitsTotal": c.total if behind else 0,
+            "branchOnDisk": d.branch_on_disk,
             "versionFromDisk": bool(repo) and repo.source == config.SOURCE_SCANNED,
             "localMissing": d.local_missing,
             **{"versionText": "", "installed": "", "status": "", "updateAvailable": False}, **version,
@@ -641,7 +651,14 @@ class Backend(QObject):
         }
 
     @staticmethod
-    def _version_info(repo: TrackedRepo, d: Details, shown: list[sources.Release]) -> dict:
+    def _current_comparison(repo: TrackedRepo, d: Details) -> sources.Comparison | None:
+        """The comparison, if it's for your version and the followed branch's newest commit as they are now."""
+        head = next((b.sha for b in d.branches if b.name == (repo.branch or d.default_branch)), "")
+        if d.comparing or d.commits_base != repo.installed or d.commits_head != head:
+            return None
+        return d.comparison
+
+    def _version_info(self, repo: TrackedRepo, d: Details, shown: list[sources.Release]) -> dict:
         """Your version as text, and a status line comparing it with the newest."""
         installed = repo.installed
         if repo.follow == FOLLOW_BRANCH:
@@ -649,8 +666,11 @@ class Backend(QObject):
             newest = next((b.sha for b in d.branches if b.name == branch), "")
             if not newest:
                 return {}
-            newest_text, yours_text = f"commit {newest[:7]}", f"commit {installed[:7]}"
-            newer_text = f"Newer commits on {branch}"
+            yours_text = f"commit {installed[:7]}"
+            if installed and installed not in (NOT_INSTALLED, newest):
+                return {"versionText": yours_text, "installed": installed,
+                        **self._branch_status(repo, d, branch, yours_text)}
+            newest_text, newer_text = f"commit {newest[:7]}", f"Newer commits on {branch}"
         else:
             if not shown:
                 return {}
@@ -666,6 +686,25 @@ class Backend(QObject):
         else:
             text, status, update = "", "", False
         return {"versionText": text, "installed": installed, "status": status, "updateAvailable": update}
+
+    def _branch_status(self, repo: TrackedRepo, d: Details, branch: str, yours_text: str) -> dict:
+        """Status when your commit isn't the branch's newest: depends on how the two relate."""
+        c = self._current_comparison(repo, d)
+        if d.comparing:
+            return {"status": "Checking\u2026", "updateAvailable": False}
+        if c is None:
+            site = RepoRef.from_id(repo.id).domain
+            return {"status": f"Your version ({yours_text}) isn\u2019t on {site}, so it can\u2019t be compared with {branch}.",
+                    "updateAvailable": False}
+        if c.relation == sources.BEHIND:
+            return {"status": f"Newer commits on {branch} (you have {yours_text})", "updateAvailable": True}
+        if c.relation == sources.AHEAD:
+            return {"status": f"Your version is newer than {branch}", "updateAvailable": False}
+        if c.relation == sources.SAME:
+            return {"status": "Up to date", "updateAvailable": False}
+        where = f"your clone is on {d.branch_on_disk}" if d.branch_on_disk and d.branch_on_disk != branch \
+            else "it\u2019s from another line of work"
+        return {"status": f"Not comparable with {branch}: {where}.", "updateAvailable": False}
 
     @Slot(str)
     def markUpToDate(self, repo_id):
@@ -685,6 +724,8 @@ class Backend(QObject):
         if (repo := self._config.find(repo_id)) and version and version != repo.installed:
             repo.installed = version
             self._changed(repo_id)
+            if repo.follow == FOLLOW_BRANCH:
+                self._refresh_whats_new(repo_id)  # compare the new version with the branch
 
     @Slot(str, str)
     def setFollow(self, repo_id, follow):
@@ -727,19 +768,25 @@ class Backend(QObject):
         ref, host = RepoRef.from_id(repo_id), repo.host
         scanned, local_path, installed = repo.source == config.SOURCE_SCANNED, repo.local_path, repo.installed
         head = next((b.sha for b in d.branches if b.name == (repo.branch or d.default_branch)), "")
+        d.comparing = True
+        self.detailsChanged.emit(repo_id)
 
         def work():
-            on_disk = scan.version_on_disk(local_path) if scanned else None
+            on_disk, branch_on_disk = _on_disk(scanned, local_path)
             yours = on_disk[0] if on_disk and on_disk[0] else installed
-            return on_disk, yours, _whats_new(ref, host, yours, head)
+            return on_disk, branch_on_disk, yours, _compare(ref, host, yours, head)
 
         def done(result, error):
             repo, d = self._config.find(repo_id), self._details.get(repo_id)
-            if error or not repo or not d:
+            if not repo or not d:
                 return
-            on_disk, yours, (total, commits) = result
-            d.new_commits, d.new_commits_total, d.commits_base, d.commits_head = commits, total, yours, head
-            d.local_missing = bool(on_disk) and not on_disk[1]
+            d.comparing = False
+            if error:
+                self.detailsChanged.emit(repo_id)
+                return
+            on_disk, branch_on_disk, yours, comparison = result
+            d.comparison, d.commits_base, d.commits_head = comparison, yours, head
+            d.local_missing, d.branch_on_disk = bool(on_disk) and not on_disk[1], branch_on_disk
             if on_disk and on_disk[0] and on_disk[0] != repo.installed:
                 repo.installed = on_disk[0]
                 self._changed(repo_id)

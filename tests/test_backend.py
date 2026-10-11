@@ -26,6 +26,13 @@ class BackendTest(unittest.TestCase):
         ])
         config.save(cfg, self.path)
         self.backend = Backend(self.path)
+        # No threads or network: comparisons with a branch are faked (BEHIND for "dev" in tests that set it up).
+        self.backend._run = lambda work, done: done(work(), None)
+        self.relations = {}
+        saved = sources.compare
+        sources.compare = lambda ref, host, yours, head: sources.Comparison(
+            sources.SAME if yours == head else self.relations.get(head, sources.BEHIND))
+        self.addCleanup(setattr, sources, "compare", saved)
         releases = sources.parse_github_releases(json.loads((FIXTURES / "github_releases.json").read_text()))
         self.backend._details[LOCALSEND] = Details(
             state="ready", releases=releases, default_branch="main",
@@ -232,17 +239,29 @@ class ScannedClonePageTest(unittest.TestCase):
             installed=self.head)]), self.path)  # e.g. marked up to date earlier, while the clone stayed behind
         self.backend = Backend(self.path)
         self.backend._run = lambda work, done: done(work(), None)  # no threads in tests
-        self.fakes = {
-            "releases": lambda ref, host: [],
-            "branches": lambda ref: ("Plasma/6.7", [sources.Branch("Plasma/6.7", self.head)]),
-            "new_commits": lambda ref, host, base, head: (1, [sources.Commit(head, "Button: fallback textures")]),
-        }
-        self.saved = (sources.releases, sources.branches, sources.new_commits)
-        sources.releases, sources.branches, sources.new_commits = (self.fakes["releases"], self.fakes["branches"],
-                                                                     self.fakes["new_commits"])
+        self.master = "c" * 40
+        self.hidpi = "d" * 40
+        branches = [sources.Branch("Plasma/6.7", None), sources.Branch("master", self.master),
+                    sources.Branch("hidpi-functionality", self.hidpi)]
+
+        def fake_branches(ref):
+            branches[0].sha = self.head
+            return "Plasma/6.7", branches
+
+        def fake_compare(ref, host, yours, head):
+            if yours == head:
+                return sources.Comparison(sources.SAME)
+            if head == self.master:
+                return sources.Comparison(sources.AHEAD)
+            if head == self.hidpi:
+                return sources.Comparison(sources.DIVERGED, 2, [])
+            return sources.Comparison(sources.BEHIND, 1, [sources.Commit(head, "Button: fallback textures")])
+
+        self.saved = (sources.releases, sources.branches, sources.compare)
+        sources.releases, sources.branches, sources.compare = (lambda ref, host: []), fake_branches, fake_compare
 
     def tearDown(self):
-        sources.releases, sources.branches, sources.new_commits = self.saved
+        sources.releases, sources.branches, sources.compare = self.saved
         self.backend.shutdown()
         self.dir.cleanup()
 
@@ -260,10 +279,28 @@ class ScannedClonePageTest(unittest.TestCase):
         d = self.backend.details("gitgud.io/aeroshell/smod")
         self.assertEqual((d["status"], d["newCommitsTotal"]), ("Up to date", 0))
 
+    def test_other_branches_arent_updates(self):
+        smod = "gitgud.io/aeroshell/smod"
+        self.backend.loadDetails(smod, True)
+        self.backend.setBranch(smod, "master")
+        d = self.backend.details(smod)
+        self.assertEqual((d["status"], d["updateAvailable"]), ("Your version is newer than master", False))
+        self.backend.setBranch(smod, "hidpi-functionality")
+        d = self.backend.details(smod)
+        self.assertEqual(d["status"], "Not comparable with hidpi-functionality: your clone is on Plasma/6.7.")
+        self.assertFalse(d["updateAvailable"])
+        self.assertEqual(d["newCommits"], [])
+
+    def test_cant_compare(self):
+        sources.compare = lambda *a: (_ for _ in ()).throw(sources.SourceError("404"))
+        self.backend.loadDetails("gitgud.io/aeroshell/smod", True)
+        d = self.backend.details("gitgud.io/aeroshell/smod")
+        self.assertIn("isn\u2019t on gitgud.io", d["status"])
+        self.assertFalse(d["updateAvailable"])
+
     def test_switching_branch_and_back_keeps_the_version_on_disk(self):
         smod = "gitgud.io/aeroshell/smod"
         self.backend.loadDetails(smod, True)
-        self.backend._details[smod].branches.append(sources.Branch("master", "c" * 40))
         self.backend.setBranch(smod, "master")
         self.backend.setBranch(smod, "Plasma/6.7")
         d = self.backend.details(smod)
@@ -271,10 +308,14 @@ class ScannedClonePageTest(unittest.TestCase):
         self.assertTrue(d["updateAvailable"], d["status"])
         self.assertEqual(d["newCommitsTotal"], 1)  # the list is back for this branch
 
-    def test_list_hidden_once_it_no_longer_applies(self):
-        self.backend.loadDetails("gitgud.io/aeroshell/smod", True)
-        self.backend.setInstalled("gitgud.io/aeroshell/smod", self.head)
-        self.assertEqual(self.backend.details("gitgud.io/aeroshell/smod")["newCommits"], [])
+    def test_disk_wins_over_a_version_set_by_hand(self):
+        # The page hides "Mark as…" for scanned repos; even if the version is set another way, disk wins on the
+        # next read, and the list of new commits follows.
+        smod = "gitgud.io/aeroshell/smod"
+        self.backend.loadDetails(smod, True)
+        self.backend.setInstalled(smod, self.head)
+        self.assertEqual(config.load(self.path).repos[0].installed, self.on_disk)
+        self.assertEqual(self.backend.details(smod)["newCommitsTotal"], 1)
 
 
 class ScanFlowTest(unittest.TestCase):

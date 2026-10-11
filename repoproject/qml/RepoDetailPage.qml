@@ -545,6 +545,12 @@ Kirigami.ScrollablePage {
                     }
 
                     Tag {
+                        visible: branch.modelData.name === page.details.branchOnDisk
+                        text: "On this computer"
+                        highlighted: true
+                    }
+
+                    Tag {
                         visible: branch.modelData.isDefault
                         text: "Default"
                     }

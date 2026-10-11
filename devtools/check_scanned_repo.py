@@ -56,4 +56,17 @@ h.run([
     (0, lambda: h.click("branch:" + picked["branch"])),
     (2500, lambda: h.click("branch:" + picked["home"])),
     (2500, after_switching_back),
+    # Other branches aren't updates: SMOD's master is behind the clone, hidpi-functionality split off earlier.
+    *([] if REPO != "gitgud.io/aeroshell/smod" else [
+        (0, lambda: h.click("branch:master")),
+        (2500, lambda: h.check("master: your version is newer",
+                               b.details(REPO)["status"] == "Your version is newer than master", b.details(REPO)["status"])),
+        (0, lambda: h.click("branch:hidpi-functionality")),
+        (2500, lambda: h.check("hidpi-functionality: not comparable, clone is on Plasma/6.7",
+                               b.details(REPO)["status"] == "Not comparable with hidpi-functionality: your clone is on Plasma/6.7.",
+                               b.details(REPO)["status"])),
+        (0, lambda: h.shot("scanned-repo-other-branch")),
+        (0, lambda: h.click("branch:Plasma/6.7")),
+        (2500, lambda: h.check("back on Plasma/6.7: newer commits", b.details(REPO)["updateAvailable"])),
+    ]),
 ])

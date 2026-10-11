@@ -235,6 +235,11 @@ def version_on_disk(path: str) -> tuple[str, bool]:
     return "", False
 
 
+def branch_on_disk(path: str) -> str:
+    """The branch checked out in a clone, or "" (not a clone, or no branch checked out)."""
+    return _git(path, "symbolic-ref", "--short", "-q", "HEAD") if (Path(path) / ".git").exists() else ""
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # 2. Checking finds with their site
 

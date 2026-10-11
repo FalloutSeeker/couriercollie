@@ -126,32 +126,59 @@ class ProjectInfoTest(unittest.TestCase):
 
 
 class CompareTest(unittest.TestCase):
-    """What's new between two commits; both sites list oldest first, the app shows newest first."""
+    """How your version relates to a branch's newest commit, and what's new; newest first."""
 
     def test_github(self):
-        data = {"ahead_by": 3, "commits": [
+        data = {"status": "ahead", "ahead_by": 3, "commits": [
             {"sha": "aaa1111", "commit": {"message": "first\n\nbody"}},
             {"sha": "bbb2222", "commit": {"message": "second"}},
             {"sha": "ccc3333", "commit": {"message": ""}},
         ]}
-        total, commits = sources.parse_github_compare(data)
-        self.assertEqual(total, 3)
-        self.assertEqual([(c.sha, c.title) for c in commits], [("ccc3333", ""), ("bbb2222", "second"), ("aaa1111", "first")])
+        c = sources.parse_github_compare(data)
+        # GitHub says the branch is "ahead" of yours: you're behind.
+        self.assertEqual((c.relation, c.total), (sources.BEHIND, 3))
+        self.assertEqual([(x.sha, x.title) for x in c.commits], [("ccc3333", ""), ("bbb2222", "second"), ("aaa1111", "first")])
+        for status, relation in [("behind", sources.AHEAD), ("diverged", sources.DIVERGED), ("identical", sources.SAME)]:
+            self.assertEqual(sources.parse_github_compare({"status": status, "commits": []}).relation, relation)
 
-    def test_gitlab(self):
-        data = {"commits": [{"id": "145d046", "title": "Do even more hidpi corrections"},
-                            {"id": "ba963d7", "title": "Button: fallback textures to lower DPIs on failure"}]}
-        total, commits = sources.parse_gitlab_compare(data)
-        self.assertEqual((total, commits[0].sha), (2, "ba963d7"))
-
-    def test_requests(self):
+    def gitlab(self, commits, merge_base):
         urls = []
-        sources.new_commits(RepoRef("gitgud.io", "aeroshell/smod"), "gitlab", "145d046", "ba963d7",
-                            get=lambda url, headers=None: urls.append(url) or {"commits": []})
-        sources.new_commits(RepoRef("github.com", "a/b"), "github", "x", "y",
-                            get=lambda url, headers=None: urls.append(url) or {"commits": []})
-        self.assertEqual(urls, ["https://gitgud.io/api/v4/projects/aeroshell%2Fsmod/repository/compare?from=145d046&to=ba963d7",
-                                "https://api.github.com/repos/a/b/compare/x...y"])
+
+        def get(url, headers=None):
+            urls.append(url)
+            return {"commits": commits} if "/compare?" in url else {"id": merge_base}
+
+        return sources.compare(RepoRef("gitgud.io", "aeroshell/smod"), "gitlab", "yours", "head", get), urls
+
+    def test_gitlab_behind(self):
+        c, urls = self.gitlab([{"id": "ba963d7", "title": "Button: fallback textures"}], "yours")
+        self.assertEqual((c.relation, c.total, c.commits[0].sha), (sources.BEHIND, 1, "ba963d7"))
+        self.assertEqual(urls, [
+            "https://gitgud.io/api/v4/projects/aeroshell%2Fsmod/repository/compare?from=yours&to=head",
+            "https://gitgud.io/api/v4/projects/aeroshell%2Fsmod/repository/merge_base?refs%5B%5D=yours&refs%5B%5D=head",
+        ])
+
+    def test_gitlab_diverged(self):
+        # e.g. hidpi-functionality: 2 commits you don't have, but it split off before your version.
+        c, _ = self.gitlab([{"id": "57112ad", "title": "Initial HiDPI functionality"}, {"id": "1a38c68", "title": "x"}],
+                           "older-common-commit")
+        self.assertEqual((c.relation, c.total), (sources.DIVERGED, 2))
+
+    def test_gitlab_ahead_needs_one_request(self):
+        # e.g. master: nothing you don't already have.
+        c, urls = self.gitlab([], "unused")
+        self.assertEqual(c.relation, sources.AHEAD)
+        self.assertEqual(len(urls), 1)
+
+    def test_same_commit_needs_no_request(self):
+        c = sources.compare(RepoRef("github.com", "a/b"), "github", "x", "x", get=lambda *a: self.fail("no request"))
+        self.assertEqual(c.relation, sources.SAME)
+
+    def test_github_request(self):
+        urls = []
+        sources.compare(RepoRef("github.com", "a/b"), "github", "x", "y",
+                        get=lambda url, headers=None: urls.append(url) or {"status": "ahead", "commits": []})
+        self.assertEqual(urls, ["https://api.github.com/repos/a/b/compare/x...y"])
 
 
 class LsRemoteTest(unittest.TestCase):

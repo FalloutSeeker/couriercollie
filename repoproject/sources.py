@@ -295,25 +295,48 @@ def releases(ref: RepoRef, host: str, get=http_get_json) -> list[Release]:
     return parse_gitlab_releases(ref.domain, ref.path, data)
 
 
-def parse_github_compare(data: dict) -> tuple[int, list[Commit]]:
+# How your version relates to a branch's newest commit.
+SAME = "same"
+BEHIND = "behind"  # the branch has newer commits: an update
+AHEAD = "ahead"  # your version is newer than the branch
+DIVERGED = "diverged"  # each has commits the other doesn't: your version is from another line of work
+
+
+@dataclass
+class Comparison:
+    relation: str
+    total: int = 0  # commits on the branch that you don't have
+    commits: list[Commit] = field(default_factory=list)  # those commits, newest first (all, or the first page)
+
+
+def parse_github_compare(data: dict) -> Comparison:
     commits = [Commit(c["sha"], (c["commit"]["message"] or "").splitlines()[0] if c["commit"]["message"] else "")
                for c in data.get("commits", [])]
-    return data.get("ahead_by", len(commits)), commits[::-1]
+    # GitHub describes the branch relative to yours, so its "ahead" means you're behind.
+    relation = {"identical": SAME, "ahead": BEHIND, "behind": AHEAD, "diverged": DIVERGED}.get(data.get("status"),
+                                                                                              DIVERGED)
+    return Comparison(relation, data.get("ahead_by", len(commits)), commits[::-1])
 
 
-def parse_gitlab_compare(data: dict) -> tuple[int, list[Commit]]:
-    commits = [Commit(c["id"], c.get("title") or "") for c in data.get("commits", [])]
-    return len(commits), commits[::-1]
+def parse_gitlab_compare(data: dict) -> list[Commit]:
+    return [Commit(c["id"], c.get("title") or "") for c in data.get("commits", [])][::-1]
 
 
-def new_commits(ref: RepoRef, host: str, base: str, head: str, get=http_get_json) -> tuple[int, list[Commit]]:
-    """Commits on the site between `base` (yours) and `head` (the branch's newest): how many, newest first. One
-    request."""
+def compare(ref: RepoRef, host: str, yours: str, head: str, get=http_get_json) -> Comparison:
+    """How your version relates to a branch's newest commit, and the commits on it you don't have. One request on
+    GitHub; on GitLab a second one when the branch has commits you don't, to tell "behind" from "diverged"."""
+    if yours == head:
+        return Comparison(SAME)
     if host == "github":
-        return parse_github_compare(get(f"https://api.github.com/repos/{ref.path}/compare/{base}...{head}",
+        return parse_github_compare(get(f"https://api.github.com/repos/{ref.path}/compare/{yours}...{head}",
                                         _GITHUB_HEADERS))
-    query = urllib.parse.urlencode({"from": base, "to": head})
-    return parse_gitlab_compare(get(f"{_gitlab_api(ref.domain, ref.path)}/repository/compare?{query}"))
+    api = f"{_gitlab_api(ref.domain, ref.path)}/repository"
+    commits = parse_gitlab_compare(get(f"{api}/compare?{urllib.parse.urlencode({'from': yours, 'to': head})}"))
+    if not commits:
+        return Comparison(AHEAD)  # nothing on the branch that you don't have
+    base = get(f"{api}/merge_base?{urllib.parse.urlencode([('refs[]', yours), ('refs[]', head)])}")
+    relation = BEHIND if (base or {}).get("id") == yours else DIVERGED
+    return Comparison(relation, len(commits), commits)
 
 
 def parse_ls_remote(output: str) -> tuple[str, list[Branch]]:
