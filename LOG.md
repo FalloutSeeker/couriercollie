@@ -4,6 +4,12 @@ Newest first.
 
 ## 2026-10-10
 
+- Repo icons (D13): looked up once per repo, in order: on this computer (scanned RPM's menu entry, scanned AppImage's
+  own icon read with 7z without running it, icon file in a scanned clone, matching installed app), then the
+  project's picture on its site (GitLab project/group, GitHub organizations only), then the default. Scanned repos
+  get a corner mark. Here: Aero and SMOD got the AeroShell logo; obt, Test and aerial (owned by people) keep the
+  defaults. A site that can't be reached is retried next load; everything else, even "none found", is saved.
+  `devtools/check_icons.py` checks it on a copy of your settings.
 - Review and test pass across stages 1–3:
   - Bug: clicking two branches quickly could show "Couldn't compare…" when the first answer arrived late. Each
     comparison is now numbered; late answers to older ones are ignored.

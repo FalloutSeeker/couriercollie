@@ -117,10 +117,27 @@ Kirigami.ScrollablePage {
             contentItem: RowLayout {
                 spacing: Kirigami.Units.largeSpacing
 
-                Kirigami.Icon {
-                    source: row.modelData.icon
+                // The repo's icon (icons.py), with a corner mark when it was found on this computer by a scan.
+                Item {
                     Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                     Layout.preferredHeight: Kirigami.Units.iconSizes.medium
+
+                    Kirigami.Icon {
+                        anchors.fill: parent
+                        source: row.modelData.icon
+                    }
+
+                    Kirigami.Icon {
+                        objectName: "scannedMark:" + row.modelData.id
+                        visible: row.modelData.scanned
+                        source: "emblem-mounted"
+                        width: Kirigami.Units.iconSizes.small
+                        height: Kirigami.Units.iconSizes.small
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.rightMargin: -Kirigami.Units.smallSpacing
+                        anchors.bottomMargin: -Kirigami.Units.smallSpacing
+                    }
                 }
 
                 ColumnLayout {

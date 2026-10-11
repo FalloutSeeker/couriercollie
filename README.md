@@ -40,6 +40,9 @@ copy of your settings:
 ```sh
 python3 -I devtools/check_scan.py   # scans this computer and asks GitHub/GitLab about new finds
 python3 -I devtools/check_pages.py  # clicks through the welcome screen, list, repo page and Settings
+python3 -I devtools/check_settings.py        # the folder list in Settings
+python3 -I devtools/check_scanned_repo.py    # a scanned clone's page: version from disk, new commits, branches
+python3 -I devtools/check_icons.py           # looks up icons for your repos (temporary cache folder)
 ```
 
 ## Code layout
@@ -50,6 +53,7 @@ python3 -I devtools/check_pages.py  # clicks through the welcome screen, list, r
 | `repoproject/sources.py`   | Talking to GitHub and GitLab: addresses, releases, branches                    |
 | `repoproject/assets.py`    | Build files: which kind, whether it suits this PC, remembering your pick       |
 | `repoproject/scan.py`      | Scanning: finding clones, RPMs and AppImages; matching them to tracked repos     |
+| `repoproject/icons.py`     | Repo icons: from this computer, the project's site, or the default (D13)          |
 | `repoproject/backend.py`   | Connects the window to the above; runs network work in the background          |
 | `repoproject/qml/`         | The window: list page, repo page, Add dialog                                   |
 

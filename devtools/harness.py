@@ -16,7 +16,7 @@ PROJECT = Path(__file__).resolve().parent.parent
 OUT = PROJECT / ".uicheck"
 
 
-def start(copy_settings_from: Path | None = None, settings: dict | None = None):
+def start(copy_settings_from: Path | None = None, settings: dict | None = None, find_icons: bool = False):
     """Start the app off-screen. `settings` (names as in Backend.settings) are applied before the window loads, as a
     real start would have them; the welcome screen is marked done unless they say otherwise."""
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -25,13 +25,14 @@ def start(copy_settings_from: Path | None = None, settings: dict | None = None):
     if copy_settings_from and copy_settings_from.exists():
         shutil.copy(copy_settings_from, config_path)
     os.environ["REPOPROJECT_CONFIG"] = str(config_path)
+    os.environ["XDG_CACHE_HOME"] = str(config_path.parent / "cache")  # icons found during a check stay out of yours
     sys.path.insert(0, str(PROJECT))
     OUT.mkdir(exist_ok=True)
-    return Harness({"firstLaunchDone": True, **(settings or {})})
+    return Harness({"firstLaunchDone": True, **(settings or {})}, find_icons)
 
 
 class Harness:
-    def __init__(self, settings: dict):
+    def __init__(self, settings: dict, find_icons: bool = False):
         from PySide6.QtCore import qInstallMessageHandler
         from PySide6.QtQml import QQmlApplicationEngine
         from PySide6.QtQuick import QQuickWindow  # noqa: F401  (so the window is a QQuickWindow)
@@ -43,7 +44,7 @@ class Harness:
         self.messages = []
         qInstallMessageHandler(lambda _m, _c, text: self.messages.append(text))
         self.app = QApplication(sys.argv)
-        self.backend = Backend()
+        self.backend = Backend(find_icons=find_icons)
         self.backend.updateSettings(settings)
         self.engine = QQmlApplicationEngine()
         self.engine.rootContext().setContextProperty("backend", self.backend)

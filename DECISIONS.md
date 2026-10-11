@@ -148,3 +148,22 @@ matches, the site is asked whether the address moved, and the old address is rem
 **Select all**.
 
 **Status:** decided 2026-10-10.
+
+## D13. Repo icons
+
+Each repo gets an icon, looked up **once**, when it first appears in the list (on first load, when added by hand, or
+when a scan adds it). The result is saved, including "none found", so it's never looked up again; only a site that
+couldn't be reached is retried, on the next load. In order, the first that turns something up:
+
+1. **On this computer:** a scanned RPM's menu entry; a scanned AppImage's own icon (read with 7z, never run); an icon
+   file in a scanned clone; an installed app whose menu entry matches the repo's name (names under 4 letters skipped).
+2. **The project's picture on its site:** a GitLab project's icon, else its group's picture; on GitHub, the owner's
+   picture only if the owner is an organization. A person's profile picture wouldn't represent the project. Taken
+   from the project info already fetched when adding (no extra request), downloaded once (max 1 MB, must be a
+   picture) into `~/.cache/repoproject/icons`, and deleted when the repo is removed.
+3. **The default icon** for the kind of repo.
+
+Scanned repos also get a corner mark (`emblem-mounted`: found on this computer).
+
+**Status:** decided 2026-10-10.
+

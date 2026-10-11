@@ -37,7 +37,7 @@ def main() -> int:
     # Let Ctrl+C in the terminal close the app.
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-    backend = Backend()
+    backend = Backend(find_icons=True)
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("backend", backend)
     engine.load(QUrl.fromLocalFile(str(QML_DIR / "Main.qml")))

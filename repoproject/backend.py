@@ -12,7 +12,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
-from . import assets, config, scan, sources
+from . import assets, config, icons, scan, sources
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, Config, ConfigError, TrackedRepo
 from .sources import RepoRef, SourceError
 
@@ -173,8 +173,12 @@ class Backend(QObject):
     saveErrorChanged = Signal()
     _deliver = Signal(object)
 
-    def __init__(self, config_path: Path | None = None, parent=None):
+    def __init__(self, config_path: Path | None = None, parent=None, find_icons: bool = False):
+        """`find_icons`: look up icons for repos (icons.py). Off by default so tests don't reach the network; the
+        app turns it on."""
         super().__init__(parent)
+        self._find_icons = find_icons
+        self._icons_pending: set[str] = set()
         self._path = config_path
         self._config_error = ""
         self._save_error = ""
@@ -256,11 +260,47 @@ class Backend(QObject):
             "follow": r.follow,
             "assetPattern": r.asset_pattern,
             "prereleases": r.prereleases,
-            "icon": KIND_ICONS.get(r.kind, "package-x-generic"),
+            "icon": self._icon_source(r),
             "followText": follow_text,
             "scanned": r.source == config.SOURCE_SCANNED,
             "localPath": r.local_path,
         }
+
+    @staticmethod
+    def _icon_source(r: TrackedRepo) -> str:
+        """What the window shows: the icon found for the repo, or the default for its kind (also if a found picture
+        has since been deleted)."""
+        if r.icon.startswith("theme:"):
+            return r.icon.removeprefix("theme:")
+        if r.icon.startswith("file:") and Path(r.icon.removeprefix("file:")).is_file():
+            return "file://" + r.icon.removeprefix("file:")
+        return KIND_ICONS.get(r.kind, "package-x-generic")
+
+    # -- icons ------------------------------------------------------------------------------------------------------
+
+    @Slot()
+    def loadIcons(self):
+        """Called when the list first shows: look up icons for repos that have never had one looked up."""
+        for r in self._config.repos:
+            self._find_icon(r.id)
+
+    def _find_icon(self, repo_id: str, icon_url: str | None = None):
+        """Look up a repo's icon, once: the result is saved, including "none found". If the site couldn't be
+        reached, nothing is saved, so it's tried again the next time the window loads."""
+        repo = self._config.find(repo_id)
+        if not self._find_icons or not repo or repo.icon or repo_id in self._icons_pending:
+            return
+        self._icons_pending.add(repo_id)
+        name, local_path = repo.name, repo.local_path
+
+        def done(result, error):
+            self._icons_pending.discard(repo_id)
+            if error or not (repo := self._config.find(repo_id)):
+                return  # unreachable (icons.Unreachable) or removed meanwhile
+            repo.icon = result
+            self._changed()
+
+        self._run(lambda: icons.resolve(repo_id, name, local_path, icon_url), done)
 
     # -- the list ---------------------------------------------------------------------------------------------------
 
@@ -433,6 +473,7 @@ class Backend(QObject):
             self._config.repos.append(repo)
             self._changed()
             self.addFinished.emit(repo.id)
+            self._find_icon(repo.id, info.icon_url)
 
         self._adding = True
         self.addingChanged.emit()
@@ -450,6 +491,10 @@ class Backend(QObject):
 
     @Slot(str)
     def removeRepo(self, repo_id):
+        if (repo := self._config.find(repo_id)) and repo.icon.startswith("file:"):
+            picture = Path(repo.icon.removeprefix("file:"))
+            if picture.parent == icons.cache_dir():
+                picture.unlink(missing_ok=True)
         self._config.repos = [r for r in self._config.repos if r.id != repo_id]
         self._details.pop(repo_id, None)
         self._changed()
@@ -553,7 +598,9 @@ class Backend(QObject):
             chosen.append(found)
         if not chosen:
             return
-        scan.merge(self._config, chosen)
+        result = scan.merge(self._config, chosen)
+        for r in result.added:
+            self._find_icon(r.id)
         self._scan_items = [i for i in self._scan_items if i["key"] not in keys or i["status"] == "problem"]
         self._changed()
         self.scanChanged.emit()

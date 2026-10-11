@@ -64,6 +64,7 @@ Kirigami.ApplicationWindow {
         if (firstFrameShown)
             return;
         firstFrameShown = true;
+        backend.loadIcons();  // once, for repos that have never had an icon looked up
         if (!backend.settings.firstLaunchDone && backend.configError === "")
             firstLaunch.open();
     }

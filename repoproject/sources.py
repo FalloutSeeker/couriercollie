@@ -102,6 +102,9 @@ class ProjectInfo:
     name: str
     description: str
     default_branch: str
+    # The project's picture: its own icon (GitLab), or its organization's or group's picture. Not a person's profile
+    # picture, which wouldn't represent the project. Empty if there's none.
+    icon_url: str = ""
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -200,12 +203,16 @@ _GITHUB_HEADERS = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Versio
 
 
 def parse_github_project(data: dict) -> ProjectInfo:
+    owner = data.get("owner") or {}
+    # GitHub has no project icons; an organization's picture is usually the project's logo.
+    icon = owner.get("avatar_url") or "" if owner.get("type") == "Organization" else ""
     return ProjectInfo(
         ref=RepoRef("github.com", data["full_name"]),
         host="github",
         name=data["name"],
         description=data.get("description") or "",
         default_branch=data.get("default_branch") or "",
+        icon_url=icon,
     )
 
 
@@ -240,12 +247,17 @@ def _gitlab_api(domain: str, path: str) -> str:
 
 
 def parse_gitlab_project(domain: str, data: dict) -> ProjectInfo:
+    namespace = data.get("namespace") or {}
+    icon = data.get("avatar_url") or (namespace.get("avatar_url") if namespace.get("kind") == "group" else "") or ""
+    if icon.startswith("/"):
+        icon = f"https://{domain}{icon}"  # some sites give it relative to themselves
     return ProjectInfo(
         ref=RepoRef(domain, data["path_with_namespace"]),
         host="gitlab",
         name=data.get("name") or data["path"],
         description=data.get("description") or "",
         default_branch=data.get("default_branch") or "",
+        icon_url=icon,
     )
 
 

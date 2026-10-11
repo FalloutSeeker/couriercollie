@@ -64,6 +64,9 @@ class TrackedRepo:
     # Other addresses for the same project: what was typed when adding, and old names the site redirected from.
     # A scan matches against these too, so a clone made under an old name isn't added a second time.
     aliases: list[str] = field(default_factory=list)
+    # The icon found for it (icons.py): "theme:<name>", "file:<path>", "-" for none. Empty until looked up, which
+    # happens once.
+    icon: str = ""
 
 
 @dataclass
