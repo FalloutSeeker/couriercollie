@@ -324,7 +324,9 @@ Signing in is never required. The Settings section explains why someone would do
   checker and the open window never overwrite each other's changes.
 - **Background:** a systemd user timer (`repoproject-check.timer`) wakes hourly, after a missed hour, and 3 minutes
   after login, and runs `run.sh --check --if-due`. That only checks if automatic checks are on and the interval has
-  passed since the last check. If the app is open, it hands the check to the app.
+  passed since the last check. If the app is open, it hands the check to the app. Opening the app never checks on its
+  own, and a computer that was off past the interval checks once, shortly after login. A check where no site answered
+  (no connection yet) doesn't count, so it's tried again within the hour rather than a whole interval later.
 - **Notifications** only for updates not announced before, and only when the window isn't in front; clicking one opens
   (or brings forward) the app. The **taskbar badge** shows the number of updates while the app is open (Plasma clears a
   badge when its app closes).

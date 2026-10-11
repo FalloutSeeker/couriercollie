@@ -141,6 +141,9 @@ class CheckAllTest(unittest.TestCase):
         kept = second.results["github.com/a/one"]
         self.assertEqual((kept.status, kept.not_rechecked, kept.retry_after), (checker.UPDATE, True, ""))
         self.assertEqual(fresh, [])  # nothing new to announce
+        # No site answered, so it doesn't count as a check: the next automatic one isn't put off.
+        first.last_run = "2026-10-10T00:00:00+00:00"
+        self.assertEqual(checker.check_all(self.repos, first)[0].last_run, first.last_run)
         # Never checked before: says it couldn't be checked (not "failed" for a reason to do with the repo).
         third, _ = checker.check_all(self.repos, checker.State())
         self.assertEqual(third.results["github.com/a/one"].status, checker.UNREACHABLE)
@@ -150,11 +153,13 @@ class CheckAllTest(unittest.TestCase):
         self.addCleanup(setattr, checker, "CHECKS_AT_ONCE", saved)
         first, _ = checker.check_all(self.repos)
         self.fakes.limited = {"github.com/a/one"}
+        first.last_run = "2026-10-10T00:00:00+00:00"
         second, fresh = checker.check_all(self.repos, first)
         kept = second.results["github.com/a/three"]  # skipped once GitHub's limit was hit
         self.assertEqual((kept.status, kept.text, kept.not_rechecked), (checker.UPDATE, "Update available: v2", True))
         self.assertEqual(kept.retry_after, "2026-10-11T02:24:00+00:00")
         self.assertEqual(fresh, [])
+        self.assertNotEqual(second.last_run, first.last_run)  # GitLab answered, so it counts
         # Never checked before: nothing to keep.
         third, _ = checker.check_all(self.repos, checker.State())
         self.assertEqual(third.results["github.com/a/three"].status, checker.RATE_LIMITED)

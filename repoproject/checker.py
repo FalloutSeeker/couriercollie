@@ -219,7 +219,11 @@ def check_all(repos: list[TrackedRepo], previous: State | None = None) -> tuple[
         old = previous.results.get(repo_id)
         if r.status in (RATE_LIMITED, UNREACHABLE) and old and old.status not in (RATE_LIMITED, UNREACHABLE, FAILED):
             results[repo_id] = dataclasses.replace(old, not_rechecked=True, retry_after=r.retry_after)
-    state = State(last_run=now().isoformat(timespec="seconds"), results=results,
+    # If no site answered (no connection yet after waking up, say), the check doesn't count: the timer tries again
+    # within the hour instead of waiting a whole interval.
+    answered = not results or any(r.status not in (RATE_LIMITED, UNREACHABLE) and not r.not_rechecked
+                                  for r in results.values())
+    state = State(last_run=now().isoformat(timespec="seconds") if answered else previous.last_run, results=results,
                   notified={k: v for k, v in previous.notified.items() if k in results})
     fresh = []
     for repo_id, r in results.items():
