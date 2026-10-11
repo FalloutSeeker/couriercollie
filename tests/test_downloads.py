@@ -335,6 +335,19 @@ class RpmTest(AppImageCase):
         self.assertTrue(asked[2].endswith("tool-2.0-1.x86_64.rpm") and asked[3] == "exists")
         self.assertEqual(list(updater.downloads_dir().iterdir()), [])  # the download is deleted
 
+    def test_installs_a_copy_only_root_can_change(self):
+        updater.install_rpm(self.asset(), [], "tool")
+        installed = Path(self.asked.read_text().split()[2])
+        self.assertNotEqual(installed.parent, updater.downloads_dir())  # not the copy in your folder
+        self.assertFalse(installed.parent.exists())  # and it's cleaned up
+
+    def test_a_file_swapped_after_it_was_checked_isnt_installed(self):
+        # Something running as you swaps the checked file just as dnf is asked for (here: the password prompt).
+        updater.ROOT = ["sh", "-c", 'printf swapped > "$5"; exec "$@"', "polkit"]
+        with self.assertRaisesRegex(updater.UpdateError, "changed after it was checked"):
+            updater.install_rpm(self.asset(), [], "tool")
+        self.assertFalse(self.asked.exists())  # dnf was never asked
+
     def test_a_different_package_isnt_installed(self):
         with self.assertRaisesRegex(updater.UpdateError, "not “other” that you have"):
             updater.install_rpm(self.asset(), [], "other")

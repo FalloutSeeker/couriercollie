@@ -628,6 +628,18 @@ def rpm_info(path: Path) -> tuple[str, str, str]:
     return parts[0], parts[1], parts[2]
 
 
+# Run as root: copy the .rpm ($1, named $2) into a new folder only root can write to, check it's still the file that
+# was checked (sha256 $3), then install that copy with the dnf command that follows ($4…).
+_CHANGED = 3
+_INSTALL_COPY = (
+    'src=$1; name=$2; sum=$3; shift 3; '
+    'dir=$(mktemp -d) || exit 1; trap \'rm -rf "$dir"\' EXIT; '
+    'cp -- "$src" "$dir/$name" || exit 1; '
+    f'printf "%s  %s\\n" "$sum" "$dir/$name" | sha256sum -c --status - || exit {_CHANGED}; '
+    '"$@" install -y "$dir/$name"'
+)
+
+
 def install_rpm(asset, others: list, package: str = "", progress=None, installing=None,
                 get_text=fetch_text) -> tuple[str, str, bool]:
     """Downloads a release's .rpm, checks it, and installs it with dnf (asking for the password). `package`: the name
@@ -651,15 +663,21 @@ def install_rpm(asset, others: list, package: str = "", progress=None, installin
             raise UpdateError(f"The new file is for {arch} computers, not this one, so it wasn’t installed.")
         if installing:
             installing()
+        # The checked file is in a folder you can write to, so as root it's first copied where only root can, and
+        # checked again there: nothing can swap it between the checks above and dnf installing it.
+        with file.open("rb") as f:
+            checked = hashlib.file_digest(f, "sha256").hexdigest()
         try:
-            result = subprocess.run([*ROOT, *DNF, "install", "-y", str(file)], capture_output=True, text=True,
-                                    timeout=DNF_TIMEOUT)
+            result = subprocess.run([*ROOT, "/bin/sh", "-c", _INSTALL_COPY, "sh", str(file), name, checked, *DNF],
+                                    capture_output=True, text=True, timeout=DNF_TIMEOUT)
         except subprocess.TimeoutExpired as e:
             raise UpdateError("dnf took too long; check Discover or a terminal to see if it’s still busy.") from e
         except OSError as e:
             raise UpdateError(f"Couldn’t run dnf: {e}") from e
         if ROOT and result.returncode in (126, 127):
             raise UpdateError("The password wasn’t given, so nothing was installed.")
+        if result.returncode == _CHANGED:
+            raise UpdateError("The downloaded file changed after it was checked, so nothing was installed.")
         if result.returncode != 0:
             raise UpdateError(f"dnf couldn’t install it: {_last_line(result)}")
         return rpm_name, version, verified
