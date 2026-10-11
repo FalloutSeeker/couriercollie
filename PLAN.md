@@ -93,8 +93,13 @@ Each update removes the version it replaced once the new one is in place (no Und
 - **Start at login** (Settings, and offered on the welcome screen; off by default): opens the app when you log in, for
   those who want its window there. Not needed for automatic checks, which run without the app open (a systemd timer
   starts a short check and it exits), so the app never runs constantly unless you choose this. Done with an autostart
-  entry (`~/.config/autostart/`), removed when turned off. Should start minimized if a tray icon exists by then;
+  entry (`~/.config/autostart/`), removed when turned off. Starts in the tray if the tray icon (below) is on;
   otherwise it opens the window. Asked for 2026-10-11.
+- **Tray icon** (asked for 2026-10-11): shows while the app is running, with the number of updates, and a menu
+  (Open, Check Now, Quit). Closing the window still quits unless "Keep running in the tray when closed" is on (off by
+  default), so the app only stays running if you choose it. Not needed for automatic checks either way: those run
+  from the systemd timer whether the app is open or not. Goes with Start at login (it can start in the tray). On
+  GNOME a tray needs the AppIndicator extension; without it, no tray icon and closing quits as before.
 - **Restore to Defaults** in the Settings window: every setting back to how it was on a fresh start (automatic
   checks, notifications, scanning and its folders). Tracked repos and categories are kept.
   Asks first.
