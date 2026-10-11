@@ -317,6 +317,9 @@ Signing in is never required. The Settings section explains why someone would do
   compare when your commit isn't the branch's newest. Scanned repos read their version from disk. Four at a time.
 - **Hourly limit:** once GitHub says it's reached, the other GitHub repos aren't asked; they keep their last result,
   marked "not rechecked", and a bar says when they can be checked again.
+- **No connection** (or a site that doesn't answer): those repos also keep their last result, marked "(not
+  rechecked)", rather than an error replacing it. The line under the filters says how many couldn't be checked. A
+  repo that fails for a reason of its own (e.g. its branch is gone) says "Couldn't check", with why on hover.
 - **Results** are kept in `~/.local/state/repoproject/checks.json`, apart from the settings file, so the background
   checker and the open window never overwrite each other's changes.
 - **Background:** a systemd user timer (`repoproject-check.timer`) wakes hourly, after a missed hour, and 3 minutes
