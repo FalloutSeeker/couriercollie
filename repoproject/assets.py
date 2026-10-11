@@ -6,6 +6,7 @@ still matches "App-1.3-x86_64.AppImage" in the next release.
 
 import platform
 import re
+import shutil
 from dataclasses import dataclass
 
 KIND_RPM = "RPM"
@@ -43,6 +44,17 @@ _ANY_ARCH = re.compile(r"(x86_64|x86-64|amd64|x64|aarch64|arm64|arm-64|armv7|arm
                        r"loong64|mips64el|mips64|mipsel|mips|sparc64)", re.I)
 
 
+# Package tools on this computer, found once: which package files can be installed here (only RPMs, with dnf, so far).
+PACKAGE_TOOLS: set[str] | None = None
+
+
+def _has(tool: str) -> bool:
+    global PACKAGE_TOOLS
+    if PACKAGE_TOOLS is None:
+        PACKAGE_TOOLS = {t for t in ("dnf", "apt", "pacman", "zypper") if shutil.which(t)}
+    return tool in PACKAGE_TOOLS
+
+
 @dataclass
 class AssetInfo:
     kind: str
@@ -63,6 +75,9 @@ def classify(name: str, url: str = "", machine: str | None = None) -> AssetInfo:
 
 
 def _classify_name(lower: str, machine: str) -> AssetInfo:
+    # An Arch package, before macOS's ".pkg" below.
+    if lower.endswith((".pkg.tar.zst", ".pkg.tar.xz")):
+        return AssetInfo(KIND_OTHER, False, "Arch package: not supported yet" if _has("pacman") else "for Arch Linux")
     # A file belonging to another system's package, e.g. "app-x86_64.apk.idsig": check before the processor type,
     # or "x86_64" would make it look like it fits this PC.
     for ext, system in _FOREIGN_EXT.items():
@@ -74,6 +89,12 @@ def _classify_name(lower: str, machine: str) -> AssetInfo:
         return AssetInfo(KIND_OTHER, False, "checksum or signature")
     if lower.endswith(".src.rpm"):
         return AssetInfo(KIND_OTHER, False, "source package")
+    # Packages for another distro's package manager, or for this one's that the app can't install yet.
+    if lower.endswith(".deb"):
+        return AssetInfo(KIND_OTHER, False, "Debian package: not supported yet" if _has("apt") else
+                         "for Debian/Ubuntu")
+    if lower.endswith(".rpm") and not _has("dnf"):
+        return AssetInfo(KIND_OTHER, False, "RPM: needs dnf")
     if lower.endswith(".rpm"):
         kind = KIND_RPM
     elif lower.endswith(".appimage"):

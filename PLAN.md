@@ -80,9 +80,9 @@ Each update removes the version it replaced once the new one is in place (no Und
   - Known and fine: no taskbar badge on GNOME's dock (Dash to Dock shows it); it looks like a KDE app.
 - **Other distros** (asked for 2026-10-11). Fedora KDE stays the main target; these make the app safe and useful
   elsewhere:
-  - Which package files suit this computer depends on what it has: `.rpm` only where dnf is (today any `.rpm` is
-    offered, and Install fails on Arch); `.deb` where apt is (today always marked "for Debian/Ubuntu"). Arch packages
-    (`.pkg.tar.zst`) are recognised as packages, not unpacked as a program archive.
+  - Done: which package files suit this computer depends on what it has. `.rpm` only where dnf is ("RPM: needs dnf"
+    elsewhere); `.deb` and Arch packages (`.pkg.tar.zst`) are never offered, and say "not supported yet" where apt
+    or pacman is. Arch packages are no longer mistaken for a program archive (or for macOS's `.pkg`).
   - Installing them: `.deb` with apt, Arch packages with pacman, RPMs with zypper on openSUSE (each through pkexec,
     as dnf is now), and the scan finding packages installed from downloaded files with each of those, where the
     package manager can tell.

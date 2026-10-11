@@ -4,6 +4,8 @@ Newest first.
 
 ## 2026-10-11
 
+- Stage 6, other distros: `.rpm` files are offered only where dnf is; `.deb` and Arch packages say "not supported
+  yet" where apt or pacman is (or which distro they're for). Arch packages were mistaken for program archives.
 - Following a branch other than the one your clone is on: instead of "Your version is newer than X", the page says
   "Nothing new on X" (everything on it is already in your clone, likely merged) or that Update can't bring X's commits
   into a clone on another branch, with a **Follow <your clone's branch>** button. Update isn't offered there (it

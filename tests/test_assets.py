@@ -5,6 +5,11 @@ from repoproject.assets import KIND_APPIMAGE, KIND_FILE, KIND_OTHER, KIND_PROGRA
 
 
 class ClassifyTest(unittest.TestCase):
+    def setUp(self):
+        # A Fedora computer, whatever this one is.
+        saved, assets.PACKAGE_TOOLS = assets.PACKAGE_TOOLS, {"dnf"}
+        self.addCleanup(setattr, assets, "PACKAGE_TOOLS", saved)
+
     def check(self, name, kind, suits, url="", machine="x86_64"):
         info = assets.classify(name, url, machine)
         self.assertEqual((info.kind, info.suits), (kind, suits), name)
@@ -26,6 +31,15 @@ class ClassifyTest(unittest.TestCase):
         self.check("eget-1.3.4-linux_386.tar.gz", KIND_PROGRAM, False)
         self.check("someapp-1.5.2.src.rpm", KIND_OTHER, False)
         self.check("checksums.sha256", KIND_OTHER, False)
+
+    def test_package_files_suit_only_where_they_can_be_installed(self):
+        self.assertEqual(self.check("app-1.0-1-x86_64.pkg.tar.zst", KIND_OTHER, False).note, "for Arch Linux")
+        assets.PACKAGE_TOOLS = {"pacman"}  # Arch: RPMs can't be installed, its own packages not yet
+        self.assertEqual(self.check("app-1.0.x86_64.rpm", KIND_OTHER, False).note, "RPM: needs dnf")
+        self.assertIn("not supported yet", self.check("app-1.0-1-x86_64.pkg.tar.zst", KIND_OTHER, False).note)
+        self.check("app-1.0-linux-x86_64.tar.zst", KIND_PROGRAM, True)  # a plain archive is still a program
+        assets.PACKAGE_TOOLS = {"apt"}
+        self.assertIn("not supported yet", self.check("app_1.0_amd64.deb", KIND_OTHER, False).note)
 
     def test_files_that_belong_to_another_systems_package(self):
         # Obtainium (an Android app) ships signature files next to each .apk; "x86_64" in the name mustn't count.
