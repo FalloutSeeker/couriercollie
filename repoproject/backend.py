@@ -209,6 +209,11 @@ def _can_update(repo: TrackedRepo) -> bool:
     return _is_clone(repo) or _is_appimage(repo) or _is_program(repo) or _is_rpm(repo)
 
 
+def _needs_password(repo: TrackedRepo) -> bool:
+    """Whether Update asks for your password: dnf installs an RPM for the whole system; a clone may belong to it."""
+    return _is_rpm(repo) or (_is_clone(repo) and updater.needs_password(repo.local_path))
+
+
 def _on_disk(scanned: bool, local_path: str, releases: bool = False) -> tuple[tuple[str, bool] | None, str]:
     """A scanned repo's (version, still there) and checked-out branch, read from disk. A clone following releases is
     at a release tag, if it's at one."""
@@ -362,6 +367,7 @@ class Backend(QObject):
             "scanned": r.source == config.SOURCE_SCANNED,
             "localPath": r.local_path,
             "canUpdate": _can_update(r),
+            "updateNeedsPassword": _needs_password(r),
             "updating": r.id in self._updating,
             **self._check_dict(r.id),
         }
@@ -1106,7 +1112,7 @@ class Backend(QObject):
             "branchError": d.branch_error,
             "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing,
             "isClone": bool(repo) and _is_clone(repo),
-            "updateNeedsPassword": bool(repo) and (_is_rpm(repo) or (_is_clone(repo) and updater.needs_password(repo.local_path))),
+            "updateNeedsPassword": bool(repo) and _needs_password(repo),
             "isRpm": bool(repo) and _is_rpm(repo),
             "updatePhase": self._phases.get(repo_id, ""),
             "isProgram": bool(repo) and _is_program(repo),

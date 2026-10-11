@@ -189,7 +189,8 @@ Kirigami.ScrollablePage {
                         return "Checking for updates\u2026";
                     const parts = [];
                     if (c.lastChecked)
-                        parts.push(c.updates === 1 ? "1 update" : `${c.updates} updates`, `checked ${c.lastChecked}`);
+                        parts.push(c.updates === 0 ? "All up to date" : c.updates === 1 ? "1 update" : `${c.updates} updates`,
+                                   `checked ${c.lastChecked}`);
                     else
                         parts.push("Not checked yet");
                     parts.push(c.autoCheck ? (c.nextCheck ? `next check ${c.nextCheck}` : "checks automatically")
@@ -633,7 +634,7 @@ Kirigami.ScrollablePage {
                                 icon.name: "update-low"
                                 text: "Update"
                                 display: QQC2.AbstractButton.IconOnly
-                                QQC2.ToolTip.text: "Update"
+                                QQC2.ToolTip.text: row.modelData.updateNeedsPassword ? "Update (asks for your password)" : "Update"
                                 QQC2.ToolTip.visible: hovered
                                 QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
                                 onClicked: backend.updateRepo(row.modelData.id)
