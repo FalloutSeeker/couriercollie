@@ -242,10 +242,10 @@ def _managed_elsewhere(repo_ids: list[str]) -> tuple[str, str, str]:
     version). couriercollie then never updates it (_can_update): two updaters would fight over the same files."""
     if found := packages.managed_by_system(repo_ids):
         tool, _name, version = found
-        return "Your package manager also keeps this up to date.", tool, version
+        return "Your package manager keeps this up to date.", tool, version
     if found := flatpaks.managed_by_flatpak(repo_ids):
         _app_id, version = found
-        return "Flatpak also keeps this up to date.", "Flatpak", version
+        return "Flatpak keeps this up to date.", "Flatpak", version
     return "", "", ""
 
 

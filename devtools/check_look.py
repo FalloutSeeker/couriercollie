@@ -143,7 +143,7 @@ sources.compare = lambda ref, host, yours, head: sources.Comparison(sources.BEHI
     sources.Commit("6" * 40, "Make the start menu open faster")])
 account.password_store = lambda: "KDE Wallet"
 # Not this computer's package manager: only Dolphin is "installed with dnf".
-backend_module._managed_elsewhere = lambda ids: (("Your package manager also keeps this up to date.", "dnf", "26.08.1")
+backend_module._managed_elsewhere = lambda ids: (("Your package manager keeps this up to date.", "dnf", "26.08.1")
                                                  if "github.com/KDE/dolphin" in ids else ("", "", ""))
 
 

@@ -59,7 +59,7 @@ Details:
   When a page learns something newer than the last check (a new commit, say), the list's result updates too.
 - **Installed by the package manager:** if the project is installed from a repository your package manager uses, or
   as a Flatpak from Flathub, it's shown only, never updated here. Two updaters would fight over the same files.
-  - **The page:** a warning ("Your package manager also keeps this up to date."), the installed version, and no
+  - **The page:** a warning ("Your package manager keeps this up to date."), the installed version, and no
     Update, Install, Mark or Set as My Version buttons, nor install scripts.
   - **The list:** "Installed with dnf" (or apt, pacman, zypper, Flatpak), never an update.
   - **Found on every check**, and on opening the page, so a repo never opened is covered too.

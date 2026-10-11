@@ -498,12 +498,12 @@ class ScannedClonePageTest(unittest.TestCase):
         import couriercollie.backend as backend_module
 
         saved = backend_module._managed_elsewhere
-        backend_module._managed_elsewhere = lambda ids: ("Your package manager also keeps this up to date.", "dnf", "1.0")
+        backend_module._managed_elsewhere = lambda ids: ("Your package manager keeps this up to date.", "dnf", "1.0")
         self.addCleanup(setattr, backend_module, "_managed_elsewhere", saved)
         smod = "gitgud.io/aeroshell/smod"
         self.backend.loadDetails(smod, True)
         d = self.backend.details(smod)
-        self.assertEqual(d["managedElsewhere"], "Your package manager also keeps this up to date.")
+        self.assertEqual(d["managedElsewhere"], "Your package manager keeps this up to date.")
         # Even with a version of its own read from disk and new commits upstream: shown only, never updated here.
         self.assertEqual((d["managedBy"], d["statusKind"], d["headline"], d["versionText"]),
                          ("dnf", "managed", "Installed with dnf", "1.0"))
