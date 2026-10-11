@@ -229,11 +229,71 @@ class BackendTest(unittest.TestCase):
 
     def test_filter_and_counts(self):
         self.assertEqual(self.backend.counts, {"all": 2, "github": 1, "gitlab": 1})
-        self.assertEqual([r["name"] for r in self.backend.repos], ["AeroThemePlasma", "LocalSend"])
+        # In the settings file's order, which dragging changes.
+        self.assertEqual([r["name"] for r in self.backend.repos], ["LocalSend", "AeroThemePlasma"])
         self.backend.filter = "gitlab"
         self.assertEqual([r["name"] for r in self.backend.repos], ["AeroThemePlasma"])
         self.backend.filter = "nonsense"
         self.assertEqual(self.backend.filter, "gitlab")
+
+    def rows(self):
+        return [(r["kind"], r.get("label") or r["name"]) for r in self.backend.rows]
+
+    def test_no_headings_until_there_are_categories(self):
+        self.assertEqual(self.rows(), [("repo", "LocalSend"), ("repo", "AeroThemePlasma")])
+
+    def test_adding_categories(self):
+        self.assertEqual(self.backend.addCategory("  Themes "), "")
+        self.assertEqual(self.backend.addCategory("Tools"), "")
+        self.assertIn("already", self.backend.addCategory("themes"))
+        self.assertIn("Uncategorized", self.backend.addCategory("uncategorized"))
+        self.assertIn("name", self.backend.addCategory("  "))
+        self.assertEqual(config.load(self.path).categories, ["Themes", "Tools"])
+        self.assertEqual(self.rows(), [("category", "Uncategorized"), ("repo", "LocalSend"), ("repo", "AeroThemePlasma"),
+                                       ("category", "Themes"), ("category", "Tools")])
+
+    def test_dragging_repos_between_categories(self):
+        self.backend.addCategory("Themes")
+        self.backend.moveRepo(AERO, "Themes", "")
+        self.assertEqual(self.saved(AERO).category, "Themes")
+        self.backend.moveRepo(LOCALSEND, "Themes", AERO)  # dropped above AeroThemePlasma
+        self.assertEqual(self.rows(), [("category", "Uncategorized"),
+                                       ("category", "Themes"), ("repo", "LocalSend"), ("repo", "AeroThemePlasma")])
+        self.assertEqual([r.id for r in config.load(self.path).repos], [LOCALSEND, AERO])
+        self.backend.moveRepo(LOCALSEND, "Themes", "")  # dropped at the end
+        self.assertEqual(self.rows()[2:], [("repo", "AeroThemePlasma"), ("repo", "LocalSend")])
+        self.backend.moveRepo(LOCALSEND, "", "")  # back out
+        self.assertEqual(self.saved(LOCALSEND).category, "")
+        self.backend.moveRepo(LOCALSEND, "No such category", "")
+        self.assertEqual(self.saved(LOCALSEND).category, "")
+
+    def test_counts_follow_the_filter(self):
+        self.backend.addCategory("Themes")
+        self.backend.moveRepo(AERO, "Themes", "")
+        self.backend.filter = "github"
+        heads = [(r["label"], r["count"]) for r in self.backend.rows if r["kind"] == "category"]
+        self.assertEqual(heads, [("Uncategorized", 1), ("Themes", 0)])
+
+    def test_dragging_categories(self):
+        for name in ("A", "B", "C"):
+            self.backend.addCategory(name)
+        self.backend.moveCategory("C", "A")
+        self.assertEqual(self.backend.categories, ["C", "A", "B"])
+        self.backend.moveCategory("C", "")
+        self.assertEqual(config.load(self.path).categories, ["A", "B", "C"])
+
+    def test_deleting_a_category_keeps_its_repos(self):
+        self.backend.addCategory("Themes")
+        self.backend.addCategory("Tools")
+        self.backend.moveRepo(LOCALSEND, "Themes", "")
+        self.backend.deleteCategory("Themes")
+        self.assertEqual(config.load(self.path).categories, ["Tools"])
+        self.assertEqual(self.saved(LOCALSEND).category, "")
+        # It goes to the end of Uncategorized.
+        self.assertEqual(self.rows(), [("category", "Uncategorized"), ("repo", "AeroThemePlasma"), ("repo", "LocalSend"),
+                                       ("category", "Tools")])
+        self.backend.deleteCategory("Tools")
+        self.assertEqual(self.rows(), [("repo", "AeroThemePlasma"), ("repo", "LocalSend")])
 
     def test_remove(self):
         self.backend.removeRepo(AERO)

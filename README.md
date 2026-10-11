@@ -58,6 +58,7 @@ python3 -I devtools/check_settings.py        # the folder list in Settings
 python3 -I devtools/check_scanned_repo.py    # a scanned clone's page: version from disk, new commits, branches
 python3 -I devtools/check_icons.py           # looks up icons for your repos (temporary cache folder)
 python3 -I devtools/check_updates.py         # Check Now, the status line, results, the rate-limit bar
+python3 -I devtools/check_categories.py      # new category, dragging repos and categories, deleting one
 ```
 
 ## Code layout

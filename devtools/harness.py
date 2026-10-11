@@ -71,6 +71,21 @@ class Harness:
             return [p.x, p.y, !!item.checked];
         })""")
 
+        self._box = self.engine.evaluate("""(function (root, name) {
+            function walk(item) {
+                if (item.objectName === name && item.visible) return item;
+                for (let i = 0; i < item.children.length; i++) {
+                    const found = walk(item.children[i]);
+                    if (found) return found;
+                }
+                return null;
+            }
+            const item = walk(root);
+            if (!item) return null;
+            const p = item.mapToItem(null, 0, 0);
+            return [p.x, p.y, item.width, item.height];
+        })""")
+
     def window(self, title):
         """Another open window (e.g. "Settings"), or None."""
         from PySide6.QtGui import QGuiApplication
@@ -92,6 +107,33 @@ class Harness:
             self.fail(f"not visible: {name}")
             return
         QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, QPoint(int(where[0]), int(where[1])))
+
+    def drag(self, name, onto, where=0.5, window=None, before_letting_go=None):
+        """Press on `name`, move in steps to the item `onto` (at `where` of its height: 0.25 for its top half, 0.75
+        for its bottom half), and let go there. `before_letting_go()` runs while it's still held (e.g. a screenshot)."""
+        from PySide6.QtCore import QPoint, Qt
+        from PySide6.QtTest import QTest
+
+        window = window or self.win
+        start, target = self.find(name, window), self._find_box(onto, window)
+        if not start or not target:
+            self.fail(f"not visible: {name if not start else onto}")
+            return
+        x, y = int(start[0]), int(start[1])
+        to_y = int(target[1] + target[3] * where)
+        QTest.mousePress(window, Qt.LeftButton, Qt.NoModifier, QPoint(x, y))
+        for i in range(1, 11):
+            QTest.mouseMove(window, QPoint(x, y + (to_y - y) * i // 10), 10)
+        if before_letting_go:
+            before_letting_go()
+        QTest.mouseRelease(window, Qt.LeftButton, Qt.NoModifier, QPoint(x, to_y))
+
+    def _find_box(self, name, window):
+        """[x, y, width, height] of a visible item, in the window."""
+        where = self.find(name, window)
+        if not where:
+            return None
+        return self._box.call([self.engine.newQObject(window.contentItem()), name]).toVariant()
 
     def call(self, object_name, method):
         from PySide6.QtCore import QMetaObject, QObject

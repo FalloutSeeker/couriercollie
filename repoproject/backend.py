@@ -28,6 +28,8 @@ KIND_ICONS = {
     assets.KIND_VERSIONS: "tag",
 }
 FILTERS = ("all", "github", "gitlab")
+# The heading for repos that aren't in one of your categories.
+UNCATEGORIZED = "Uncategorized"
 
 
 @dataclass
@@ -476,10 +478,31 @@ class Backend(QObject):
 
     # -- the list ---------------------------------------------------------------------------------------------------
 
+    def _sections(self) -> list[tuple[str, list[TrackedRepo]]]:
+        """(category, repos shown in it) in the order they're listed: Uncategorized first, then your categories. Repos
+        keep their order in the settings file, which dragging changes."""
+        shown = [r for r in self._config.repos if self._filter == "all" or r.host == self._filter]
+        return [(c, [r for r in shown if r.category == c]) for c in ["", *self._config.categories]]
+
     @Property("QVariantList", notify=reposChanged)
     def repos(self):
-        shown = [r for r in self._config.repos if self._filter == "all" or r.host == self._filter]
-        return [self._repo_dict(r) for r in sorted(shown, key=lambda r: r.name.lower())]
+        return [self._repo_dict(r) for _, repos in self._sections() for r in repos]
+
+    @Property("QVariantList", notify=reposChanged)
+    def rows(self):
+        """The list as the window shows it: a heading for each category, followed by its repos. Without categories
+        there are no headings, so the list looks as it did before categories."""
+        rows = []
+        for category, repos in self._sections():
+            if self._config.categories:
+                rows.append({"kind": "category", "category": category, "label": category or UNCATEGORIZED,
+                             "count": len(repos), "total": sum(r.category == category for r in self._config.repos)})
+            rows += [{"kind": "repo", "category": category, **self._repo_dict(r)} for r in repos]
+        return rows
+
+    @Property("QVariantList", notify=reposChanged)
+    def categories(self):
+        return list(self._config.categories)
 
     @Property("QVariantMap", notify=reposChanged)
     def counts(self):
@@ -496,6 +519,65 @@ class Backend(QObject):
             self.reposChanged.emit()
 
     filter = Property(str, _get_filter, _set_filter, notify=filterChanged)
+
+    # -- categories -------------------------------------------------------------------------------------------------
+
+    @Slot(str, result=str)
+    def addCategory(self, name):
+        """Adds a category at the end of the list. Returns why it couldn't, or "" if it was added."""
+        name = name.strip()
+        if not name:
+            return "Type a name for the category."
+        if name.lower() == UNCATEGORIZED.lower():
+            return f"\u201c{UNCATEGORIZED}\u201d is where repos without a category go. Choose another name."
+        if any(name.lower() == c.lower() for c in self._config.categories):
+            return f"There\u2019s already a category called \u201c{name}\u201d."
+        self._config.categories.append(name)
+        self._changed()
+        return ""
+
+    @Slot(str)
+    def deleteCategory(self, name):
+        """Deletes a category. Its repos aren't removed: they move to the end of Uncategorized."""
+        if name not in self._config.categories:
+            return
+        self._config.categories.remove(name)
+        moved = [r for r in self._config.repos if r.category == name]
+        for r in moved:
+            r.category = ""
+        self._config.repos = [r for r in self._config.repos if r.category or r not in moved] + moved
+        self._changed()
+
+    @Slot(str, str, str)
+    def moveRepo(self, repo_id, category, before_id):
+        """Moves a repo into `category` ("" for Uncategorized), just before the repo `before_id`, or to the end of the
+        category if that's empty or not in it."""
+        repo = self._config.find(repo_id)
+        if not repo or (category and category not in self._config.categories) or before_id == repo_id:
+            return
+        repos = [r for r in self._config.repos if r is not repo]
+        before = next((i for i, r in enumerate(repos) if r.id == before_id and r.category == category), None)
+        if before is None:
+            last = [i for i, r in enumerate(repos) if r.category == category]
+            before = last[-1] + 1 if last else len(repos)
+        repos.insert(before, repo)
+        if repos == self._config.repos and repo.category == category:
+            return
+        repo.category = category
+        self._config.repos = repos
+        self._changed()
+
+    @Slot(str, str)
+    def moveCategory(self, name, before):
+        """Moves a category to just before the category `before`, or to the end if that's empty."""
+        cats = self._config.categories
+        if name not in cats or name == before:
+            return
+        rest = [c for c in cats if c != name]
+        rest.insert(rest.index(before) if before in rest else len(rest), name)
+        if rest != cats:
+            self._config.categories = rest
+            self._changed()
 
     @Property(str, constant=True)
     def configError(self):

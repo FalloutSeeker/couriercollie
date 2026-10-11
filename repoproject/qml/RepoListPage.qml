@@ -13,6 +13,18 @@ Kirigami.ScrollablePage {
     actions: backend.settings.scanning ? [addAction, scanAction, checkAction, settingsAction]
                                        : [addAction, checkAction, settingsAction]
 
+    function askDelete(heading) {
+        // An empty category goes straight away; one with repos asks first. Later, so the heading's button isn't
+        // deleted with the list's rows while it's still handling the click.
+        if (heading.total === 0) {
+            Qt.callLater(backend.deleteCategory, heading.category);
+            return;
+        }
+        deleteDialog.category = heading.category;
+        deleteDialog.total = heading.total;
+        deleteDialog.open();
+    }
+
     Kirigami.Action {
         id: addAction
 
@@ -107,6 +119,14 @@ Kirigami.ScrollablePage {
                 Item {
                     Layout.fillWidth: true
                 }
+
+                // Here rather than with the page's actions, where it would push Check Now into the overflow menu.
+                QQC2.ToolButton {
+                    objectName: "newCategory"
+                    icon.name: "folder-new"
+                    text: "New Category…"
+                    onClicked: newCategoryDialog.open()
+                }
             }
         }
 
@@ -175,105 +195,383 @@ Kirigami.ScrollablePage {
         }
     }
 
+    // The handle for dragging a repo or category. While it's held, the list shows where it would go; the move is
+    // made when it's let go.
+    component DragHandle: Kirigami.Icon {
+        id: handle
+
+        required property ListView view
+        required property var what
+
+        source: "handle-sort"
+        implicitWidth: Kirigami.Units.iconSizes.smallMedium
+        implicitHeight: Kirigami.Units.iconSizes.smallMedium
+        opacity: area.containsMouse || area.pressed ? 1 : 0.6
+
+        MouseArea {
+            id: area
+
+            function yInList(mouse) {
+                return mapToItem(handle.view.contentItem, mouse.x, mouse.y).y;
+            }
+
+            anchors.fill: parent
+            anchors.margins: -Kirigami.Units.smallSpacing
+            hoverEnabled: true
+            preventStealing: true
+            cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+            onPressed: mouse => handle.view.startDrag(handle.what, yInList(mouse))
+            onPositionChanged: mouse => {
+                if (pressed)
+                    handle.view.moveDrag(yInList(mouse));
+            }
+            onReleased: handle.view.endDrag(true)
+            onCanceled: handle.view.endDrag(false)
+        }
+    }
+
+    Kirigami.PromptDialog {
+        id: deleteDialog
+
+        objectName: "deleteCategoryDialog"
+
+        property string category
+        property int total
+
+        title: `Delete \u201c${category}\u201d?`
+        subtitle: (total === 1 ? "Its repo moves to Uncategorized and stays tracked."
+                               : `Its ${total} repos move to Uncategorized and stay tracked.`) +
+                  " Nothing on this computer is changed."
+        standardButtons: Kirigami.Dialog.NoButton
+        customFooterActions: [
+            Kirigami.Action {
+                text: "Delete Category"
+                icon.name: "edit-delete"
+                onTriggered: deleteDialog.accept()
+            },
+            Kirigami.Action {
+                text: "Cancel"
+                icon.name: "dialog-cancel"
+                onTriggered: deleteDialog.reject()
+            }
+        ]
+        onAccepted: backend.deleteCategory(category)
+    }
+
+    NewCategoryDialog {
+        id: newCategoryDialog
+    }
+
     ListView {
         id: list
 
-        model: backend.repos
+        // While something is dragged: what it is ({ kind, id, category, label }), the pointer's height in the list,
+        // and where it would go if let go here ({ category, before, lineY }), or null for nowhere new.
+        property var dragged: null
+        property real dragY: 0
+        property var drop: null
 
-        delegate: QQC2.ItemDelegate {
+        // The repo just after row i in the same category, or "" if row i is the category's last.
+        function nextRepo(i) {
+            const next = model[i + 1];
+            return next && next.kind === "repo" ? next.id : "";
+        }
+
+        function headingY(category) {
+            const i = model.findIndex(r => r.kind === "category" && r.category === category);
+            const item = i >= 0 ? itemAtIndex(i) : null;
+            return item ? item.y : -1;
+        }
+
+        function dropFor(y) {
+            const rows = model;
+            if (!dragged || rows.length === 0)
+                return null;
+            let i = indexAt(width / 2, y);
+            const pastEnd = i < 0 && y >= 0;
+            if (i < 0)
+                i = y < 0 ? 0 : rows.length - 1;
+            const row = rows[i], item = itemAtIndex(i);
+            if (!item)
+                return null;
+            const top = item.y, bottom = item.y + item.height;
+            if (dragged.kind === "repo") {
+                // Onto a heading: the top of that category. Onto a repo: above or below it, by which half.
+                if (row.kind === "repo" && !pastEnd && y < (top + bottom) / 2)
+                    return { category: row.category, before: row.id, lineY: top };
+                return { category: row.category, before: nextRepo(i), lineY: bottom };
+            }
+            // A category goes before the one pointed at if that's above it, or after it if it's below.
+            // Uncategorized always stays first.
+            const cats = backend.categories;
+            const from = cats.indexOf(dragged.category), at = cats.indexOf(row.category);
+            const to = at < from ? Math.max(at, 0) : at + 1;
+            if (at === from || to === from)
+                return null;
+            const before = to < cats.length ? cats[to] : "";
+            return { category: "", before: before, lineY: before ? headingY(before) : contentHeight + originY };
+        }
+
+        function startDrag(what, y) {
+            dragged = what;
+            moveDrag(y);
+        }
+
+        function moveDrag(y) {
+            dragY = y;
+            drop = dropFor(y);
+        }
+
+        function endDrag(commit) {
+            const what = dragged, where = drop;
+            dragged = null;
+            drop = null;
+            if (!commit || !what || !where)
+                return;
+            // Later, so the rows aren't rebuilt while the handle that was let go is still handling it.
+            if (what.kind === "repo")
+                Qt.callLater(backend.moveRepo, what.id, where.category, where.before);
+            else
+                Qt.callLater(backend.moveCategory, what.category, where.before);
+        }
+
+        model: backend.rows
+        // The rows are rebuilt when the list changes (e.g. a check finishes), which drops a drag in progress.
+        onModelChanged: dragged = drop = null
+
+        delegate: Loader {
             id: row
 
             required property var modelData
 
             width: ListView.view.width
-            highlighted: applicationWindow().currentRepoId === modelData.id
-            onClicked: applicationWindow().openRepo(modelData.id)
+            sourceComponent: modelData.kind === "category" ? headingRow : repoRow
+            // What's being dragged is dimmed: a repo, or a category with its repos.
+            opacity: {
+                const d = list.dragged;
+                if (!d)
+                    return 1;
+                const mine = d.kind === "repo" ? modelData.id === d.id : modelData.category === d.category;
+                return mine ? 0.4 : 1;
+            }
 
-            contentItem: RowLayout {
-                spacing: Kirigami.Units.largeSpacing
-
-                // The repo's icon (icons.py), with a corner mark when it was found on this computer by a scan.
-                Item {
-                    Layout.preferredWidth: Kirigami.Units.iconSizes.medium
-                    Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-
-                    Kirigami.Icon {
-                        anchors.fill: parent
-                        source: row.modelData.icon
-                    }
-
-                    Kirigami.Icon {
-                        objectName: "scannedMark:" + row.modelData.id
-                        visible: row.modelData.scanned
-                        source: "emblem-mounted"
-                        width: Kirigami.Units.iconSizes.small
-                        height: Kirigami.Units.iconSizes.small
-                        anchors.right: parent.right
-                        anchors.bottom: parent.bottom
-                        anchors.rightMargin: -Kirigami.Units.smallSpacing
-                        anchors.bottomMargin: -Kirigami.Units.smallSpacing
-                    }
-                }
+            Component {
+                id: headingRow
 
                 ColumnLayout {
-                    Layout.fillWidth: true
+                    objectName: "category:" + row.modelData.label
                     spacing: 0
 
-                    QQC2.Label {
+                    RowLayout {
                         Layout.fillWidth: true
-                        text: row.modelData.name
-                        font.bold: true
-                        elide: Text.ElideRight
-                    }
+                        Layout.minimumHeight: Kirigami.Units.iconSizes.medium
+                        Layout.topMargin: Kirigami.Units.largeSpacing
+                        Layout.leftMargin: Kirigami.Units.largeSpacing
+                        Layout.rightMargin: Kirigami.Units.smallSpacing
+                        spacing: Kirigami.Units.smallSpacing
 
-                    QQC2.Label {
-                        Layout.fillWidth: true
-                        text: `${row.modelData.hostLabel} · ${row.modelData.domain}/${row.modelData.path}`
-                        font: Kirigami.Theme.smallFont
-                        opacity: 0.7
-                        elide: Text.ElideMiddle
-                    }
-
-                    QQC2.Label {
-                        Layout.fillWidth: true
-                        text: row.modelData.followText
-                        font: Kirigami.Theme.smallFont
-                        opacity: 0.7
-                        elide: Text.ElideMiddle
-                    }
-                }
-
-                // The last check's result; an update gets the update icon.
-                ColumnLayout {
-                    Layout.maximumWidth: Kirigami.Units.gridUnit * 10
-                    visible: row.modelData.checkText !== ""
-                    spacing: 0
-
-                    Kirigami.Icon {
-                        objectName: "updateIcon:" + row.modelData.id
-                        Layout.alignment: Qt.AlignRight
-                        visible: row.modelData.updateAvailable
-                        source: "update-low"
-                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
-                    }
-
-                    QQC2.Label {
-                        Layout.alignment: Qt.AlignRight
-                        Layout.maximumWidth: Kirigami.Units.gridUnit * 10
-                        horizontalAlignment: Text.AlignRight
-                        // Bold through the text itself: setting font.bold here would replace the small font.
-                        text: {
-                            const t = row.modelData.checkText.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-                            return row.modelData.updateAvailable ? `<b>${t}</b>` : t;
+                        DragHandle {
+                            objectName: "dragCategory:" + row.modelData.category
+                            visible: row.modelData.category !== ""
+                            view: list
+                            what: ({ kind: "category", id: "", category: row.modelData.category,
+                                     label: row.modelData.label })
                         }
-                        textFormat: Text.StyledText
-                        font: Kirigami.Theme.smallFont
-                        opacity: row.modelData.updateAvailable ? 1 : 0.7
-                        wrapMode: Text.Wrap
-                        maximumLineCount: 2
-                        elide: Text.ElideRight
+
+                        Kirigami.Heading {
+                            Layout.fillWidth: true
+                            level: 4
+                            text: `${row.modelData.label} <font color="${Kirigami.Theme.disabledTextColor}">${row.modelData.count}</font>`
+                            textFormat: Text.StyledText
+                            elide: Text.ElideRight
+                        }
+
+                        QQC2.ToolButton {
+                            objectName: "deleteCategory:" + row.modelData.category
+                            visible: row.modelData.category !== ""
+                            icon.name: "edit-delete"
+                            text: "Delete Category"
+                            display: QQC2.AbstractButton.IconOnly
+                            QQC2.ToolTip.text: text
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                            onClicked: page.askDelete(row.modelData)
+                        }
                     }
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: Kirigami.Units.largeSpacing + Kirigami.Units.iconSizes.smallMedium + Kirigami.Units.smallSpacing
+                        Layout.bottomMargin: Kirigami.Units.smallSpacing
+                        visible: row.modelData.total === 0 && row.modelData.category !== ""
+                        text: "Empty. Drag repos here by their handles."
+                        font: Kirigami.Theme.smallFont
+                        opacity: 0.7
+                        wrapMode: Text.Wrap
+                    }
+
+                    Kirigami.Separator {
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+        Component {
+            id: repoRow
+
+            QQC2.ItemDelegate {
+                objectName: "repo:" + row.modelData.id
+                highlighted: applicationWindow().currentRepoId === row.modelData.id
+                onClicked: applicationWindow().openRepo(row.modelData.id)
+
+                contentItem: RowLayout {
+                    spacing: Kirigami.Units.largeSpacing
+
+                    DragHandle {
+                        objectName: "dragRepo:" + row.modelData.id
+                        view: list
+                        what: ({ kind: "repo", id: row.modelData.id, category: row.modelData.category,
+                                 label: row.modelData.name })
+                    }
+
+                    // The repo's icon (icons.py), with a corner mark when it was found on this computer by a scan.
+                    Item {
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.medium
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.medium
+
+                        Kirigami.Icon {
+                            anchors.fill: parent
+                            source: row.modelData.icon
+                        }
+
+                        Kirigami.Icon {
+                            objectName: "scannedMark:" + row.modelData.id
+                            visible: row.modelData.scanned
+                            source: "emblem-mounted"
+                            width: Kirigami.Units.iconSizes.small
+                            height: Kirigami.Units.iconSizes.small
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.rightMargin: -Kirigami.Units.smallSpacing
+                            anchors.bottomMargin: -Kirigami.Units.smallSpacing
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: row.modelData.name
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: `${row.modelData.hostLabel} · ${row.modelData.domain}/${row.modelData.path}`
+                            font: Kirigami.Theme.smallFont
+                            opacity: 0.7
+                            elide: Text.ElideMiddle
+                        }
+
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: row.modelData.followText
+                            font: Kirigami.Theme.smallFont
+                            opacity: 0.7
+                            elide: Text.ElideMiddle
+                        }
+                    }
+
+                    // The last check's result; an update gets the update icon.
+                    ColumnLayout {
+                        Layout.maximumWidth: Kirigami.Units.gridUnit * 10
+                        visible: row.modelData.checkText !== ""
+                        spacing: 0
+
+                        Kirigami.Icon {
+                            objectName: "updateIcon:" + row.modelData.id
+                            Layout.alignment: Qt.AlignRight
+                            visible: row.modelData.updateAvailable
+                            source: "update-low"
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                            Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                        }
+
+                        QQC2.Label {
+                            Layout.alignment: Qt.AlignRight
+                            Layout.maximumWidth: Kirigami.Units.gridUnit * 10
+                            horizontalAlignment: Text.AlignRight
+                            // Bold through the text itself: setting font.bold here would replace the small font.
+                            text: {
+                                const t = row.modelData.checkText.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+                                return row.modelData.updateAvailable ? `<b>${t}</b>` : t;
+                            }
+                            textFormat: Text.StyledText
+                            font: Kirigami.Theme.smallFont
+                            opacity: row.modelData.updateAvailable ? 1 : 0.7
+                            wrapMode: Text.Wrap
+                            maximumLineCount: 2
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+            }
+            }
+        }
+
+        // Where a dragged repo or category would go.
+        Rectangle {
+            z: 10
+            visible: list.drop !== null && list.drop.lineY >= 0
+            y: list.drop ? list.drop.lineY - height / 2 : 0
+            width: list.width
+            height: 3
+            color: Kirigami.Theme.highlightColor
+        }
+
+        // A label that follows the pointer while dragging.
+        Rectangle {
+            z: 11
+            visible: list.dragged !== null
+            x: Kirigami.Units.gridUnit * 2
+            y: list.dragY - height / 2
+            width: Math.min(dragLabel.implicitWidth + Kirigami.Units.largeSpacing * 2, list.width - x * 2)
+            height: dragLabel.implicitHeight + Kirigami.Units.smallSpacing * 2
+            radius: Kirigami.Units.cornerRadius
+            color: Kirigami.Theme.backgroundColor
+            border.color: Kirigami.Theme.highlightColor
+
+            QQC2.Label {
+                id: dragLabel
+
+                anchors.centerIn: parent
+                width: parent.width - Kirigami.Units.largeSpacing * 2
+                text: list.dragged ? list.dragged.label : ""
+                font.bold: true
+                elide: Text.ElideRight
+            }
+        }
+
+        // Near the top or bottom while dragging, the list scrolls.
+        Timer {
+            running: list.dragged !== null
+            interval: 30
+            repeat: true
+            onTriggered: {
+                const edge = Kirigami.Units.gridUnit * 2, inView = list.dragY - list.contentY;
+                let step = 0;
+                if (inView < edge)
+                    step = -Math.ceil((edge - inView) / 4);
+                else if (inView > list.height - edge)
+                    step = Math.ceil((inView - list.height + edge) / 4);
+                const lowest = Math.max(list.originY, list.originY + list.contentHeight - list.height);
+                const to = Math.max(list.originY, Math.min(lowest, list.contentY + step));
+                if (to !== list.contentY) {
+                    list.moveDrag(list.dragY + to - list.contentY);
+                    list.contentY = to;
                 }
             }
         }

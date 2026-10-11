@@ -67,11 +67,15 @@ class TrackedRepo:
     # The icon found for it (icons.py): "theme:<name>", "file:<path>", "-" for none. Empty until looked up, which
     # happens once.
     icon: str = ""
+    # The category it's in (one of Config.categories), or empty for Uncategorized.
+    category: str = ""
 
 
 @dataclass
 class Config:
     settings: Settings = field(default_factory=Settings)
+    # Your categories, in the order they're shown. Repos are shown in the order of `repos` within each one.
+    categories: list[str] = field(default_factory=list)
     repos: list[TrackedRepo] = field(default_factory=list)
 
     def find(self, repo_id: str) -> TrackedRepo | None:
@@ -144,7 +148,23 @@ def load(path: Path | None = None) -> Config:
         repos = [_from_dict(TrackedRepo, r) for r in repos_data]
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, TypeError) as e:
         raise ConfigError(f"Couldn’t read {path}: {e}") from e
-    return Config(settings=settings, repos=repos)
+    if "categories" not in data:
+        # Saved before categories existed, when the list was sorted by name. Keep that order; it can be dragged from
+        # here on.
+        repos.sort(key=lambda r: r.name.lower())
+    return Config(settings=settings, categories=_categories(data.get("categories"), repos), repos=repos)
+
+
+def _categories(saved, repos: list[TrackedRepo]) -> list[str]:
+    """The saved categories without blanks or repeats. A repo in a category that isn't listed (a hand-edited file)
+    gets that category added, rather than quietly losing it."""
+    names: list[str] = []
+    for name in (saved if isinstance(saved, list) else []) + [r.category for r in repos]:
+        if isinstance(name, str) and name.strip() and name.strip().lower() not in (n.lower() for n in names):
+            names.append(name.strip())
+    for r in repos:
+        r.category = next((n for n in names if n.lower() == r.category.strip().lower()), "") if r.category else ""
+    return names
 
 
 def reset(path: Path | None = None) -> Path | None:
@@ -161,7 +181,8 @@ def reset(path: Path | None = None) -> Path | None:
 def save(config: Config, path: Path | None = None) -> None:
     path = path or default_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    text = tomlwrite.dumps({"settings": asdict(config.settings), "repos": [asdict(r) for r in config.repos]})
+    text = tomlwrite.dumps({"categories": config.categories, "settings": asdict(config.settings),
+                            "repos": [asdict(r) for r in config.repos]})
     # Write to a temporary file and rename, so a crash mid-write can't leave a half-written settings file.
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(text, encoding="utf-8")

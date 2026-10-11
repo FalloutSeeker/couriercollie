@@ -107,6 +107,32 @@ class ConfigTest(unittest.TestCase):
         self.assertIsNotNone(cfg.find_any("GITGUD.IO/aeroshell/atp/aerothemeplasma"))
         self.assertIsNone(cfg.find_any("gitgud.io/someone/else"))
 
+    def test_categories_and_repo_order_are_kept(self):
+        cfg = Config(categories=["Themes", "Tools"], repos=[
+            TrackedRepo(id="a/b/z", name="Zed", url="", host="github", category="Tools"),
+            TrackedRepo(id="a/b/a", name="Aero", url="", host="github"),
+        ])
+        config.save(cfg, self.path)
+        self.assertEqual(config.load(self.path), cfg)
+
+    def test_file_from_before_categories_keeps_its_order_by_name(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text('[[repos]]\nid = "a/b/z"\nname = "zed"\nurl = ""\nhost = "github"\n\n'
+                             '[[repos]]\nid = "a/b/a"\nname = "Aero"\nurl = ""\nhost = "github"\n')
+        cfg = config.load(self.path)
+        self.assertEqual([r.name for r in cfg.repos], ["Aero", "zed"])
+        self.assertEqual(cfg.categories, [])
+
+    def test_hand_edited_categories_are_tidied(self):
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text('categories = ["Tools", " ", "tools", 3]\n\n'
+                             '[[repos]]\nid = "a/b/c"\nname = "C"\nurl = ""\nhost = "github"\ncategory = "TOOLS"\n\n'
+                             '[[repos]]\nid = "a/b/d"\nname = "D"\nurl = ""\nhost = "github"\ncategory = "Games"\n')
+        cfg = config.load(self.path)
+        # Blanks and repeats dropped; a category only a repo mentions is added, so the repo doesn't lose it.
+        self.assertEqual(cfg.categories, ["Tools", "Games"])
+        self.assertEqual([r.category for r in cfg.repos], ["Tools", "Games"])
+
     def test_find(self):
         cfg = Config(repos=[TrackedRepo(id="a/b/c", name="C", url="", host="github")])
         self.assertEqual(cfg.find("a/b/c").name, "C")

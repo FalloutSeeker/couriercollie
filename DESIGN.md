@@ -39,6 +39,11 @@ Anything already looked after by dnf or Flatpak is left out, since those update 
 > On this machine today, a scan would find 11 git clones (10 AeroThemePlasma repos and `ultrakanban`) and no
 > AppImages or GitHub RPMs.
 
+### 1b. Categories
+
+The list can be sorted into categories of your own, by dragging (DECISIONS.md, D14). Repos in none are under
+"Uncategorized". Deleting a category keeps its repos.
+
 ### 2. Add a repo by hand
 
 **Add** asks for:

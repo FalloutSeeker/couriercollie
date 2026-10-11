@@ -26,7 +26,8 @@ GitHub and GitLab (which includes gitgud.io, where the AeroThemePlasma repos are
 - **a) Build files**: one release ships several files (RPM, AppImage, ARM, Intel…). You pick one to follow.
 - **b) Branches**: for repos without releases, e.g. AeroThemePlasma's `Plasma/6.7` and `master`. You pick one.
 
-**Status:** decided 2026-10-10. Both a) and b). Grouping related repos together isn't planned.
+**Status:** decided 2026-10-10. Both a) and b). Grouping related repos together isn't planned (since
+2026-10-11, repos can be sorted into categories of your own: D14).
 
 ## D4. How updates get installed
 
@@ -170,3 +171,19 @@ Scanned repos also get a corner mark (`emblem-mounted`: found on this computer).
 
 **Status:** decided 2026-10-10.
 
+## D14. Categories
+
+Your own categories for sorting the list, e.g. "Themes" and "Tools".
+
+- **New Category…** (right of the filters) adds one at the bottom. Names are unique, ignoring upper/lower case.
+- **Drag** a repo by its handle onto a category's heading (to the top of it) or above/below another repo. Drag a
+  category by its handle to move it, with its repos. A line shows where it will land.
+- **Delete** (the heading's button) never removes repos: they move to the end of Uncategorized, and stay tracked. A
+  category with repos asks first; an empty one goes straight away.
+- A repo is in one category at most. Repos in none are under **Uncategorized**, which is always first and can't be
+  moved or deleted. Until there's a category, there are no headings and the list looks as before.
+- The order is yours: it's the order in the settings file. Files from before categories keep their order by name; new
+  repos go to the end of Uncategorized.
+- The All / GitHub / GitLab filter still applies; headings stay, with the number shown.
+
+**Status:** decided 2026-10-11.
