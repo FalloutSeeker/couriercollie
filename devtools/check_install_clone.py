@@ -45,7 +45,7 @@ from PySide6.QtCore import QObject  # noqa: E402
 
 from repoproject import sources  # noqa: E402
 
-sources.releases = lambda ref, host: []
+sources.releases = lambda ref, host, **_: []
 sources.branches = lambda ref: ("main", [sources.Branch("main", newest)])
 
 

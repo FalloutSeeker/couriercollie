@@ -34,9 +34,9 @@ class Fakes:
             raise sources.RateLimited("github.com says too many requests were made.",
                                       datetime(2026, 10, 11, 2, 24, tzinfo=timezone.utc))
 
-    def get_releases(self, ref, host):
+    def get_releases(self, ref, host, count=sources.RELEASES_PER_PAGE):
         self._ask("releases", ref)
-        return self.releases[ref.id]
+        return self.releases[ref.id][:count]
 
     def get_branches(self, ref):
         return "main", self.branches[ref.id]  # git ls-remote: not a request to the API
@@ -72,6 +72,16 @@ class CheckRepoTest(unittest.TestCase):
         self.check(repo("github.com/a/app", installed="v1.18.2"))
         self.assertEqual(self.fakes.requests, [("releases", "github.com/a/app")])
 
+    def test_only_a_few_releases_are_asked_for_unless_theyre_all_pre_releases(self):
+        self.fakes.releases["github.com/a/betas"] = [release(f"v2.0-beta{i}", True) for i in range(9, 0, -1)] + \
+            [release("v1.0")]
+        result = self.check(repo("github.com/a/betas", installed="v1.0"))
+        self.assertEqual((result.status, result.newest), (checker.UP_TO_DATE, "v1.0"))
+        self.assertEqual(len(self.fakes.requests), 2)  # 5 betas, then the full list
+        self.fakes.requests.clear()
+        self.check(repo("github.com/a/betas", installed="v1.0", prereleases=True))
+        self.assertEqual(len(self.fakes.requests), 1)
+
     def test_no_releases(self):
         self.fakes.releases["github.com/a/empty"] = []
         self.assertEqual(self.check(repo("github.com/a/empty", installed="-")).status, checker.NO_RELEASES)
@@ -98,7 +108,7 @@ class CheckRepoTest(unittest.TestCase):
             self.assertEqual(self.check(r).status, checker.UP_TO_DATE)
 
     def test_problems(self):
-        def broken(ref, host):
+        def broken(ref, host, **_):
             raise sources.SourceError("Couldn’t reach github.com. Check your internet connection.")
 
         sources.releases = broken

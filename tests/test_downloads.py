@@ -131,7 +131,7 @@ class InstallClickedTest(AppImageCase):
         self.backend._run = lambda work, done: done(*self._attempt(work))
         release = Release("v2.0", "v2.0", None, False, "", "", [self.asset()])
         self.saved = sources.releases
-        sources.releases = lambda ref, host: [release]
+        sources.releases = lambda ref, host, **_: [release]
 
     def tearDown(self):
         sources.releases = self.saved
@@ -279,7 +279,7 @@ class ProgramClickedTest(InstallClickedTest):
         self.backend._run = lambda work, done: done(*self._attempt(work))
         release = Release("v2.0", "v2.0", None, False, "", "", [Asset("pair-2.0.tar.gz", self.url + "pair-2.0.tar.gz")])
         self.saved = sources.releases
-        sources.releases = lambda ref, host: [release]
+        sources.releases = lambda ref, host, **_: [release]
 
     def test_install_puts_it_in_applications_with_a_menu_entry(self):
         pass  # (an AppImage test; not for programs)
@@ -368,7 +368,7 @@ class RpmTest(AppImageCase):
         backend._run = lambda work, done: done(*InstallClickedTest._attempt(work))
         release = Release("v2.0", "v2.0", None, False, "", "", [self.asset()])
         saved = sources.releases
-        sources.releases = lambda ref, host: [release]
+        sources.releases = lambda ref, host, **_: [release]
         self.addCleanup(setattr, sources, "releases", saved)
         self.assertTrue(backend.details("github.com/a/tool")["updateNeedsPassword"])
         backend.updateRepo("github.com/a/tool")
@@ -388,7 +388,7 @@ class RpmTest(AppImageCase):
         backend._run = lambda work, done: done(*InstallClickedTest._attempt(work))
         release = Release("v2.0", "v2.0", None, False, "", "", [self.asset()])
         saved = sources.releases
-        sources.releases = lambda ref, host: [release]
+        sources.releases = lambda ref, host, **_: [release]
         self.addCleanup(setattr, sources, "releases", saved)
         backend.updateRepo("github.com/a/tool")
         self.assertIn("not “other” that you have", backend.details("github.com/a/tool")["updateNote"])

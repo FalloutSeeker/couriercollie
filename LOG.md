@@ -4,6 +4,8 @@ Newest first.
 
 ## 2026-10-11
 
+- Checks ask for the newest 5 releases instead of 30 (more only if those are all pre-releases you don't follow):
+  each release comes with its notes and file list, so a check of LocalSend went from 572 KB to 160 KB.
 - Scan folders a scan would skip say why in Settings ("You can't open this folder", "Not found"), and the scan's
   results list them. Scans never ask for a password; unreadable folders were skipped silently before.
 - Install for projects added by hand that follow a branch (or releases with nothing to download for this computer):

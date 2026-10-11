@@ -121,7 +121,7 @@ class CheckCommandTest(TempHome):
         self.asked = []
         saved = sources.releases
         self.addCleanup(setattr, sources, "releases", saved)
-        sources.releases = lambda ref, host: self.asked.append(ref.id) or [sources.Release("v2", "v2", None, False,
+        sources.releases = lambda ref, host, **_: self.asked.append(ref.id) or [sources.Release("v2", "v2", None, False,
                                                                                             "", "")]
 
     def test_checks_and_saves_when_the_app_isnt_open(self):
@@ -157,7 +157,7 @@ class CheckNowTest(unittest.TestCase):
         self.backend._run = lambda work, done: done(work(), None)
         saved = sources.releases
         self.addCleanup(setattr, sources, "releases", saved)
-        sources.releases = lambda ref, host: [sources.Release("v2", "v2", None, False, "", "")]
+        sources.releases = lambda ref, host, **_: [sources.Release("v2", "v2", None, False, "", "")]
 
     def tearDown(self):
         self.backend.shutdown()

@@ -326,11 +326,12 @@ def _is_gitlab(domain: str, get) -> bool:
         return False
 
 
-def releases(ref: RepoRef, host: str, get=http_get_json) -> list[Release]:
+def releases(ref: RepoRef, host: str, get=http_get_json, count: int = RELEASES_PER_PAGE) -> list[Release]:
+    """The newest `count` releases, newest first."""
     if host == "github":
-        data = get(f"https://api.github.com/repos/{ref.path}/releases?per_page={RELEASES_PER_PAGE}", _GITHUB_HEADERS)
+        data = get(f"https://api.github.com/repos/{ref.path}/releases?per_page={count}", _GITHUB_HEADERS)
         return parse_github_releases(data)
-    data = get(f"{_gitlab_api(ref.domain, ref.path)}/releases?per_page={RELEASES_PER_PAGE}")
+    data = get(f"{_gitlab_api(ref.domain, ref.path)}/releases?per_page={count}")
     return parse_gitlab_releases(ref.domain, ref.path, data)
 
 

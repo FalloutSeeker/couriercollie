@@ -52,7 +52,7 @@ from PySide6.QtCore import QObject  # noqa: E402
 from repoproject import checker, sources, updater  # noqa: E402
 
 releases = []  # the project's releases, as the site would list them; one is added later
-sources.releases = lambda ref, host: list(releases)
+sources.releases = lambda ref, host, **_: list(releases)
 sources.branches = lambda ref: ("main", [sources.Branch("main", newest)])
 sources.compare = lambda ref, host, yours, head: sources.Comparison(
     sources.SAME if yours == head else sources.BEHIND, 2, [sources.Commit(newest, "change 2")])
