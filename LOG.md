@@ -4,6 +4,9 @@ Newest first.
 
 ## 2026-10-10
 
+- "Your version" is no longer a dropdown (it repeated the "your version" tag in the releases list). It's shown as
+  text; you set it from the releases list ("This is my version" in an opened release) or with "Mark as up to date"
+  and "Mark as not installed".
 - Only files that run on this computer can be chosen. Projects with nothing for this computer (Obtainium: Android
   only) are tracked by version only: no picker, a "Tracking versions only" explanation, and "Versions only" in the
   list. A saved pick of a file for another system is dropped the next time the repo's releases load.

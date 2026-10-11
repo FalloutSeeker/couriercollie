@@ -15,6 +15,8 @@ Kirigami.ScrollablePage {
     property var expanded: ({})
     readonly property bool followsReleases: repo.follow === "releases"
     readonly property bool ready: details.state === "ready"
+    readonly property bool canMarkUpToDate: ready && details.status !== "" && details.status !== "Up to date"
+    readonly property bool canMarkNotInstalled: ready && details.versionText !== "" && details.installed !== "-"
 
     function reload() {
         repo = backend.repo(repoId);
@@ -153,12 +155,12 @@ Kirigami.ScrollablePage {
                 opacity: 0.7
             }
 
-            QQC2.ComboBox {
+            // Set from the releases list ("This is my version"), or with the buttons below.
+            QQC2.Label {
                 Kirigami.FormData.label: "Your version:"
-                visible: page.ready && page.details.versionOptions.length > 0
-                model: page.details.versionOptions.map(o => o.label)
-                currentIndex: page.details.versionIndex
-                onActivated: index => backend.setInstalled(page.repoId, page.details.versionOptions[index].value)
+                visible: page.ready && page.details.versionText !== ""
+                text: page.details.versionText
+                font.bold: true
             }
 
             QQC2.Label {
@@ -171,12 +173,25 @@ Kirigami.ScrollablePage {
                 wrapMode: Text.Wrap
             }
 
-            QQC2.Button {
-                objectName: "markUpToDate"
-                visible: page.ready && page.details.status !== "" && page.details.status !== "Up to date"
-                text: "Mark as up to date"
-                icon.name: "dialog-ok-apply"
-                onClicked: backend.markUpToDate(page.repoId)
+            RowLayout {
+                visible: page.canMarkUpToDate || page.canMarkNotInstalled
+
+                QQC2.Button {
+                    objectName: "markUpToDate"
+                    visible: page.canMarkUpToDate
+                    text: "Mark as up to date"
+                    icon.name: "dialog-ok-apply"
+                    onClicked: backend.markUpToDate(page.repoId)
+                }
+
+                QQC2.Button {
+                    objectName: "markNotInstalled"
+                    visible: page.canMarkNotInstalled
+                    flat: true
+                    text: "Mark as not installed"
+                    icon.name: "edit-clear"
+                    onClicked: backend.setInstalled(page.repoId, "-")
+                }
             }
 
             QQC2.CheckBox {
@@ -363,6 +378,14 @@ Kirigami.ScrollablePage {
                             : release.yourFile ? `Your file: ${release.yourFile.name}` + (release.yourFile.details ? ` (${release.yourFile.details})` : "")
                             : "Your file isn't in this release."
                         wrapMode: Text.Wrap
+                    }
+
+                    QQC2.Button {
+                        objectName: "mine:" + release.modelData.tag
+                        visible: !release.modelData.isInstalled
+                        text: "This is my version"
+                        icon.name: "tag"
+                        onClicked: backend.setInstalled(page.repoId, release.modelData.tag)
                     }
 
                     QQC2.Button {

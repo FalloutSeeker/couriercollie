@@ -413,7 +413,7 @@ class Backend(QObject):
         choices = [f for f in latest["assets"] if f["suits"]] if latest else []
         version = self._version_info(repo, d, shown) if repo and d.state == "ready" else {}
         return {
-            **{"versionOptions": [], "versionIndex": -1, "status": "", "updateAvailable": False}, **version,
+            **{"versionText": "", "installed": "", "status": "", "updateAvailable": False}, **version,
             "state": d.state,
             "error": d.error,
             "description": repo.description if repo else "",
@@ -437,40 +437,30 @@ class Backend(QObject):
 
     @staticmethod
     def _version_info(repo: TrackedRepo, d: Details, shown: list[sources.Release]) -> dict:
-        """Choices for "Your version", and a status line comparing it with the newest."""
+        """Your version as text, and a status line comparing it with the newest."""
         installed = repo.installed
-        not_installed = {"value": NOT_INSTALLED, "label": "Not installed"}
         if repo.follow == FOLLOW_BRANCH:
             branch = repo.branch or d.default_branch
-            head = next((b.sha for b in d.branches if b.name == branch), "")
-            if not head:
+            newest = next((b.sha for b in d.branches if b.name == branch), "")
+            if not newest:
                 return {}
-            options = [{"value": head, "label": f"Newest commit ({head[:7]})"}]
-            if installed not in (head, "", NOT_INSTALLED):
-                options.append({"value": installed, "label": f"Older commit ({installed[:7]})"})
-            newest_text, yours_text = f"commit {head[:7]}", f"commit {installed[:7]}"
+            newest_text, yours_text = f"commit {newest[:7]}", f"commit {installed[:7]}"
             newer_text = f"Newer commits on {branch}"
-            newest = head
         else:
             if not shown:
                 return {}
             newest = shown[0].tag
-            options = [{"value": r.tag, "label": r.tag + (" (newest)" if i == 0 else "")} for i, r in enumerate(shown)]
-            if installed not in {r.tag for r in shown} | {"", NOT_INSTALLED}:
-                options.append({"value": installed, "label": installed})
             newest_text, yours_text = newest, installed
             newer_text = f"Newer version available: {newest}"
-        options.append(not_installed)
-        index = next((i for i, o in enumerate(options) if o["value"] == installed), -1)
         if installed == NOT_INSTALLED:
-            status, update = f"Not installed. The newest is {newest_text}.", False
+            text, status, update = "Not installed", f"The newest is {newest_text}.", False
         elif installed == newest:
-            status, update = "Up to date", False
+            text, status, update = yours_text, "Up to date", False
         elif installed:
-            status, update = f"{newer_text} (you have {yours_text})", True
+            text, status, update = yours_text, f"{newer_text} (you have {yours_text})", True
         else:
-            status, update = "", False
-        return {"versionOptions": options, "versionIndex": index, "status": status, "updateAvailable": update}
+            text, status, update = "", "", False
+        return {"versionText": text, "installed": installed, "status": status, "updateAvailable": update}
 
     @Slot(str)
     def markUpToDate(self, repo_id):

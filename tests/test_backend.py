@@ -111,7 +111,7 @@ class BackendTest(unittest.TestCase):
         d = self.backend.details(LOCALSEND)
         self.assertEqual(d["status"], "Newer version available: v1.18.2 (you have v1.18.1)")
         self.assertTrue(d["updateAvailable"])
-        self.assertEqual(d["versionOptions"][d["versionIndex"]]["value"], "v1.18.1")
+        self.assertEqual(d["versionText"], "v1.18.1")
         self.assertEqual(self.saved(LOCALSEND).installed, "v1.18.1")
 
     def test_mark_up_to_date(self):
@@ -128,13 +128,13 @@ class BackendTest(unittest.TestCase):
     def test_not_installed(self):
         self.backend.setInstalled(LOCALSEND, "-")
         d = self.backend.details(LOCALSEND)
-        self.assertEqual(d["status"], "Not installed. The newest is v1.18.2.")
-        self.assertEqual(d["versionOptions"][d["versionIndex"]]["label"], "Not installed")
+        self.assertEqual(d["versionText"], "Not installed")
+        self.assertEqual(d["status"], "The newest is v1.18.2.")
 
     def test_version_older_than_the_list_is_kept_as_a_choice(self):
         self.backend.setInstalled(LOCALSEND, "v1.0.0")
         d = self.backend.details(LOCALSEND)
-        self.assertEqual(d["versionOptions"][d["versionIndex"]]["value"], "v1.0.0")
+        self.assertEqual(d["versionText"], "v1.0.0")
         self.assertTrue(d["updateAvailable"])
 
     def test_branch_versions_are_commits(self):
@@ -147,8 +147,7 @@ class BackendTest(unittest.TestCase):
         self.backend.setInstalled(LOCALSEND, "c" * 40)
         d = self.backend.details(LOCALSEND)
         self.assertEqual(d["status"], "Newer commits on dev (you have commit ccccccc)")
-        self.assertEqual([o["label"] for o in d["versionOptions"]],
-                         ["Newest commit (bbbbbbb)", "Older commit (ccccccc)", "Not installed"])
+        self.assertEqual(d["versionText"], "commit ccccccc")
 
     def test_files_for_this_pc_are_marked(self):
         latest = self.backend.details(LOCALSEND)["releases"][0]
