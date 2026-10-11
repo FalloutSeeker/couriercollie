@@ -231,6 +231,7 @@ Kirigami.ScrollablePage {
                     level: 1
                     font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.6
                     text: page.repo.name || ""
+                    textFormat: Text.PlainText
                     elide: Text.ElideRight
                 }
 
@@ -239,12 +240,13 @@ Kirigami.ScrollablePage {
                     Layout.maximumWidth: Kirigami.Units.gridUnit * 34
                     visible: text !== ""
                     text: page.details.description || ""
+                    textFormat: Text.PlainText
                     wrapMode: Text.Wrap
                 }
 
                 QQC2.Label {
                     Layout.fillWidth: true
-                    text: `<a href="${page.repo.url}">${page.repo.domain}/${page.repo.path}</a>`
+                    text: `<a href="${Labels.escaped(page.repo.url)}">${Labels.escaped(page.repo.domain + "/" + page.repo.path)}</a>`
                     textFormat: Text.StyledText
                     elide: Text.ElideMiddle
                     onLinkActivated: link => Qt.openUrlExternally(link)
@@ -603,7 +605,7 @@ Kirigami.ScrollablePage {
                 objectName: "programCommand"
                 Layout.fillWidth: true
                 visible: (page.details.command || "") !== ""
-                text: `<b>${page.details.command}</b> (a link in ${page.details.binFolder})`
+                text: `<b>${Labels.escaped(page.details.command)}</b> (a link in ${Labels.escaped(page.details.binFolder)})`
                 textFormat: Text.StyledText
                 elide: Text.ElideMiddle
             }
@@ -742,6 +744,7 @@ Kirigami.ScrollablePage {
                         QQC2.Label {
                             Layout.fillWidth: true
                             text: choice.modelData.name
+                            textFormat: Text.PlainText
                             font.bold: choice.modelData.selected
                             elide: Text.ElideMiddle
                         }
@@ -824,6 +827,7 @@ Kirigami.ScrollablePage {
                         QQC2.Label {
                             Layout.fillWidth: true
                             text: release.modelData.title !== release.modelData.tag ? release.modelData.title : ""
+                            textFormat: Text.PlainText
                             elide: Text.ElideRight
                             opacity: 0.8
                         }
@@ -896,6 +900,7 @@ Kirigami.ScrollablePage {
                             Layout.fillWidth: true
                             Layout.leftMargin: Kirigami.Units.largeSpacing
                             text: modelData.name + (modelData.details ? `  \u00b7  ${modelData.details}` : "")
+                            textFormat: Text.PlainText
                             font: Kirigami.Theme.smallFont
                             opacity: modelData.suits ? 0.9 : 0.5
                             elide: Text.ElideMiddle
@@ -963,6 +968,7 @@ Kirigami.ScrollablePage {
                     QQC2.Label {
                         Layout.fillWidth: true
                         text: branch.modelData.name
+                        textFormat: Text.PlainText
                         font.bold: branch.modelData.selected
                         elide: Text.ElideRight
                     }

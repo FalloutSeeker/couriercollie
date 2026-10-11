@@ -470,7 +470,7 @@ Kirigami.ScrollablePage {
                             Layout.fillWidth: true
                             visible: !heading.editing
                             level: 4
-                            text: `${row.modelData.label} <font color="${Kirigami.Theme.disabledTextColor}">${row.modelData.count}</font>`
+                            text: `${Labels.escaped(row.modelData.label)} <font color="${Kirigami.Theme.disabledTextColor}">${row.modelData.count}</font>`
                             textFormat: Text.StyledText
                             elide: Text.ElideRight
 
@@ -593,6 +593,7 @@ Kirigami.ScrollablePage {
                             QQC2.Label {
                                 Layout.fillWidth: true
                                 text: row.modelData.name
+                                textFormat: Text.PlainText
                                 font.bold: true
                                 elide: Text.ElideRight
                             }
@@ -600,6 +601,7 @@ Kirigami.ScrollablePage {
                             QQC2.Label {
                                 Layout.fillWidth: true
                                 text: `${row.modelData.hostLabel} · ${row.modelData.domain}/${row.modelData.path}`
+                                textFormat: Text.PlainText
                                 font: Kirigami.Theme.smallFont
                                 opacity: 0.7
                                 elide: Text.ElideMiddle
@@ -658,7 +660,7 @@ Kirigami.ScrollablePage {
                                 horizontalAlignment: Text.AlignRight
                                 // Bold through the text itself: setting font.bold here would replace the small font.
                                 text: {
-                                    const t = row.modelData.checkText.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+                                    const t = Labels.escaped(row.modelData.checkText);
                                     return row.modelData.updateAvailable ? `<b>${t}</b>` : t;
                                 }
                                 textFormat: Text.StyledText

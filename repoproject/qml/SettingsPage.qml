@@ -95,6 +95,7 @@ Kirigami.ScrollablePage {
                     QQC2.Label {
                         Layout.fillWidth: true
                         text: folderRow.modelData.label
+                        textFormat: Text.PlainText
                         elide: Text.ElideMiddle
                     }
 

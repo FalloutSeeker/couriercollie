@@ -4,6 +4,11 @@ import QtQuick
 
 // Wording shared by more than one screen.
 QtObject {
+    // Text from outside (a name, a site's answer) inside styled text, so it shows as written.
+    function escaped(text) {
+        return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
     function interval(hours) {
         return {
             "24": "Daily",

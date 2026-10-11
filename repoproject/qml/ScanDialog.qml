@@ -163,6 +163,7 @@ Kirigami.Dialog {
                         QQC2.Label {
                             Layout.fillWidth: true
                             text: row.modelData.name
+                            textFormat: Text.PlainText
                             font.bold: true
                             elide: Text.ElideRight
                         }
@@ -170,6 +171,7 @@ Kirigami.Dialog {
                         QQC2.Label {
                             Layout.fillWidth: true
                             text: `${row.modelData.address} · ${row.modelData.path}`
+                            textFormat: Text.PlainText
                             font: Kirigami.Theme.smallFont
                             opacity: 0.7
                             elide: Text.ElideMiddle
@@ -179,6 +181,7 @@ Kirigami.Dialog {
                             Layout.fillWidth: true
                             visible: text !== ""
                             text: row.modelData.note
+                            textFormat: Text.PlainText
                             font: Kirigami.Theme.smallFont
                             color: row.modelData.status === "problem" ? Kirigami.Theme.negativeTextColor
                                  : row.modelData.status === "similar" ? Kirigami.Theme.neutralTextColor
