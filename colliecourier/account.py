@@ -50,8 +50,8 @@ def password_store() -> str:
 
 
 def use_login(way: str) -> None:
-    """Send GitHub requests with the login chosen in Settings (or none). Read lazily, when the first is made."""
-    sources.use_github_login((lambda: github_login.token_for(way)) if way else None)
+    """Send GitHub requests with the login kept when signing in (or none). Read lazily, when the first is made."""
+    sources.use_github_login(github_login.kept if way == github_login.WITH_CODE else None)
 
 
 def user_name(token: str) -> str:
@@ -79,9 +79,11 @@ class Account:
         self._signin_code: github_login.DeviceCode | None = None
         self._signin_error = ""
         self._signin_cancel = threading.Event()
-        self._gh_user = ""  # the GitHub CLI's account, when it's signed in (looked up when Settings opens)
         self._store = ""  # the desktop's password store, by name ("" if none); looked up when Settings opens
-        use_login(self._config.settings.github_login)
+        s = self._config.settings
+        if s.github_login != github_login.WITH_CODE:
+            s.github_login = s.github_user = ""  # signed out (or a way of signing in that no longer exists)
+        use_login(s.github_login)
 
     def _github_dict(self) -> dict:
         s = self._config.settings
@@ -89,7 +91,6 @@ class Account:
         return {
             "way": s.github_login,
             "user": s.github_user,
-            "ghUser": self._gh_user,
             "signIn": self._signin_state,
             "code": code.user_code if code and self._signin_state == "waiting" else "",
             "verifyUrl": code.verification_uri if code else "",
@@ -98,12 +99,12 @@ class Account:
             "store": self._store,
         }
 
-    def _signed_in(self, way: str, user: str, token: str = ""):
+    def _signed_in(self, way: str, user: str, token: str):
         s = self._config.settings
         s.github_login, s.github_user = way, user
         self._save()
         # The new login straight away (no need to read it back from where it's kept).
-        sources.use_github_login((lambda: token) if token else (lambda: github_login.token_for(way)))
+        sources.use_github_login(lambda: token)
         self._signin_state, self._signin_code, self._signin_error = "", None, ""
         self.githubChanged.emit()
         self.refreshGitHub()
@@ -154,28 +155,9 @@ class Account:
         self.githubChanged.emit()
 
     @Slot()
-    def useGhLogin(self):
-        """Use the GitHub CLI's login: read from gh whenever it's needed, never copied."""
-        def work():
-            token = github_login.gh_token()
-            if not token:
-                raise github_login.LoginError("The GitHub CLI isn’t signed in any more (gh auth login).")
-            return user_name(token)
-
-        def done(user, error):
-            if error:
-                self._signin_error = self._error_text(error)
-                self.githubChanged.emit()
-            else:
-                self._signed_in(github_login.WITH_GH, user)
-
-        self._run(work, done)
-
-    @Slot()
     def signOut(self):
-        """Stop using the login. One made here is removed from the password store; the GitHub CLI's is left alone."""
-        if self._config.settings.github_login == github_login.WITH_CODE:
-            github_login.forget()
+        """Stop using the login, and remove it from the password store."""
+        github_login.forget()
         s = self._config.settings
         s.github_login, s.github_user = "", ""
         self._save()
@@ -185,25 +167,9 @@ class Account:
 
     @Slot()
     def refreshGitHub(self):
-        """When Settings or the welcome screen opens: which password store the desktop has, and whether the GitHub
-        CLI is signed in, to offer its login."""
+        """When Settings or the welcome screen opens: which password store the desktop has (none: no signing in)."""
         self._store = password_store()
         self.githubChanged.emit()
-        if self._config.settings.github_login:
-            return
-
-        def work():
-            token = github_login.gh_token()
-            try:
-                return user_name(token) if token else ""
-            except github_login.LoginError:
-                return ""
-
-        def done(gh_user, error):
-            self._gh_user = "" if error else gh_user
-            self.githubChanged.emit()
-
-        self._run(work, done)
 
     @Slot(str)
     def copyText(self, text):

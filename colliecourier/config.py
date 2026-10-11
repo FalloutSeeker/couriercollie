@@ -35,8 +35,8 @@ class Settings:
     toasts: bool = True
     scanning: bool = False
     scan_folders: list[str] = field(default_factory=lambda: list(DEFAULT_SCAN_FOLDERS))
-    # Signed in to GitHub (github_login.py): "" no, "app" with a code (the login is in the password store), "gh" with
-    # the GitHub CLI's login. And the account's name, to show.
+    # Signed in to GitHub (github_login.py): "" no, "app" yes, with a code (the login is in the password store). And
+    # the account's name, to show.
     github_login: str = ""
     github_user: str = ""
 

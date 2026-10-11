@@ -16,7 +16,6 @@ APPROVED = "gho_x_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 SECRET = "gho_secret_aaaaaaaaaaaaaaaaaaaaaaaaaa"
 TOKEN = "gho_token_aaaaaaaaaaaaaaaaaaaaaaaaaaa"
 NEW = "gho_new_aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-CLI = "gho_cli_aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 
 class DeviceFlowTest(unittest.TestCase):
@@ -95,7 +94,6 @@ esac
         self.assertEqual(github_login.kept(), "")
         github_login.keep(SECRET)
         self.assertEqual(github_login.kept(), SECRET)
-        self.assertEqual(github_login.token_for(github_login.WITH_CODE), SECRET)
         self.assertNotIn(SECRET, self.args.read_text())  # on stdin, not on a command line
         self.assertIn("service colliecourier account github", self.args.read_text())
         github_login.forget()
@@ -198,8 +196,7 @@ class SettingsSignInTest(unittest.TestCase):
             (github_login, "wait"): lambda code, cancelled: NEW,
             (github_login, "keep"): self.kept.append,
             (github_login, "forget"): lambda: self.forgotten.append(True),
-            (github_login, "gh_token"): lambda: CLI,
-            (account, "user_name"): lambda token: {NEW: "octocat", CLI: "FalloutSeeker"}[token],
+            (account, "user_name"): lambda token: {NEW: "octocat"}[token],
             (account, "password_store"): lambda: "KDE Wallet",
         }
         for (module, name), fake in fakes.items():
@@ -231,15 +228,15 @@ class SettingsSignInTest(unittest.TestCase):
         self.assertEqual((self.backend.github["way"], self.forgotten), ("", [True]))
         self.assertEqual(sources._github_token(), "")
 
-    def test_the_github_clis_login_is_offered_and_used_not_copied(self):
-        self.backend.refreshGitHub()
-        self.assertEqual(self.backend.github["ghUser"], "FalloutSeeker")
-        self.backend.useGhLogin()
-        self.assertEqual((self.backend.github["way"], self.backend.github["user"]), ("gh", "FalloutSeeker"))
-        self.assertEqual(self.kept, [])
-        self.assertEqual(sources._github_token(), CLI)
-        self.backend.signOut()
-        self.assertEqual(self.forgotten, [])  # gh's own login is left alone
+    def test_a_saved_github_cli_login_counts_as_signed_out(self):
+        from colliecourier import config
+        from colliecourier.backend import Backend
+
+        config.save(config.Config(settings=config.Settings(github_login="gh", github_user="someone")), self.path)
+        backend = Backend(self.path)
+        self.addCleanup(backend.shutdown)
+        self.assertEqual((backend.github["way"], backend.github["user"]), ("", ""))
+        self.assertEqual(sources._github_token(), "")  # and gh is never asked
 
     def test_cancelled_while_waiting(self):
         self.backend._run = lambda work, done: None if work is not github_login.start else done(work(), None)

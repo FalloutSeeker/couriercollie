@@ -23,7 +23,7 @@ Kirigami.Dialog {
     }
 
     title: "Welcome to colliecourier"
-    // Offers the GitHub CLI's login, if there is one.
+    // Finds the desktop's password store, which signing in needs.
     onOpened: backend.refreshGitHub()
     padding: Kirigami.Units.largeSpacing * 2
     preferredWidth: Kirigami.Units.gridUnit * 30

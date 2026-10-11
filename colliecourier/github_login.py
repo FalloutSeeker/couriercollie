@@ -1,12 +1,11 @@
 """Signing in to GitHub (DESIGN.md §8): optional, and read-only. It raises GitHub's limit from 60 requests an hour to
 5,000, and makes "nothing changed" answers free.
 
-Two ways to sign in:
-- With a code entered at github.com/login/device (GitHub's device flow, through colliecourier's OAuth App). The login
-  asks for no access to your account, so it can only read public information. It's kept in the desktop's password
-  store (the Secret Service: KDE Wallet on Plasma, GNOME Keyring on GNOME, …) through secret-tool, never in the
-  settings file.
-- With the GitHub CLI's login, read from `gh` when it's needed and never copied anywhere.
+Signing in is with a code entered at github.com/login/device (GitHub's device flow, through colliecourier's OAuth
+App). The login asks for no access to your account, so it can only read public information. It's kept in the
+desktop's password store (the Secret Service: KDE Wallet on Plasma, GNOME Keyring on GNOME, …) through secret-tool,
+never in the settings file. (Reusing the GitHub CLI's login was left out on purpose: it can usually change your
+repositories, which a read-only app has no business holding.)
 
 The login is only ever sent to api.github.com (sources.py).
 """
@@ -31,9 +30,8 @@ VERIFY_URL = "https://github.com/login/device"
 SECRET = ["service", "colliecourier", "account", "github"]
 TIMEOUT = 20
 
-# How you're signed in (Settings.github_login).
+# Signed in (Settings.github_login): with a code, the only way.
 WITH_CODE = "app"
-WITH_GH = "gh"
 
 
 class LoginError(Exception):
@@ -134,25 +132,3 @@ def forget() -> None:
         _secret_tool("clear")
     except LoginError:
         pass
-
-
-# ---------------------------------------------------------------------------------------------------------------------
-# The GitHub CLI's login
-
-
-def gh_token() -> str:
-    """The GitHub CLI's login for github.com, or "" if gh isn't installed or isn't signed in."""
-    gh = shutil.which("gh")
-    if not gh:
-        return ""
-    try:
-        result = subprocess.run([gh, "auth", "token", "--hostname", "github.com"], capture_output=True, text=True,
-                                timeout=15)
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
-    return result.stdout.strip() if result.returncode == 0 else ""
-
-
-def token_for(way: str) -> str:
-    """The login to use for `way` (WITH_CODE or WITH_GH), or ""."""
-    return kept() if way == WITH_CODE else gh_token() if way == WITH_GH else ""

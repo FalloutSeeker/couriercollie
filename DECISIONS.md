@@ -91,10 +91,13 @@ share a limit and there's no server of ours to run or pay for.
 with no login. You'd only hit the limit with something like 60+ release repos checked hourly.
 
 **Optional login, for heavy use:** Settings → "Sign in to GitHub", which raises the limit to 5,000 an hour.
-- If the `gh` command is already logged in (it is on this machine), the app offers to reuse that login.
-- Otherwise it uses GitHub's sign-in code page (the same "enter this code at github.com/login/device" flow the
-  ultrakanban Setup page uses).
-- The login token is stored in KDE Wallet, never in the plain settings file.
+- It uses GitHub's sign-in code page ("enter this code at github.com/login/device"), asking for no access to your
+  account, so the login can only read public information.
+- **Not** the GitHub CLI's login (decided 2026-10-11): `gh` logins can usually change your repositories, and a
+  read-only app shouldn't hold or use one. One way to sign in, with the least access, is also one less thing to get
+  wrong.
+- The login token is stored in the desktop's password store (KDE Wallet, GNOME Keyring, …), never in the plain
+  settings file.
 - The app **never ships with a built-in token**. Anyone could pull it out of the app and use it, and GitHub would
   revoke it.
 

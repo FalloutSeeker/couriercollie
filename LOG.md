@@ -4,6 +4,9 @@ Newest first.
 
 ## 2026-10-11
 
+- Sign-in is with a code only: the GitHub CLI's login option is removed (it can usually change your repositories,
+  more than a read-only app should hold; D7). The app no longer runs `gh` at all. A settings file that had chosen it
+  counts as signed out.
 - Sign-in: no "requests left" line when signed in. The password store is named as the desktop actually has it (KDE
   Wallet, GNOME Keyring, KeePassXC, or "your desktop's password store"), found through D-Bus; with none running, Sign
   In is unavailable and says why, and the GitHub CLI's login is still offered.

@@ -180,7 +180,7 @@ GITHUB_API = "api.github.com"
 _login: Callable[[], str] | None = None  # gives the login's token, or ""
 _token: str | None = None  # the token, once asked for this run
 _token_lock = threading.Lock()
-# GitHub turned the login down (revoked on GitHub, or signed out of gh): requests carry on without it.
+# GitHub turned the login down (revoked on GitHub): requests carry on without it.
 login_rejected = False
 
 
@@ -269,7 +269,7 @@ def http_get_json(url: str, headers: dict | None = None, _without_login: bool = 
         if e.code == 304 and cached:
             return cached["body"]
         if e.code == 401 and token:
-            # The login no longer works (revoked on GitHub, or gh signed out): carry on without it; Settings says so.
+            # The login no longer works (revoked on GitHub): carry on without it; Settings says so.
             _drop_rejected_login()
             return http_get_json(url, headers, _without_login=True)
         if e.code == 404:

@@ -65,7 +65,7 @@ Each update removes the version it replaced once the new one is in place (no Und
 ## Stage 6: Finishing
 
 - Done (2026-10-11): **Sign in to GitHub** (DESIGN.md §8), optional, on the welcome screen and in Settings: with a
-  code (device flow, kept in KDE Wallet) or the GitHub CLI's login. Release lists are asked for with their ETag; an
+  code (device flow, kept in the desktop's password store; not the GitHub CLI's login, D7). Release lists are asked for with their ETag; an
   unchanged one (304) costs nothing signed in (tried), and no download signed out.
 - Done (2026-10-11): an app icon (`data/colliecourier.svg`), the menu entry, and the app's own RPM
   (`packaging/colliecourier.spec`, built by `devtools/build_rpm.sh`; tested unpacked, not yet installed with dnf).

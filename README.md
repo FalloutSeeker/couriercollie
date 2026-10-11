@@ -108,7 +108,7 @@ python3 -I devtools/check_rpm.py             # bottom's real .rpm up to dnf, whi
 | `colliecourier/updater.py`   | Updating: pulling and cloning, downloads checked and put in place, dnf          |
 | `colliecourier/backend.py`   | Connects the window to the above; runs network work in the background          |
 | `colliecourier/updating.py`  | The backend's Update and Install buttons and install scripts (part of it)      |
-| `colliecourier/github_login.py` | Signing in to GitHub: the code sign-in, the password store, gh's login      |
+| `colliecourier/github_login.py` | Signing in to GitHub: the code sign-in, and keeping it in the password store |
 | `colliecourier/account.py`   | The backend's sign-in buttons, for Settings and the welcome screen (part of it) |
 | `colliecourier/qml/`         | The window: list page, repo page, Add dialog                                   |
 

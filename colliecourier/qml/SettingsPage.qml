@@ -12,7 +12,7 @@ Kirigami.ScrollablePage {
     readonly property var gh: backend.github
 
     title: "Settings"
-    // GitHub's limit as it stands, and whether the GitHub CLI's login can be offered (costs no request against it).
+    // Which password store the desktop has: signing in needs one.
     Component.onCompleted: backend.refreshGitHub()
 
     Kirigami.FormLayout {
