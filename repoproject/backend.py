@@ -464,10 +464,14 @@ class Backend(QObject):
         if new == old:
             return
         self._checks.results[repo.id] = new
+        self._save_checks()
+
+    def _save_checks(self):
+        """The check results were changed here (not by a check): keep them, and show them."""
         try:
             checker.save_state(self._checks, self._state_path)
         except OSError:
-            pass
+            pass  # they still show; they're just not kept for next time
         self.checksChanged.emit()
         self._update_badge()
 
@@ -848,12 +852,7 @@ class Backend(QObject):
         for kept in (self._details, self._update_notes, self._progress, self._program_choices, self._phases):
             kept.pop(repo_id, None)
         if self._checks.results.pop(repo_id, None):
-            try:
-                checker.save_state(self._checks, self._state_path)
-            except OSError:
-                pass
-            self.checksChanged.emit()
-            self._update_badge()
+            self._save_checks()
         self._changed()
 
     # -- scanning ---------------------------------------------------------------------------------------------------
@@ -1237,12 +1236,7 @@ class Backend(QObject):
         # The last check's result and update message were about what it followed before.
         self._update_notes.pop(repo_id, None)
         if self._checks.results.pop(repo_id, None):
-            try:
-                checker.save_state(self._checks, self._state_path)
-            except OSError:
-                pass
-            self.checksChanged.emit()
-            self._update_badge()
+            self._save_checks()
         if follow == FOLLOW_BRANCH or clone:
             repo.kind = assets.KIND_GIT
             if not repo.branch:
@@ -1324,12 +1318,13 @@ class Backend(QObject):
 
     @Slot(str)
     def updateRepo(self, repo_id):
-        """Update clicked: pull a clone's new commits (updater.pull). Your version then follows what's on disk."""
+        """Update (or Install) clicked: a clone is pulled or moved to the newest release (updater.pull,
+        checkout_release); anything else is downloaded (_update_download)."""
         repo = self._config.find(repo_id)
         if not repo or repo_id in self._updating or not _can_update(repo):
             return
         if not _is_clone(repo):
-            self._update_appimage(repo)
+            self._update_download(repo)
             return
         d = self._details.get(repo_id)
         branch = repo.branch or (d.default_branch if d else "")
@@ -1372,7 +1367,7 @@ class Backend(QObject):
         self._run(lambda: updater.pull(path, branch, ids) if by_branch else updater.checkout_release(path, tag, ids),
                   done)
 
-    def _update_appimage(self, repo: TrackedRepo):
+    def _update_download(self, repo: TrackedRepo):
         """Download the newest release's AppImage or program archive, check it, and put it in place
         (updater.install_appimage, install_program). An AppImage you don't have yet goes into ~/Applications, with a
         menu entry; a program is unpacked into its own folder, with a link in ~/.local/bin."""
@@ -1482,12 +1477,7 @@ class Backend(QObject):
         if (old := self._checks.results.get(repo.id)) and old.status in (checker.UPDATE, checker.UP_TO_DATE):
             self._checks.results[repo.id] = dataclasses.replace(old, status=checker.UP_TO_DATE, text="Up to date",
                                                                 newest=head, not_rechecked=False)
-            try:
-                checker.save_state(self._checks, self._state_path)
-            except OSError:
-                pass
-            self.checksChanged.emit()
-            self._update_badge()
+            self._save_checks()
         if head and head != repo.installed:
             repo.installed = head
             self._changed(repo.id)
