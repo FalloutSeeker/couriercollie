@@ -136,6 +136,10 @@ Each update removes the version it replaced once the new one is in place (no Und
   colliecourier brings these together for software from GitHub and GitLab: clones, AppImages, programs from release
   archives and RPMs, found by a scan or added by hand, checked on a schedule, and updated with a click. The pitch is
   one app to install and learn, not a handful of tools and their commands.
+  Explain signing in to GitHub with this line: "colliecourier uses its registered app identity to ask GitHub for a
+  read-only, public-data token on behalf of whoever signs in." (The token belongs to the person signing in, counts
+  against their own 5,000-an-hour allowance, can't read anything private or change anything, and is revoked from
+  GitHub's Settings → Applications. The app registration isn't tied to any repository.)
   Also include how the scan decides an RPM is one dnf won't update, in plain words:
   1. *Where it was installed from.* dnf records this for every package. Packages from Fedora, RPM Fusion or a COPR
      show that repository's name; one installed from a downloaded `.rpm` shows as `@commandline`. Only the second
