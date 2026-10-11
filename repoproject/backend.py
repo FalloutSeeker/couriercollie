@@ -120,6 +120,16 @@ def _join_folders(folders: list[str]) -> str:
     return ", ".join(names[:-1]) + ", and " + names[-1]
 
 
+def _whats_new(ref: RepoRef, host: str, yours: str, head: str) -> tuple[int, list[sources.Commit]]:
+    """The commits between your version and the branch's newest. One request, only if you're behind."""
+    if not head or not yours or yours in (head, NOT_INSTALLED):
+        return 0, []
+    try:
+        return sources.new_commits(ref, host, yours, head)
+    except SourceError:
+        return 0, []  # just leaves the list out
+
+
 def _fetch_branches(ref: RepoRef) -> tuple[str, list[sources.Branch], str]:
     try:
         default, branches = sources.branches(ref)
@@ -536,12 +546,7 @@ class Backend(QObject):
             default, branches, branch_error = _fetch_branches(ref)
             yours = on_disk[0] if on_disk and on_disk[0] else installed
             head = next((b.sha for b in branches if b.name == (branch or default)), "")
-            commits = (0, [])
-            if follow == FOLLOW_BRANCH and head and yours and yours not in (head, NOT_INSTALLED):
-                try:
-                    commits = sources.new_commits(ref, host, yours, head)
-                except SourceError:
-                    pass  # just leaves the list out
+            commits = _whats_new(ref, host, yours, head) if follow == FOLLOW_BRANCH else (0, [])
             return rels, default, branches, branch_error, on_disk, yours, head, commits
 
         def done(result, error):
@@ -705,11 +710,43 @@ class Backend(QObject):
 
     @Slot(str, str)
     def setBranch(self, repo_id, branch):
-        if (repo := self._config.find(repo_id)) and branch != repo.branch:
-            repo.branch = branch
-            repo.installed = ""
-            _set_baseline(repo, self._details.get(repo_id, Details()))
-            self._changed(repo_id)
+        """Choose which branch to compare against. Your version stays as it is: for a scanned repo it's re-read from
+        disk, and the list of new commits is refreshed for the new branch."""
+        repo = self._config.find(repo_id)
+        if not repo or branch == repo.branch:
+            return
+        repo.branch = branch
+        _set_baseline(repo, self._details.get(repo_id, Details()))  # only if your version isn't known yet
+        self._changed(repo_id)
+        self._refresh_whats_new(repo_id)
+
+    def _refresh_whats_new(self, repo_id):
+        repo, d = self._config.find(repo_id), self._details.get(repo_id)
+        if not repo or not d or d.state != "ready":
+            return
+        ref, host = RepoRef.from_id(repo_id), repo.host
+        scanned, local_path, installed = repo.source == config.SOURCE_SCANNED, repo.local_path, repo.installed
+        head = next((b.sha for b in d.branches if b.name == (repo.branch or d.default_branch)), "")
+
+        def work():
+            on_disk = scan.version_on_disk(local_path) if scanned else None
+            yours = on_disk[0] if on_disk and on_disk[0] else installed
+            return on_disk, yours, _whats_new(ref, host, yours, head)
+
+        def done(result, error):
+            repo, d = self._config.find(repo_id), self._details.get(repo_id)
+            if error or not repo or not d:
+                return
+            on_disk, yours, (total, commits) = result
+            d.new_commits, d.new_commits_total, d.commits_base, d.commits_head = commits, total, yours, head
+            d.local_missing = bool(on_disk) and not on_disk[1]
+            if on_disk and on_disk[0] and on_disk[0] != repo.installed:
+                repo.installed = on_disk[0]
+                self._changed(repo_id)
+            else:
+                self.detailsChanged.emit(repo_id)
+
+        self._run(work, done)
 
     @Slot(str, str, str)
     def pickAsset(self, repo_id, tag, asset_name):

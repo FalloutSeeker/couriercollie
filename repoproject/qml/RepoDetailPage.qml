@@ -59,14 +59,16 @@ Kirigami.ScrollablePage {
         }
     ]
 
+    // Rebuilt just after the current click or key press is handled, not in the middle of it (the clicked item may be
+    // one that's rebuilt). Several changes in a row rebuild once.
     Connections {
         function onDetailsChanged(id) {
             if (id === page.repoId)
-                page.reload();
+                Qt.callLater(page.reload);
         }
 
         function onReposChanged() {
-            page.reload();
+            Qt.callLater(page.reload);
         }
 
         target: backend
@@ -217,38 +219,24 @@ Kirigami.ScrollablePage {
                 }
             }
 
-            // What's new on the branch since your version.
-            ColumnLayout {
+            // What's new on the branch since your version. One label rather than a row per commit: rows added and
+            // removed inside the form layout as the list changes crash Qt's layout code.
+            QQC2.Label {
+                objectName: "newCommits"
                 Layout.maximumWidth: Kirigami.Units.gridUnit * 26
                 visible: page.ready && page.details.newCommitsTotal > 0
-                spacing: 0
-
-                QQC2.Label {
-                    text: page.details.newCommitsTotal === 1 ? "1 new commit:" : `${page.details.newCommitsTotal} new commits, newest first:`
-                    font: Kirigami.Theme.smallFont
+                text: {
+                    const total = page.details.newCommitsTotal;
+                    const shown = page.details.newCommits;
+                    const lines = [total === 1 ? "1 new commit:" : `${total} new commits, newest first:`];
+                    shown.forEach(c => lines.push(`    ${c.sha}  ${c.title}`));
+                    if (total > shown.length)
+                        lines.push(`    and ${total - shown.length} more`);
+                    return lines.join("\n");
                 }
-
-                Repeater {
-                    model: page.details.newCommits
-
-                    delegate: QQC2.Label {
-                        required property var modelData
-
-                        Layout.fillWidth: true
-                        Layout.leftMargin: Kirigami.Units.largeSpacing
-                        text: `${modelData.sha}  ${modelData.title}`
-                        font: Kirigami.Theme.smallFont
-                        elide: Text.ElideRight
-                    }
-                }
-
-                QQC2.Label {
-                    Layout.leftMargin: Kirigami.Units.largeSpacing
-                    visible: page.details.newCommitsTotal > page.details.newCommits.length
-                    text: `and ${page.details.newCommitsTotal - page.details.newCommits.length} more`
-                    font: Kirigami.Theme.smallFont
-                    opacity: 0.7
-                }
+                font: Kirigami.Theme.smallFont
+                textFormat: Text.PlainText
+                elide: Text.ElideRight
             }
 
             RowLayout {

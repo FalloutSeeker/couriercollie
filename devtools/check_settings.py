@@ -35,4 +35,12 @@ h.run([
     (0, lambda: h.click("restoreFolders", h.window("Settings"))),
     (300, lambda: h.check("restored", folders() == ["~", "/opt", "/usr/local", "/srv"])),
     (0, lambda: h.check("Restore Defaults hidden at the defaults", h.find("restoreFolders", h.window("Settings")) is None)),
+    # Rows come and go inside the form layout here; make sure that's stable.
+    *[step for _ in range(3) for step in (
+        (0, lambda: [h.click("removeFolder:" + f, h.window("Settings")) for f in ("/srv", "/usr/local", "/opt", "~")]),
+        (300, lambda: h.check("removed every folder", folders() == [])),
+        (0, lambda: b.addScanFolder("/mnt/data")),
+        (200, lambda: h.click("restoreFolders", h.window("Settings"))),
+        (300, lambda: h.check("restored again", folders() == ["~", "/opt", "/usr/local", "/srv"])),
+    )],
 ])

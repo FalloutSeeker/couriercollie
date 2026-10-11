@@ -4,6 +4,14 @@ Newest first.
 
 ## 2026-10-10
 
+- Bug: switching branch and back showed "Up to date" for SMOD while the clone was behind. Switching branch reset
+  "your version" to the new branch's newest commit (a rule from earlier today). Now switching branch never changes
+  your version: it only changes what it's compared with. Scanned repos re-read their version from disk, and the
+  list of new commits is refreshed for the chosen branch.
+- Found while checking that: a crash (in Qt's layout code) when the new-commits list changed inside the repo page's
+  form after a branch click. The list is now one label instead of a row per commit. Page rebuilds after a change
+  are also deferred until the click has been handled. Checked with three runs of every window check, plus
+  repeatedly removing and restoring all scan folders in Settings (the other list inside a form).
 - SMOD showed "Newer commits" while the user believed it was current. It was right: the clone last fetched at 16:13,
   and a commit was pushed at 21:52; `git status` can't show that without a fetch. But "Mark as Up to Date" had been
   clicked, so the app's saved version no longer matched the clone. Fixed by:

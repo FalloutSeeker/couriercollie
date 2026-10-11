@@ -142,8 +142,13 @@ class BackendTest(unittest.TestCase):
         repo = self.saved(LOCALSEND)
         self.assertEqual(repo.installed, "a" * 40)  # newest commit on "main"
         self.assertEqual(self.backend.details(LOCALSEND)["status"], "Up to date")
+        # Switching branch keeps your version; it's compared with the new branch's newest commit.
         self.backend.setBranch(LOCALSEND, "dev")
-        self.assertEqual(self.saved(LOCALSEND).installed, "b" * 40)
+        self.assertEqual(self.saved(LOCALSEND).installed, "a" * 40)
+        self.assertEqual(self.backend.details(LOCALSEND)["status"], "Newer commits on dev (you have commit aaaaaaa)")
+        self.backend.setBranch(LOCALSEND, "main")
+        self.assertEqual(self.backend.details(LOCALSEND)["status"], "Up to date")
+        self.backend.setBranch(LOCALSEND, "dev")
         self.backend.setInstalled(LOCALSEND, "c" * 40)
         d = self.backend.details(LOCALSEND)
         self.assertEqual(d["status"], "Newer commits on dev (you have commit ccccccc)")
@@ -254,6 +259,17 @@ class ScannedClonePageTest(unittest.TestCase):
         self.backend.loadDetails("gitgud.io/aeroshell/smod", True)
         d = self.backend.details("gitgud.io/aeroshell/smod")
         self.assertEqual((d["status"], d["newCommitsTotal"]), ("Up to date", 0))
+
+    def test_switching_branch_and_back_keeps_the_version_on_disk(self):
+        smod = "gitgud.io/aeroshell/smod"
+        self.backend.loadDetails(smod, True)
+        self.backend._details[smod].branches.append(sources.Branch("master", "c" * 40))
+        self.backend.setBranch(smod, "master")
+        self.backend.setBranch(smod, "Plasma/6.7")
+        d = self.backend.details(smod)
+        self.assertEqual(config.load(self.path).repos[0].installed, self.on_disk)
+        self.assertTrue(d["updateAvailable"], d["status"])
+        self.assertEqual(d["newCommitsTotal"], 1)  # the list is back for this branch
 
     def test_list_hidden_once_it_no_longer_applies(self):
         self.backend.loadDetails("gitgud.io/aeroshell/smod", True)

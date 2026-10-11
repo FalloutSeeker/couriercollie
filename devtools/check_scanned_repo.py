@@ -1,5 +1,6 @@
 """Open a scanned clone's page (SMOD, from a copy of your settings) and check: the version is read from the clone on
-disk, what's new on the branch is listed, and the "Mark as…" buttons are hidden. Reads the clone; asks gitgud.io.
+disk, what's new on the branch is listed, the "Mark as…" buttons are hidden, and switching to another branch and back
+changes nothing. Reads the clone; asks gitgud.io.
 
     python3 -I devtools/check_scanned_repo.py [repo address]
 """
@@ -33,8 +34,26 @@ def report():
     h.shot("scanned-repo")
 
 
+def other_branch():
+    return next(x["name"] for x in b.details(REPO)["branches"] if not x["selected"])
+
+
+picked = {}
+
+
+def after_switching_back():
+    d = b.details(REPO)
+    print(f"  after switching to {picked['branch']} and back: status {d['status']!r}")
+    h.check("switching branch and back keeps the version on disk", b._config.find(REPO).installed == on_disk)
+    h.check("status unchanged by switching back", d["status"] == picked["status"])
+
+
 h.run([
     (300, lambda: h.win.openRepo(REPO)),
     h.until(lambda: b.details(REPO)["state"] == "ready"),
     (800, report),
+    (0, lambda: picked.update(branch=other_branch(), status=b.details(REPO)["status"], home=repo.branch)),
+    (0, lambda: h.click("branch:" + picked["branch"])),
+    (2500, lambda: h.click("branch:" + picked["home"])),
+    (2500, after_switching_back),
 ])
