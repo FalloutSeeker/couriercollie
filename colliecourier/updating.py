@@ -189,7 +189,8 @@ class Updating:
                     repo.installed = ref
                 self._version_changed(repo)
                 self._changed(repo_id)
-                what = f"Cloned {ref} into {folder}." if by_branch else f"Cloned {project.name} at {ref} into {folder}."
+                where = updater.shown(folder)
+                what = f"Cloned {ref} into {where}." if by_branch else f"Cloned {project.name} at {ref} into {where}."
                 self._update_notes[repo_id] = ("done", what + (" To install it, run its install script (under "
                                                                "Tracking)." if scripts else ""))
             self.reposChanged.emit()
@@ -284,10 +285,12 @@ class Updating:
                 if is_program:
                     on_path = str(updater.bin_dir()) in os.environ.get("PATH", "").split(os.pathsep)
                     run = f" Run it as \u201c{new.name}\u201d." if on_path else \
-                        f" Run it as {new} ({updater.bin_dir()} isn\u2019t where your terminal looks for commands)."
+                        f" Run it as {updater.shown(new)} ({updater.shown(updater.bin_dir())} isn\u2019t where your " \
+                        "terminal looks for commands)."
                     what = (f"Updated to {tag}." if replaced else f"Installed {tag}.") + run
                 else:
-                    what = f"Updated to {tag}." if replaced else f"Installed {tag} as {new}, with a menu entry."
+                    what = f"Updated to {tag}." if replaced else \
+                        f"Installed {tag} as {updater.shown(new)}, with a menu entry."
                 check = " Checked against the project\u2019s published checksum." if verified else \
                     " The project publishes no checksum for it, so the download couldn\u2019t be checked."
                 self._update_notes[repo_id] = ("done" if verified else "warning", what + check)

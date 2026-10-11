@@ -47,6 +47,12 @@ class UpdateError(Exception):
     """Why an update couldn't be done, for the user."""
 
 
+def shown(path) -> str:
+    """A path as shown to you: inside your home folder, it starts with ~ (easier to read than /home/<you>/…)."""
+    home, text = str(Path.home()), str(path)
+    return "~" + text[len(home):] if text == home or text.startswith(home + "/") else text
+
+
 def _git(path: str, *args: str, timeout: int = 30) -> subprocess.CompletedProcess:
     # safe.directory: git won't otherwise read a clone that belongs to another user (e.g. the system, in /opt).
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0", "LC_ALL": "C"}
@@ -97,14 +103,15 @@ def _as_root(path: str) -> bool:
     """Whether the clone has to be changed as root: it belongs to the system. One that belongs to another person is
     left alone: changing it as root would leave files in it that they can't change."""
     if not (Path(path) / ".git").exists():
-        raise UpdateError(f"There\u2019s no git clone at {path} any more.")
+        raise UpdateError(f"There\u2019s no git clone at {shown(path)} any more.")
     if _writable(path):
         return False
     if _owner(path) == 0 and (not ROOT or shutil.which(ROOT[0])):
         return True
     if _owner(path) == os.geteuid():
-        raise UpdateError(f"{path} is yours, but its permissions don\u2019t let it be changed, so it wasn\u2019t.")
-    raise UpdateError(f"{path} belongs to another user, so it can\u2019t be updated from here. As that user, in a "
+        raise UpdateError(f"{shown(path)} is yours, but its permissions don\u2019t let it be changed, so it "
+                          "wasn\u2019t.")
+    raise UpdateError(f"{shown(path)} belongs to another user, so it can\u2019t be updated from here. As that user, in a "
                       f"terminal: cd {shlex.quote(path)} && git pull --ff-only")
 
 
@@ -390,7 +397,7 @@ def install_appimage(asset, others: list, folder: Path, old: Path | None,
     which is then removed. Returns (the new file, whether it was checked against a published checksum)."""
     folder.mkdir(parents=True, exist_ok=True)
     if not os.access(folder, os.W_OK):
-        raise UpdateError(f"{folder} belongs to another user (often the system), so the new version can’t be put "
+        raise UpdateError(f"{shown(folder)} belongs to another user (often the system), so the new version can’t be put "
                           "there from here.")
     name = Path(asset.name).name  # never a path from the site
     part = folder / f".{name}.part"

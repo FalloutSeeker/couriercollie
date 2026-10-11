@@ -102,6 +102,8 @@ Kirigami.ApplicationWindow {
 
     AddRepoDialog {
         id: addDialog
+
+        objectName: "addDialog"
     }
 
     Component {

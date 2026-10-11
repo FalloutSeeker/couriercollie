@@ -134,7 +134,7 @@ Kirigami.ScrollablePage {
 
             QQC2.Label {
                 Layout.fillWidth: true
-                text: `It runs in a terminal window, in ${page.repo.localPath}, as you. It may ask for your password itself (for example through sudo), and can change anything that allows. Read it first; scripts it calls aren\u2019t shown here.`
+                text: `It runs in a terminal window, in ${page.repo.shownPath}, as you. It may ask for your password itself (for example through sudo), and can change anything that allows. Read it first; scripts it calls aren\u2019t shown here.`
                 wrapMode: Text.Wrap
             }
 
@@ -262,7 +262,7 @@ Kirigami.ScrollablePage {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 34
             visible: page.ready && page.details.localMissing === true
             type: Kirigami.MessageType.Warning
-            text: `It\u2019s no longer at ${page.repo.localPath}. If it moved, scan again; if it was removed, stop tracking it.`
+            text: `It\u2019s no longer at ${page.repo.shownPath}. If it moved, scan again; if it was removed, stop tracking it.`
         }
 
         // ---- Status: your version next to the newest, coloured by how they compare ------------------------------
@@ -508,8 +508,8 @@ Kirigami.ScrollablePage {
                         objectName: "markNotInstalled"
                         visible: page.canMarkNotInstalled
                         flat: true
+                        // No icon: a quiet, secondary choice (a red ✗ read as an error, or as deleting something).
                         text: "Mark as Not Installed"
-                        icon.name: "edit-clear"
                         onClicked: backend.setInstalled(page.repoId, "-")
                     }
                 }
@@ -613,8 +613,8 @@ Kirigami.ScrollablePage {
                     : page.repo.assetPattern ? page.repo.assetPattern
                     : page.details.versionOnly === true ? "None (versions only)"
                     : "Not chosen yet. Choose one below."
-                font.bold: page.details.isClone ? false
-                         : page.followsReleases ? page.repo.assetPattern !== "" : page.currentBranch !== ""
+                // A name (the branch, the build file) in bold; a sentence or a placeholder not.
+                font.bold: !page.followsReleases ? page.currentBranch !== "" : !page.details.isClone && page.repo.assetPattern !== ""
                 elide: Text.ElideMiddle
             }
 
@@ -663,7 +663,7 @@ Kirigami.ScrollablePage {
 
                 QQC2.Label {
                     Layout.fillWidth: true
-                    text: page.repo.scanned ? page.repo.localPath
+                    text: page.repo.scanned ? page.repo.shownPath
                         : page.followsReleases ? "You set your version: with the buttons above, or Set as My Version on a release."
                         : "You set your version, with the buttons above."
                     font: Kirigami.Theme.smallFont

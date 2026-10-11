@@ -4,6 +4,10 @@ Newest first.
 
 ## 2026-10-11
 
+- UI and readability pass, with a new tour of every screen and state (`devtools/check_look.py`, light and Breeze
+  Dark). List rows: the address without the repeated "GitHub ·", the update icon beside its result, and results that
+  wrap when the list is narrow so names stay whole. Paths in your home folder show as `~/…`. "Mark as Not Installed"
+  lost its red ✗. Branch and build-file names are bold on every page.
 - Sign-in is with a code only: the GitHub CLI's login option is removed (it can usually change your repositories,
   more than a read-only app should hold; D7). The app no longer runs `gh` at all. A settings file that had chosen it
   counts as signed out.

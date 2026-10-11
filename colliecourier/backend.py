@@ -24,7 +24,6 @@ from .updating import (Updating, _can_clone, _can_update, _head, _is_appimage, _
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, Config, ConfigError, TrackedRepo
 from .sources import RepoRef, SourceError
 
-HOST_LABELS = {"github": "GitHub", "gitlab": "GitLab"}
 KIND_ICONS = {
     assets.KIND_GIT: "folder-git",
     assets.KIND_RPM: "application-x-rpm",
@@ -339,7 +338,6 @@ class Backend(QObject, Updating, Account):
             "id": r.id,
             "name": r.name,
             "url": r.url,
-            "hostLabel": HOST_LABELS.get(r.host, r.host),
             "domain": ref.domain,
             "path": ref.path,
             "follow": r.follow,
@@ -349,6 +347,7 @@ class Backend(QObject, Updating, Account):
             "followText": follow_text,
             "scanned": r.source == config.SOURCE_SCANNED,
             "localPath": r.local_path,
+            "shownPath": updater.shown(r.local_path),  # as shown: ~ for your home folder
             "canUpdate": _can_update(r),
             "updateNeedsPassword": _needs_password(r),
             "updating": r.id in self._updating,
@@ -1161,7 +1160,7 @@ class Backend(QObject, Updating, Account):
             "isClone": bool(repo) and _is_clone(repo),
             # Install clones the project into clonesFolder.
             "installClones": bool(repo) and _can_clone(repo),
-            "clonesFolder": str(updater.clones_dir()),
+            "clonesFolder": updater.shown(updater.clones_dir()),
             "updateNeedsPassword": bool(repo) and _needs_password(repo),
             "isRpm": bool(repo) and _is_rpm(repo),
             "updatePhase": self._phases.get(repo_id, ""),
@@ -1171,11 +1170,11 @@ class Backend(QObject, Updating, Account):
             "program": repo.program if repo else "",
             # The command an installed program is run as, and where its link is.
             "command": Path(repo.local_path).name if repo and _is_program(repo) and repo.local_path else "",
-            "binFolder": str(updater.bin_dir()),
-            "programsFolder": str(updater.programs_dir()),
+            "binFolder": updater.shown(updater.bin_dir()),
+            "programsFolder": updater.shown(updater.programs_dir()),
             "progress": self._progress.get(repo_id, -1),
             # Where Install puts an AppImage you don't have yet.
-            "installFolder": str(updater.apps_dir()),
+            "installFolder": updater.shown(updater.apps_dir()),
             "updating": repo_id in self._updating,
             "updateNoteKind": self._update_notes.get(repo_id, ("", ""))[0],
             "updateNote": self._update_notes.get(repo_id, ("", ""))[1],

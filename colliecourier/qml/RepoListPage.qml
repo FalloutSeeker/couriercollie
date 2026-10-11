@@ -304,6 +304,8 @@ Kirigami.ScrollablePage {
 
     NewCategoryDialog {
         id: newCategoryDialog
+
+        objectName: "newCategoryDialog"
     }
 
     ListView {
@@ -610,7 +612,7 @@ Kirigami.ScrollablePage {
 
                             QQC2.Label {
                                 Layout.fillWidth: true
-                                text: `${row.modelData.hostLabel} · ${row.modelData.domain}/${row.modelData.path}`
+                                text: `${row.modelData.domain}/${row.modelData.path}`
                                 textFormat: Text.PlainText
                                 font: Kirigami.Theme.smallFont
                                 opacity: 0.7
@@ -626,15 +628,13 @@ Kirigami.ScrollablePage {
                             }
                         }
 
-                        // The last check's result; an update gets the update icon.
-                        ColumnLayout {
-                            Layout.maximumWidth: Kirigami.Units.gridUnit * 10
+                        // The last check's result, with the update icon (or Update button) beside it.
+                        RowLayout {
                             visible: row.modelData.checkText !== ""
-                            spacing: 0
+                            spacing: Kirigami.Units.smallSpacing
 
                             Kirigami.Icon {
                                 objectName: "updateIcon:" + row.modelData.id
-                                Layout.alignment: Qt.AlignRight
                                 visible: row.modelData.updateAvailable && !row.modelData.canUpdate
                                 source: "update-low"
                                 Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
@@ -644,7 +644,6 @@ Kirigami.ScrollablePage {
                             // Repos Update can handle: the icon is the Update button (DECISIONS.md, D4).
                             QQC2.ToolButton {
                                 objectName: "updateButton:" + row.modelData.id
-                                Layout.alignment: Qt.AlignRight
                                 visible: row.modelData.updateAvailable && row.modelData.canUpdate
                                          && !row.modelData.updating
                                 icon.name: "update-low"
@@ -657,7 +656,6 @@ Kirigami.ScrollablePage {
                             }
 
                             QQC2.BusyIndicator {
-                                Layout.alignment: Qt.AlignRight
                                 visible: row.modelData.updating
                                 running: visible
                                 Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
@@ -665,8 +663,8 @@ Kirigami.ScrollablePage {
                             }
 
                             QQC2.Label {
-                                Layout.alignment: Qt.AlignRight
-                                Layout.maximumWidth: Kirigami.Units.gridUnit * 10
+                                // Narrow (a repo's page open beside the list): two short lines, so the name keeps room.
+                                Layout.maximumWidth: Kirigami.Units.gridUnit * (row.width < Kirigami.Units.gridUnit * 26 ? 6 : 10)
                                 horizontalAlignment: Text.AlignRight
                                 // Bold through the text itself: setting font.bold here would replace the small font.
                                 text: {
