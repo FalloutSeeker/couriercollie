@@ -4,6 +4,13 @@ Newest first.
 
 ## 2026-10-10
 
+- Added "Your version" to each repo page: a release, or a commit when following a branch, or "Not installed". It starts
+  at the newest version when a repo is added (or first loaded, for repos added earlier), and resets when you switch
+  between releases and a branch, or switch branch. A status line says "Up to date" or "Newer version available: …".
+  This is what update checks (stage 4) will compare against.
+- Cleaned up the releases list: the green ✓ and the "has your file" tag on every release were confusing. Release
+  headers now only show "your version", "newest" and "pre-release". Opening a release shows one line ("Your file: …"
+  or "Your file isn't in this release"), then "Show all N files" and the release notes.
 - Repo page redesign, after testing with Obtainium: every release had its own radio buttons, and because the same
   file appears in each release, a button showed as picked in every release at once. Choosing a file now happens in
   one place, "Your build file", listing the newest release's files. The releases list is read-only, with a ✓ on

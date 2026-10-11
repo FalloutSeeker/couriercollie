@@ -13,6 +13,7 @@ from . import tomlwrite
 
 FOLLOW_RELEASES = "releases"
 FOLLOW_BRANCH = "branch"
+NOT_INSTALLED = "-"
 
 
 # The choices offered in the window (DESIGN.md §6, §7).
@@ -46,6 +47,9 @@ class TrackedRepo:
     # What's being followed: "git" for a branch, or the chosen file's kind (assets.KIND_*). Empty until a file is picked.
     kind: str = ""
     prereleases: bool = False
+    # Your version: a release tag, or a commit when following a branch. NOT_INSTALLED if you don't have it. Empty until
+    # known: it's then set to the newest version the first time the repo's releases or branches are loaded.
+    installed: str = ""
     description: str = ""
     added_at: str = ""
 

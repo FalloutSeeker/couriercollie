@@ -144,6 +144,24 @@ Kirigami.ScrollablePage {
                 opacity: 0.7
             }
 
+            QQC2.ComboBox {
+                Kirigami.FormData.label: "Your version:"
+                visible: page.ready && page.details.versionOptions.length > 0
+                model: page.details.versionOptions.map(o => o.label)
+                currentIndex: page.details.versionIndex
+                onActivated: index => backend.setInstalled(page.repoId, page.details.versionOptions[index].value)
+            }
+
+            QQC2.Label {
+                Kirigami.FormData.label: "Status:"
+                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
+                visible: page.ready && page.details.status !== ""
+                text: page.details.status
+                font.bold: page.details.updateAvailable
+                color: page.details.updateAvailable ? Kirigami.Theme.positiveTextColor : Kirigami.Theme.textColor
+                wrapMode: Text.Wrap
+            }
+
             QQC2.CheckBox {
                 Kirigami.FormData.label: "Pre-releases:"
                 visible: page.followsReleases
@@ -168,13 +186,13 @@ Kirigami.ScrollablePage {
 
             Kirigami.Heading {
                 level: 3
-                text: "Your build file"
+                text: "Which file you use"
             }
 
             QQC2.Label {
                 Layout.fillWidth: true
                 Layout.bottomMargin: Kirigami.Units.smallSpacing
-                text: `A release can come in several files. Choose the one you use; from then on, each new release's version of that same file is followed. These are the files in ${page.details.latestTag}, the newest release.`
+                text: `A release can come in several files. Choose yours, and the same file is followed in every new release. Listed from ${page.details.latestTag}, the newest release.`
                 wrapMode: Text.Wrap
                 opacity: 0.7
             }
@@ -258,9 +276,8 @@ Kirigami.ScrollablePage {
                 required property int index
                 readonly property bool open: page.isExpanded(modelData.tag, index)
                 property bool notesShown: false
-                property bool othersShown: false
-                readonly property var forThisPC: modelData.assets.filter(a => a.suits || a.selected)
-                readonly property int otherCount: modelData.assets.length - forThisPC.length
+                property bool filesShown: false
+                readonly property var yourFile: modelData.assets.find(a => a.selected) || null
 
                 Layout.fillWidth: true
                 spacing: 0
@@ -291,19 +308,19 @@ Kirigami.ScrollablePage {
                         }
 
                         Tag {
+                            visible: release.modelData.isInstalled
+                            text: "your version"
+                            highlighted: true
+                        }
+
+                        Tag {
                             visible: release.modelData.isLatest
-                            text: "latest"
+                            text: "newest"
                         }
 
                         Tag {
                             visible: release.modelData.prerelease
                             text: "pre-release"
-                        }
-
-                        Tag {
-                            visible: release.modelData.hasSelected
-                            text: "has your file"
-                            highlighted: true
                         }
 
                         QQC2.Label {
@@ -320,67 +337,36 @@ Kirigami.ScrollablePage {
                     spacing: 0
 
                     QQC2.Label {
-                        visible: release.modelData.assets.length === 0
-                        text: "No download files in this release (only the source code)."
-                        opacity: 0.7
-                    }
-
-                    QQC2.Label {
-                        visible: release.modelData.assets.length > 0 && release.forThisPC.length === 0
-                        text: "No files for this computer in this release."
-                        opacity: 0.7
-                    }
-
-                    Repeater {
-                        model: release.othersShown ? release.modelData.assets : release.forThisPC
-
-                        delegate: RowLayout {
-                            id: file
-
-                            required property var modelData
-
-                            objectName: "releaseFile:" + release.modelData.tag + ":" + modelData.name
-                            Layout.fillWidth: true
-                            Layout.topMargin: Kirigami.Units.smallSpacing
-                            Layout.bottomMargin: Kirigami.Units.smallSpacing
-                            spacing: Kirigami.Units.smallSpacing
-                            opacity: modelData.suits || modelData.selected ? 1 : 0.5
-
-                            Kirigami.Icon {
-                                source: file.modelData.selected ? "emblem-checked" : ""
-                                Layout.preferredWidth: Kirigami.Units.iconSizes.small
-                                Layout.preferredHeight: Kirigami.Units.iconSizes.small
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 0
-
-                                QQC2.Label {
-                                    Layout.fillWidth: true
-                                    text: file.modelData.name
-                                    font.bold: file.modelData.selected
-                                    elide: Text.ElideMiddle
-                                }
-
-                                QQC2.Label {
-                                    Layout.fillWidth: true
-                                    visible: text !== ""
-                                    text: [file.modelData.selected ? "your file" : "", file.modelData.details].filter(s => s).join(" · ")
-                                    font: Kirigami.Theme.smallFont
-                                    opacity: 0.8
-                                    elide: Text.ElideRight
-                                }
-                            }
-                        }
+                        Layout.fillWidth: true
+                        Layout.topMargin: Kirigami.Units.smallSpacing
+                        text: release.modelData.assets.length === 0 ? "No download files in this release (only the source code)."
+                            : page.repo.assetPattern === "" ? `${release.modelData.assets.length} files. Choose yours under \u201cWhich file you use\u201d.`
+                            : release.yourFile ? `Your file: ${release.yourFile.name}` + (release.yourFile.details ? ` (${release.yourFile.details})` : "")
+                            : "Your file isn't in this release."
+                        wrapMode: Text.Wrap
                     }
 
                     QQC2.Button {
-                        visible: release.otherCount > 0
+                        visible: release.modelData.assets.length > 0
                         flat: true
-                        icon.name: release.othersShown ? "go-up-symbolic" : "view-more-symbolic"
-                        text: release.othersShown ? "Hide files for other systems" : `Show ${release.otherCount} files for other systems`
-                        onClicked: release.othersShown = !release.othersShown
+                        icon.name: release.filesShown ? "go-up-symbolic" : "view-list-details"
+                        text: release.filesShown ? "Hide files" : `Show all ${release.modelData.assets.length} files`
+                        onClicked: release.filesShown = !release.filesShown
+                    }
+
+                    Repeater {
+                        model: release.filesShown ? release.modelData.assets : []
+
+                        delegate: QQC2.Label {
+                            required property var modelData
+
+                            Layout.fillWidth: true
+                            Layout.leftMargin: Kirigami.Units.largeSpacing
+                            text: modelData.name + (modelData.details ? `  \u00b7  ${modelData.details}` : "")
+                            font: Kirigami.Theme.smallFont
+                            opacity: modelData.suits ? 0.9 : 0.5
+                            elide: Text.ElideMiddle
+                        }
                     }
 
                     QQC2.Button {

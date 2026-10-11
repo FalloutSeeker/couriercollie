@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from repoproject import config, sources
-from repoproject.backend import Backend, Details
+from repoproject.backend import Backend, Details, _set_baseline
 from repoproject.config import TrackedRepo
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -68,6 +68,48 @@ class BackendTest(unittest.TestCase):
         self.backend._details[LOCALSEND].releases[0].assets = [
             sources.Asset("app-x86_64-release.apk", "u"), sources.Asset("app-x86_64-release.apk.idsig", "u")]
         self.assertFalse(self.backend.details(LOCALSEND)["anyFileSuits"])
+
+    def test_your_version_starts_at_the_newest(self):
+        repo = self.backend._config.find(LOCALSEND)
+        self.assertTrue(_set_baseline(repo, self.backend._details[LOCALSEND]))
+        d = self.backend.details(LOCALSEND)
+        self.assertEqual(repo.installed, "v1.18.2")
+        self.assertEqual(d["status"], "Up to date")
+        self.assertFalse(d["updateAvailable"])
+        self.assertTrue(d["releases"][0]["isInstalled"])
+
+    def test_older_version_shows_an_update(self):
+        self.backend.setInstalled(LOCALSEND, "v1.18.1")
+        d = self.backend.details(LOCALSEND)
+        self.assertEqual(d["status"], "Newer version available: v1.18.2 (you have v1.18.1)")
+        self.assertTrue(d["updateAvailable"])
+        self.assertEqual(d["versionOptions"][d["versionIndex"]]["value"], "v1.18.1")
+        self.assertEqual(self.saved(LOCALSEND).installed, "v1.18.1")
+
+    def test_not_installed(self):
+        self.backend.setInstalled(LOCALSEND, "-")
+        d = self.backend.details(LOCALSEND)
+        self.assertEqual(d["status"], "Not installed. The newest is v1.18.2.")
+        self.assertEqual(d["versionOptions"][d["versionIndex"]]["label"], "Not installed")
+
+    def test_version_older_than_the_list_is_kept_as_a_choice(self):
+        self.backend.setInstalled(LOCALSEND, "v1.0.0")
+        d = self.backend.details(LOCALSEND)
+        self.assertEqual(d["versionOptions"][d["versionIndex"]]["value"], "v1.0.0")
+        self.assertTrue(d["updateAvailable"])
+
+    def test_branch_versions_are_commits(self):
+        self.backend.setFollow(LOCALSEND, "branch")
+        repo = self.saved(LOCALSEND)
+        self.assertEqual(repo.installed, "a" * 40)  # newest commit on "main"
+        self.assertEqual(self.backend.details(LOCALSEND)["status"], "Up to date")
+        self.backend.setBranch(LOCALSEND, "dev")
+        self.assertEqual(self.saved(LOCALSEND).installed, "b" * 40)
+        self.backend.setInstalled(LOCALSEND, "c" * 40)
+        d = self.backend.details(LOCALSEND)
+        self.assertEqual(d["status"], "Newer commits on dev (you have commit ccccccc)")
+        self.assertEqual([o["label"] for o in d["versionOptions"]],
+                         ["Newest commit (bbbbbbb)", "Older commit (ccccccc)", "Not installed"])
 
     def test_files_for_this_pc_are_marked(self):
         latest = self.backend.details(LOCALSEND)["releases"][0]

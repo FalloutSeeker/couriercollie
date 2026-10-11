@@ -12,7 +12,7 @@ from pathlib import Path
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from . import assets, config, sources
-from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, Config, ConfigError, TrackedRepo
+from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, Config, ConfigError, TrackedRepo
 from .sources import RepoRef, SourceError
 
 HOST_LABELS = {"github": "GitHub", "gitlab": "GitLab"}
@@ -50,6 +50,23 @@ def _size_text(size: int | None) -> str:
 
 def _date_text(date: datetime | None) -> str:
     return f"{date.astimezone():%-d %b %Y}" if date else ""
+
+
+def _newest_version(repo: TrackedRepo, d: Details) -> str:
+    """The newest version of what the repo follows: the newest full release, or the latest commit on the branch."""
+    if repo.follow == FOLLOW_BRANCH:
+        branch = next((b for b in d.branches if b.name == (repo.branch or d.default_branch)), None)
+        return branch.sha if branch else ""
+    release = next((r for r in d.releases if not r.prerelease), d.releases[0] if d.releases else None)
+    return release.tag if release else ""
+
+
+def _set_baseline(repo: TrackedRepo, d: Details) -> bool:
+    """If your version isn't known yet, assume you have the newest. You can change it on the repo page."""
+    if repo.installed or d.state != "ready":
+        return False
+    repo.installed = _newest_version(repo, d)
+    return bool(repo.installed)
 
 
 def _fetch_branches(ref: RepoRef) -> tuple[str, list[sources.Branch], str]:
@@ -263,10 +280,12 @@ class Backend(QObject):
                 self._auto_pick(repo, rels)
             else:
                 repo.follow, repo.kind = FOLLOW_BRANCH, assets.KIND_GIT
-            self._details[repo.id] = Details(
+            details = Details(
                 state="ready", releases=rels,
                 default_branch=default or info.default_branch, branches=branches, branch_error=branch_error,
             )
+            self._details[repo.id] = details
+            _set_baseline(repo, details)
             self._config.repos.append(repo)
             self._changed()
             self.addFinished.emit(repo.id)
@@ -321,6 +340,8 @@ class Backend(QObject):
                 self._details[repo_id] = Details(
                     state="ready", releases=rels, default_branch=default, branches=branches, branch_error=branch_error,
                 )
+                if (repo := self._config.find(repo_id)) and _set_baseline(repo, self._details[repo_id]):
+                    self._changed()
             self.detailsChanged.emit(repo_id)
 
         self._run(work, done)
@@ -354,12 +375,15 @@ class Backend(QObject):
                 "url": rel.url,
                 "assets": files,
                 "hasSelected": any(f["selected"] for f in files),
+                "isInstalled": bool(repo) and rel.tag == repo.installed,
             })
         current_branch = (repo.branch if repo else "") or d.default_branch
         # The one place to choose which file to follow: the newest release's files, those for this PC first.
         latest = releases[0] if releases else None
         choices = sorted(latest["assets"], key=lambda f: not f["suits"]) if latest else []
+        version = self._version_info(repo, d, shown) if repo and d.state == "ready" else {}
         return {
+            **{"versionOptions": [], "versionIndex": -1, "status": "", "updateAvailable": False}, **version,
             "state": d.state,
             "error": d.error,
             "description": repo.description if repo else "",
@@ -379,6 +403,49 @@ class Backend(QObject):
             ],
         }
 
+    @staticmethod
+    def _version_info(repo: TrackedRepo, d: Details, shown: list[sources.Release]) -> dict:
+        """Choices for "Your version", and a status line comparing it with the newest."""
+        installed = repo.installed
+        not_installed = {"value": NOT_INSTALLED, "label": "Not installed"}
+        if repo.follow == FOLLOW_BRANCH:
+            branch = repo.branch or d.default_branch
+            head = next((b.sha for b in d.branches if b.name == branch), "")
+            if not head:
+                return {}
+            options = [{"value": head, "label": f"Newest commit ({head[:7]})"}]
+            if installed not in (head, "", NOT_INSTALLED):
+                options.append({"value": installed, "label": f"Older commit ({installed[:7]})"})
+            newest_text, yours_text = f"commit {head[:7]}", f"commit {installed[:7]}"
+            newer_text = f"Newer commits on {branch}"
+            newest = head
+        else:
+            if not shown:
+                return {}
+            newest = shown[0].tag
+            options = [{"value": r.tag, "label": r.tag + (" (newest)" if i == 0 else "")} for i, r in enumerate(shown)]
+            if installed not in {r.tag for r in shown} | {"", NOT_INSTALLED}:
+                options.append({"value": installed, "label": installed})
+            newest_text, yours_text = newest, installed
+            newer_text = f"Newer version available: {newest}"
+        options.append(not_installed)
+        index = next((i for i, o in enumerate(options) if o["value"] == installed), -1)
+        if installed == NOT_INSTALLED:
+            status, update = f"Not installed. The newest is {newest_text}.", False
+        elif installed == newest:
+            status, update = "Up to date", False
+        elif installed:
+            status, update = f"{newer_text} (you have {yours_text})", True
+        else:
+            status, update = "", False
+        return {"versionOptions": options, "versionIndex": index, "status": status, "updateAvailable": update}
+
+    @Slot(str, str)
+    def setInstalled(self, repo_id, version):
+        if (repo := self._config.find(repo_id)) and version and version != repo.installed:
+            repo.installed = version
+            self._changed(repo_id)
+
     @Slot(str, str)
     def setFollow(self, repo_id, follow):
         repo = self._config.find(repo_id)
@@ -396,12 +463,16 @@ class Backend(QObject):
                     if a := next((a for a in rel.assets if assets.matches(repo.asset_pattern, a.name)), None):
                         repo.kind = assets.classify(a.name, a.url).kind
                         break
+        repo.installed = ""
+        _set_baseline(repo, self._details.get(repo_id, Details()))
         self._changed(repo_id)
 
     @Slot(str, str)
     def setBranch(self, repo_id, branch):
         if (repo := self._config.find(repo_id)) and branch != repo.branch:
             repo.branch = branch
+            repo.installed = ""
+            _set_baseline(repo, self._details.get(repo_id, Details()))
             self._changed(repo_id)
 
     @Slot(str, str, str)

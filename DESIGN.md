@@ -44,7 +44,9 @@ The app then fetches the project's releases and shows them, so you can pick whic
 
 Clicking a tracked repo shows:
 
-- **Installed version** and **latest version**, with when it was last checked.
+- **Your version** and a status line ("Up to date" / "Newer version available: …"). Your version is a release, a
+  commit (when following a branch), or "Not installed". When a repo is added it starts at the newest version; change
+  it if you're on an older one.
 - **Releases list**: every version, newest first, with its date and release notes. Pre-releases are hidden unless
   you turn them on for that repo.
 - **Your build file**: one project often publishes several files for the same version (an `.rpm`, an AppImage, ARM
