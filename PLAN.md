@@ -94,8 +94,8 @@ Each update removes the version it replaced once the new one is in place (no Und
     downloaded file, so the app could install and update them. (Installed Flatpaks stay Flatpak's to update.)
   - Done: an Arch package (`packaging/arch/PKGBUILD`, for the AUR at release): built with makepkg, installed with
     pacman and started in an Arch container (`devtools/build_arch.sh`). Maybe a `.deb` later.
-  - Packages besides the RPM: Not a Flatpak of the app itself: its sandbox blocks
-    scanning folders, running git, dnf and pkexec, `~/.local/bin` and the systemd timer.
+  - Not a Flatpak of the app itself: its sandbox blocks scanning folders, running git, dnf and pkexec,
+    `~/.local/bin` and the systemd timer.
   - Done: the libraries' package names per distro, in the README (looked up in Ubuntu 26.04, Arch and openSUSE
     Tumbleweed containers). The tests pass on openSUSE's Python 3.13.
 
