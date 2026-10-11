@@ -57,30 +57,19 @@ class Found:
 # 1. Finding things on disk
 
 
-def _git(path: str, *args: str) -> str:
-    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"}
-    try:
-        # safe.directory: git won't otherwise read a clone that belongs to another user (e.g. the system, in /opt).
-        result = subprocess.run(["git", "-c", f"safe.directory={path}", "-C", path, *args], capture_output=True,
-                                text=True, timeout=10, env=env)
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
-    return result.stdout.strip() if result.returncode == 0 else ""
-
-
 def _clone_info(path: str) -> Found | None:
-    remote = _git(path, "config", "--get", "remote.origin.url")
+    remote = updater.git_out(path, "config", "--get", "remote.origin.url")
     if not remote:
         # No "origin": use whichever remote there is.
-        first = _git(path, "remote").splitlines()
-        remote = _git(path, "config", "--get", f"remote.{first[0]}.url") if first else ""
+        first = updater.git_out(path, "remote").splitlines()
+        remote = updater.git_out(path, "config", "--get", f"remote.{first[0]}.url") if first else ""
     try:
         ref = sources.parse_url(remote)
     except ValueError:
         return None  # a local folder or an address that isn't a project page
     return Found(
         id=ref.id, name=ref.name, url=ref.web_url, host="", path=path, kind=assets.KIND_GIT,
-        version=_git(path, "rev-parse", "HEAD"), branch=_git(path, "symbolic-ref", "--short", "-q", "HEAD"),
+        version=updater.git_out(path, "rev-parse", "HEAD"), branch=updater.git_out(path, "symbolic-ref", "--short", "-q", "HEAD"),
     )
 
 
@@ -253,8 +242,8 @@ def version_on_disk(path: str, releases: bool = False) -> tuple[str, bool]:
     if p.is_symlink() and (version := updater.program_version(p)):
         return version, True  # a program the app installed: its link points into that version's folder
     if (p / ".git").exists():
-        tags = _git(path, "tag", "--points-at", "HEAD").split() if releases else []
-        return (tags[0] if tags else _git(path, "rev-parse", "HEAD")), True
+        tags = updater.git_out(path, "tag", "--points-at", "HEAD").split() if releases else []
+        return (tags[0] if tags else updater.git_out(path, "rev-parse", "HEAD")), True
     if p.is_file() and p.suffix.lower() == ".appimage":
         return appimage_version(p.name), True
     return "", False
@@ -262,7 +251,7 @@ def version_on_disk(path: str, releases: bool = False) -> tuple[str, bool]:
 
 def branch_on_disk(path: str) -> str:
     """The branch checked out in a clone, or "" (not a clone, or no branch checked out)."""
-    return _git(path, "symbolic-ref", "--short", "-q", "HEAD") if (Path(path) / ".git").exists() else ""
+    return updater.git_out(path, "symbolic-ref", "--short", "-q", "HEAD") if (Path(path) / ".git").exists() else ""
 
 
 # ---------------------------------------------------------------------------------------------------------------------

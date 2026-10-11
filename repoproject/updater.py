@@ -45,7 +45,7 @@ class UpdateError(Exception):
 
 def _git(path: str, *args: str, timeout: int = 30) -> subprocess.CompletedProcess:
     # safe.directory: git won't otherwise read a clone that belongs to another user (e.g. the system, in /opt).
-    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"}
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0", "LC_ALL": "C"}
     try:
         return subprocess.run(["git", "-c", f"safe.directory={path}", "-C", path, *args], capture_output=True,
                               text=True, timeout=timeout, env=env)
@@ -55,8 +55,12 @@ def _git(path: str, *args: str, timeout: int = 30) -> subprocess.CompletedProces
         raise UpdateError(f"Couldn’t run git: {e}") from e
 
 
-def _out(path: str, *args: str) -> str:
-    result = _git(path, *args)
+def git_out(path: str, *args: str, timeout: int = 30) -> str:
+    """A git command's output in the clone at `path`, or "" if it fails. Never asks for anything."""
+    try:
+        result = _git(path, *args, timeout=timeout)
+    except UpdateError:
+        return ""
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
@@ -68,9 +72,9 @@ def _last_line(result: subprocess.CompletedProcess) -> str:
 def _remote_for(path: str, repo_ids: list[str]) -> str:
     """The clone's remote that points at the tracked project (a scan matched it by address), else "origin"."""
     wanted = {i.lower() for i in repo_ids}
-    for name in _out(path, "remote").splitlines():
+    for name in git_out(path, "remote").splitlines():
         try:
-            if sources.parse_url(_out(path, "remote", "get-url", name)).id.lower() in wanted:
+            if sources.parse_url(git_out(path, "remote", "get-url", name)).id.lower() in wanted:
                 return name
         except ValueError:
             continue
@@ -151,19 +155,19 @@ def pull(path: str, branch: str, repo_ids: list[str]) -> tuple[str, str, int]:
     """Brings the clone at `path` up to the newest commit on `branch`. Returns (commit before, commit after, how many
     new commits). Refuses, with the reason, anything that isn't a plain fast-forward of the branch you're on."""
     as_root = _as_root(path)
-    on = _out(path, "symbolic-ref", "--short", "-q", "HEAD")
+    on = git_out(path, "symbolic-ref", "--short", "-q", "HEAD")
     if on != branch:
         where = f"on {on}" if on else "not on any branch"
         raise UpdateError(f"Your clone is {where}, not {branch}, so it wasn\u2019t changed. Switch it to {branch} "
                           f"(git switch {shlex.quote(branch)}), or follow {on or 'another branch'} instead.")
-    before = _out(path, "rev-parse", "HEAD")
+    before = git_out(path, "rev-parse", "HEAD")
     remote = _remote_for(path, repo_ids)
     result = _run_steps(path, [["fetch", "--quiet", "--no-tags", remote, branch],
                                ["merge", "--ff-only", "--quiet", "FETCH_HEAD"]], as_root)
     if result.returncode != 0:
         raise _explain(result)
-    after = _out(path, "rev-parse", "HEAD")
-    count = int(_out(path, "rev-list", "--count", f"{before}..{after}") or 0) if before and after else 0
+    after = git_out(path, "rev-parse", "HEAD")
+    count = int(git_out(path, "rev-list", "--count", f"{before}..{after}") or 0) if before and after else 0
     return before, after, count
 
 
@@ -172,9 +176,9 @@ def checkout_release(path: str, tag: str, repo_ids: list[str]) -> tuple[str, str
     was on, or ""). The branch itself isn't changed, so `git switch <branch>` goes back. Refuses if that would leave
     commits behind that aren't on any branch or tag."""
     as_root = _as_root(path)
-    on = _out(path, "symbolic-ref", "--short", "-q", "HEAD")
-    before = _out(path, "rev-parse", "HEAD")
-    if not on and before and not _out(path, "for-each-ref", "--count=1", "--contains", before):
+    on = git_out(path, "symbolic-ref", "--short", "-q", "HEAD")
+    before = git_out(path, "rev-parse", "HEAD")
+    if not on and before and not git_out(path, "for-each-ref", "--count=1", "--contains", before):
         raise UpdateError("Your clone has commits that aren\u2019t on any branch, and moving it to the new release "
                           "would leave them behind, so it wasn\u2019t changed. Put them on a branch first "
                           "(git switch -c <name>), then update again.")
