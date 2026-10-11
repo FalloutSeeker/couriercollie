@@ -77,8 +77,9 @@ Settings has how often to check (or never), notifications, scan folders and GitH
 - Your password is only asked for packages (through your package manager) and for clones owned by the system.
 - A project's install script is shown to you before it runs.
 
-**Does it run all the time?** No. With automatic checks on, a small timer runs a quick check and exits. Close the
-window and nothing stays running.
+**Does it run all the time?** No, but automatic checks don't need the window. With them on, a small background
+timer runs a quick check now and then, and exits, even after you close the window. Turn automatic checks off in
+Settings and nothing runs unless you open couriercollie.
 
 **Do I need to sign in to GitHub?** Only if you track a lot of GitHub projects. GitHub allows 60 requests an hour
 without signing in, and 5,000 with.
@@ -100,8 +101,8 @@ without signing in, and 5,000 with.
 The scan folders are your home folder, `/opt`, `/usr/local` and `/srv`, where software installed by hand lives. The
 rest of the system belongs to your package manager. Change them in Settings.
 
-**Which distros?** It's built and tested mainly on Fedora KDE. Package installs were tested on Fedora, openSUSE,
-Ubuntu and Arch in containers. GNOME works, but needs more testing. Tried it somewhere? Please
+**Which distros?** It's built and tested mainly on Fedora KDE. openSUSE, Ubuntu, Debian, Arch and GNOME are
+supported, but need feedback. Tried it somewhere? Please
 [open an issue](https://github.com/FalloutSeeker/couriercollie/issues), whether it worked or not.
 
 **Start over:** `./run.sh --reset` brings the welcome screen back. Your old settings are kept as a dated backup.
@@ -119,45 +120,5 @@ Ubuntu and Arch in containers. GNOME works, but needs more testing. Tried it som
 | Programs it installs | `~/.local/share/couriercollie/programs`, linked from `~/.local/bin` |
 | Projects it clones | `~/src` |
 | GitHub sign-in (only if you sign in) | Your desktop's password store |
-
-</details>
-
-## For developers
-
-- [DESIGN.md](DESIGN.md): how it works.
-- [DECISIONS.md](DECISIONS.md): why it works that way.
-- [ROADMAP.md](ROADMAP.md): what's next.
-- [CHANGELOG.md](CHANGELOG.md): what changed.
-
-Run the tests, which need no network:
-
-```sh
-python3 -m unittest discover -s tests -t .
-```
-
-<details>
-<summary>Window checks and packaging scripts (<code>devtools/</code>)</summary>
-
-The window checks drive the real window off-screen, with temporary settings, and save screenshots to `.uicheck/`.
-
-| Script | Checks |
-| --- | --- |
-| `check_look.py [dark\|readme]` | Every screen and state, for looking over |
-| `check_pages.py` | Welcome screen, list, repo page, Settings |
-| `check_settings.py` | Scan folders in Settings |
-| `check_categories.py` | Adding, dragging, renaming, deleting categories |
-| `check_updates.py` | Check Now, results, the rate-limit bar |
-| `check_update_clone.py` | Updating a clone, refusals, install scripts |
-| `check_install_clone.py` | Install clones a project |
-| `check_scanned_repo.py` | A scanned clone's page (uses a copy of your settings) |
-| `check_icons.py` | Icon lookup (uses a copy of your settings) |
-| `check_scan.py` | A real scan of this computer |
-| `check_appimage.py`, `check_program.py` | Real downloads, into temporary folders |
-| `check_rpm.py` | A real `.rpm` up to a stand-in dnf |
-| `check_flatpak.py` | A Flatpak bundle, in a temporary Flatpak folder |
-| `check_distros.sh` | Packages with dnf, zypper, apt and pacman, in containers |
-| `build_rpm.sh`, `build_arch.sh` | Build the Fedora and Arch packages |
-
-Run Python ones as `python3 -I devtools/<script>`.
 
 </details>
