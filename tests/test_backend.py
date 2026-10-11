@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from repoproject import config, sources
-from repoproject.backend import Backend, Details, _set_baseline
+from repoproject.backend import Backend, Details, _fit_files, _set_baseline
 from repoproject.config import TrackedRepo
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -52,12 +52,40 @@ class BackendTest(unittest.TestCase):
     def test_one_picker_from_the_newest_release(self):
         d = self.backend.details(LOCALSEND)
         self.assertEqual(d["latestTag"], "v1.18.2")
-        names = [f["name"] for f in d["fileChoices"]]
-        self.assertEqual(len(names), 20)
-        # Files for this PC come first.
-        self.assertTrue(all(f["suits"] for f in d["fileChoices"][:3]))
+        # Only files that run on this computer can be chosen.
+        self.assertEqual([f["name"] for f in d["fileChoices"]],
+                         ["LocalSend-1.18.2-linux-x86-64.AppImage", "LocalSend-1.18.2-linux-x86-64.tar.gz",
+                          "LocalSend-CLI-1.18.2-linux-x86-64.tar.gz"])
         self.assertTrue(d["anyFileSuits"])
+        self.assertFalse(d["versionOnly"])
         self.assertFalse(d["yourFileMissing"])
+
+    def test_files_for_other_systems_cant_be_chosen(self):
+        self.backend.pickAsset(LOCALSEND, "v1.18.2", "LocalSend-1.18.2-windows-x86-64.exe")
+        self.assertEqual(self.saved(LOCALSEND).asset_pattern, "")
+
+    def test_nothing_for_this_pc_means_versions_only(self):
+        # Like Obtainium: Android files only. An earlier pick of one is dropped, and only versions are tracked.
+        rel = self.backend._details[LOCALSEND].releases[0]
+        rel.assets = [sources.Asset("app-x86_64-release.apk", "u"), sources.Asset("app-x86_64-release.apk.idsig", "u")]
+        self.backend._details[LOCALSEND].releases = [rel]
+        repo = self.backend._config.find(LOCALSEND)
+        repo.asset_pattern, repo.kind = "app-x86_64-release.apk.idsig", "File"
+        self.assertTrue(_fit_files(repo, self.backend._details[LOCALSEND]))
+        self.assertEqual((repo.asset_pattern, repo.kind), ("", "versions"))
+        d = self.backend.details(LOCALSEND)
+        self.assertTrue(d["versionOnly"])
+        self.assertEqual(d["fileChoices"], [])
+        self.assertEqual(self.backend.repo(LOCALSEND)["followText"], "Versions only (nothing for this computer)")
+        # Version tracking still works.
+        self.backend.setInstalled(LOCALSEND, "v1.18.2")
+        self.assertEqual(self.backend.details(LOCALSEND)["status"], "Up to date")
+
+    def test_versions_only_ends_when_a_release_adds_something_for_this_pc(self):
+        repo = self.backend._config.find(LOCALSEND)
+        repo.kind = "versions"
+        self.assertTrue(_fit_files(repo, self.backend._details[LOCALSEND]))
+        self.assertEqual(repo.kind, "")
 
     def test_file_missing_from_the_newest_release(self):
         repo = self.backend._config.find(LOCALSEND)

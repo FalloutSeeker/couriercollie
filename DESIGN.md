@@ -52,7 +52,11 @@ Clicking a tracked repo shows:
 - **Your build file**: one project often publishes several files for the same version (an `.rpm`, an AppImage, ARM
   and Intel builds, etc.). You pick the one you use in one place, from the newest release's files, and the app
   follows that same file in future releases (it matches by pattern, so `app-1.2-x86_64.rpm` → `app-1.3-x86_64.rpm`
-  still matches). The releases list is for reading, with a ✓ on your file in each release.
+  still matches). Only files that run on this computer can be chosen. The releases list is for reading.
+- **Versions only**: if nothing in the newest release runs on this computer (e.g. an Android-only project), there's
+  no file to choose. The repo is tracked by version only, as with scanning off: you hear about new releases and set
+  your version yourself or mark it as up to date. Nothing is downloaded or installed. If a later release adds a file
+  for this computer, the file picker comes back.
 - **Branches**, for repos that don't publish releases (common for git clones): the app follows new commits on a
   branch instead, e.g. `Plasma/6.7`.
 - **Update** and **Open project page** buttons.

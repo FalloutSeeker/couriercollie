@@ -131,7 +131,9 @@ Kirigami.ScrollablePage {
             QQC2.Label {
                 Kirigami.FormData.label: "Tracking:"
                 Layout.maximumWidth: Kirigami.Units.gridUnit * 26
-                text: page.repo.scanned ? `Found on this computer: ${page.repo.localPath}` : "Added by hand. Set your version yourself."
+                text: page.repo.scanned ? `Found on this computer: ${page.repo.localPath}`
+                    : page.details.versionOnly === true && page.followsReleases ? "Versions only. Set your version yourself."
+                    : "Added by hand. Set your version yourself."
                 wrapMode: Text.WrapAnywhere
             }
 
@@ -186,14 +188,12 @@ Kirigami.ScrollablePage {
             }
         }
 
-        // ---- Your build file: the one place to choose -----------------------------------------------------------
+        // ---- Which file you use: the one place to choose ----------------------------------------------------------
 
         ColumnLayout {
             id: picker
 
-            property bool othersShown: false
             readonly property var choices: page.details.fileChoices || []
-            readonly property var forThisPC: choices.filter(f => f.suits || f.selected)
 
             Layout.fillWidth: true
             visible: page.followsReleases && page.ready && choices.length > 0
@@ -207,7 +207,7 @@ Kirigami.ScrollablePage {
             QQC2.Label {
                 Layout.fillWidth: true
                 Layout.bottomMargin: Kirigami.Units.smallSpacing
-                text: `A release can come in several files. Choose yours, and the same file is followed in every new release. Listed from ${page.details.latestTag}, the newest release.`
+                text: `A release can come in several files. Choose yours, and the same file is followed in every new release. These are the files in ${page.details.latestTag}, the newest release, that run on this computer.`
                 wrapMode: Text.Wrap
                 opacity: 0.7
             }
@@ -219,15 +219,8 @@ Kirigami.ScrollablePage {
                 text: `The newest release doesn't include your file (${page.repo.assetPattern}). The project may have renamed it. Choose it again below.`
             }
 
-            Kirigami.InlineMessage {
-                Layout.fillWidth: true
-                visible: page.details.anyFileSuits === false
-                type: Kirigami.MessageType.Information
-                text: "None of the newest release's files are for this computer. This project may only make software for other systems, such as Android or Windows."
-            }
-
             Repeater {
-                model: picker.othersShown ? picker.choices : picker.forThisPC
+                model: picker.choices
 
                 delegate: QQC2.RadioDelegate {
                     id: choice
@@ -239,7 +232,6 @@ Kirigami.ScrollablePage {
                     // Shows the saved choice only; a click asks the app, and its answer decides what's marked.
                     checkable: false
                     checked: modelData.selected
-                    opacity: modelData.suits || modelData.selected ? 1 : 0.5
                     onClicked: backend.pickAsset(page.repoId, page.details.latestTag, modelData.name)
 
                     contentItem: ColumnLayout {
@@ -263,13 +255,24 @@ Kirigami.ScrollablePage {
                     }
                 }
             }
+        }
 
-            QQC2.Button {
-                visible: picker.choices.length > picker.forThisPC.length
-                flat: true
-                icon.name: picker.othersShown ? "go-up-symbolic" : "view-more-symbolic"
-                text: picker.othersShown ? "Hide files for other systems" : `Show ${picker.choices.length - picker.forThisPC.length} files for other systems`
-                onClicked: picker.othersShown = !picker.othersShown
+        // Nothing in the newest release runs on this computer: versions only, as with scanning off.
+        ColumnLayout {
+            Layout.fillWidth: true
+            visible: page.followsReleases && page.ready && page.details.versionOnly === true
+            spacing: Kirigami.Units.smallSpacing
+
+            Kirigami.Heading {
+                level: 3
+                text: "Tracking versions only"
+            }
+
+            QQC2.Label {
+                Layout.fillWidth: true
+                text: "None of this project's files run on this computer (they're for other systems, such as Android or Windows). So only its versions are tracked: you'll hear about new releases, and you set your version yourself or mark it as up to date. Nothing is downloaded or installed."
+                wrapMode: Text.Wrap
+                opacity: 0.8
             }
         }
 
@@ -355,6 +358,7 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         Layout.topMargin: Kirigami.Units.smallSpacing
                         text: release.modelData.assets.length === 0 ? "No download files in this release (only the source code)."
+                            : page.details.versionOnly === true ? `${release.modelData.assets.length} files, none for this computer.`
                             : page.repo.assetPattern === "" ? `${release.modelData.assets.length} files. Choose yours under \u201cWhich file you use\u201d.`
                             : release.yourFile ? `Your file: ${release.yourFile.name}` + (release.yourFile.details ? ` (${release.yourFile.details})` : "")
                             : "Your file isn't in this release."

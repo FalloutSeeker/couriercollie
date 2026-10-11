@@ -4,6 +4,9 @@ Newest first.
 
 ## 2026-10-10
 
+- Only files that run on this computer can be chosen. Projects with nothing for this computer (Obtainium: Android
+  only) are tracked by version only: no picker, a "Tracking versions only" explanation, and "Versions only" in the
+  list. A saved pick of a file for another system is dropped the next time the repo's releases load.
 - Manual vs scanned entries. Each repo records how it got on the list, where it was found, and other addresses it's
   known by. `scan.merge` (for stage 3) updates existing entries instead of adding duplicates, including when the
   clone on disk uses an old address: the Aero clone here is `wackyideas/aerothemeplasma`, but the app saves the new

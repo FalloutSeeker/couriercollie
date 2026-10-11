@@ -15,6 +15,8 @@ KIND_GIT = "git"
 # A download whose type can't be told from its name or link (GitLab links are often just labelled "Linux (x86_64)").
 KIND_FILE = "File"
 KIND_OTHER = "Other"
+# Not a file: the project has nothing that runs on this computer, so only its versions are tracked.
+KIND_VERSIONS = "versions"
 
 _ARCHIVES = (".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.bz2", ".tbz2", ".tar.zst", ".zip")
 # Files for other systems, or that aren't software at all.

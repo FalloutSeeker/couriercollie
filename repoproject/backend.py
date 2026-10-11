@@ -22,6 +22,7 @@ KIND_ICONS = {
     assets.KIND_APPIMAGE: "application-vnd.appimage",
     assets.KIND_PROGRAM: "application-x-executable",
     assets.KIND_FILE: "application-x-executable",
+    assets.KIND_VERSIONS: "tag",
 }
 FILTERS = ("all", "github", "gitlab")
 
@@ -67,6 +68,25 @@ def _set_baseline(repo: TrackedRepo, d: Details) -> bool:
         return False
     repo.installed = _newest_version(repo, d)
     return bool(repo.installed)
+
+
+def _fit_files(repo: TrackedRepo, d: Details) -> bool:
+    """Only files that run on this computer can be followed. A pick of any other file is dropped, and a project with
+    nothing for this computer is tracked by version only. Returns True if the repo changed."""
+    if repo.follow != FOLLOW_RELEASES or d.state != "ready" or not d.releases:
+        return False
+    before = (repo.asset_pattern, repo.kind)
+    if repo.asset_pattern:
+        picked = [a for r in d.releases for a in r.assets if assets.matches(repo.asset_pattern, a.name)]
+        if picked and not any(assets.classify(a.name, a.url).suits for a in picked):
+            repo.asset_pattern, repo.kind = "", ""
+    newest = next((r for r in d.releases if not r.prerelease), d.releases[0])
+    nothing_fits = not any(assets.classify(a.name, a.url).suits for a in newest.assets)
+    if nothing_fits and not repo.asset_pattern:
+        repo.kind = assets.KIND_VERSIONS
+    elif repo.kind == assets.KIND_VERSIONS:
+        repo.kind = ""  # a later release added something for this computer
+    return (repo.asset_pattern, repo.kind) != before
 
 
 def _fetch_branches(ref: RepoRef) -> tuple[str, list[sources.Branch], str]:
@@ -140,6 +160,8 @@ class Backend(QObject):
             follow_text = f"Branch {r.branch}" if r.branch else "A branch"
         elif r.asset_pattern:
             follow_text = r.asset_pattern
+        elif r.kind == assets.KIND_VERSIONS:
+            follow_text = "Versions only (nothing for this computer)"
         else:
             follow_text = "No build file picked yet"
         return {
@@ -290,6 +312,7 @@ class Backend(QObject):
             )
             self._details[repo.id] = details
             _set_baseline(repo, details)
+            _fit_files(repo, details)
             self._config.repos.append(repo)
             self._changed()
             self.addFinished.emit(repo.id)
@@ -344,8 +367,10 @@ class Backend(QObject):
                 self._details[repo_id] = Details(
                     state="ready", releases=rels, default_branch=default, branches=branches, branch_error=branch_error,
                 )
-                if (repo := self._config.find(repo_id)) and _set_baseline(repo, self._details[repo_id]):
-                    self._changed()
+                if repo := self._config.find(repo_id):
+                    baseline_set = _set_baseline(repo, self._details[repo_id])
+                    if _fit_files(repo, self._details[repo_id]) or baseline_set:
+                        self._changed()
             self.detailsChanged.emit(repo_id)
 
         self._run(work, done)
@@ -384,7 +409,8 @@ class Backend(QObject):
         current_branch = (repo.branch if repo else "") or d.default_branch
         # The one place to choose which file to follow: the newest release's files, those for this PC first.
         latest = releases[0] if releases else None
-        choices = sorted(latest["assets"], key=lambda f: not f["suits"]) if latest else []
+        # Only files that run on this computer can be chosen.
+        choices = [f for f in latest["assets"] if f["suits"]] if latest else []
         version = self._version_info(repo, d, shown) if repo and d.state == "ready" else {}
         return {
             **{"versionOptions": [], "versionIndex": -1, "status": "", "updateAvailable": False}, **version,
@@ -395,7 +421,9 @@ class Backend(QObject):
             "releases": releases,
             "latestTag": latest["tag"] if latest else "",
             "fileChoices": choices,
-            "anyFileSuits": any(f["suits"] for f in choices),
+            "anyFileSuits": bool(choices),
+            # Nothing in the newest release runs on this computer: tracked by version only.
+            "versionOnly": latest is not None and not choices,
             # A file was picked, but the newest release doesn't have it (renamed or dropped by the project).
             "yourFileMissing": bool(pattern) and latest is not None and not latest["hasSelected"],
             "hiddenPrereleases": sum(1 for r in d.releases if r.prerelease) if repo and not repo.prereleases else 0,
@@ -482,6 +510,7 @@ class Backend(QObject):
                         break
         repo.installed = ""
         _set_baseline(repo, self._details.get(repo_id, Details()))
+        _fit_files(repo, self._details.get(repo_id, Details()))
         self._changed(repo_id)
 
     @Slot(str, str)
@@ -498,7 +527,7 @@ class Backend(QObject):
         d = self._details.get(repo_id)
         rel = next((r for r in d.releases if r.tag == tag), None) if d else None
         asset = next((a for a in rel.assets if a.name == asset_name), None) if rel else None
-        if not repo or not asset:
+        if not repo or not asset or not assets.classify(asset.name, asset.url).suits:
             return
         repo.asset_pattern = assets.pattern_for(asset.name, tag)
         repo.kind = assets.classify(asset.name, asset.url).kind
