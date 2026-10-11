@@ -128,6 +128,23 @@ class CheckAllTest(unittest.TestCase):
         self.assertNotIn(("releases", "github.com/a/three"), self.fakes.requests)  # not asked
         self.assertEqual(state.results["github.com/a/three"].retry_after, "2026-10-11T02:24:00+00:00")
 
+    def test_without_a_connection_repos_keep_their_last_result(self):
+        first, _ = checker.check_all(self.repos)
+        saved = checker.sources.releases
+
+        def offline(*args, **kwargs):
+            raise checker.sources.Unreachable("Couldn\u2019t reach api.github.com. Check your internet connection.")
+
+        checker.sources.releases = offline
+        self.addCleanup(setattr, checker.sources, "releases", saved)
+        second, fresh = checker.check_all(self.repos, first)
+        kept = second.results["github.com/a/one"]
+        self.assertEqual((kept.status, kept.not_rechecked, kept.retry_after), (checker.UPDATE, True, ""))
+        self.assertEqual(fresh, [])  # nothing new to announce
+        # Never checked before: says it couldn't be checked (not "failed" for a reason to do with the repo).
+        third, _ = checker.check_all(self.repos, checker.State())
+        self.assertEqual(third.results["github.com/a/one"].status, checker.UNREACHABLE)
+
     def test_limited_repos_keep_their_last_result(self):
         checker.CHECKS_AT_ONCE, saved = 1, checker.CHECKS_AT_ONCE
         self.addCleanup(setattr, checker, "CHECKS_AT_ONCE", saved)

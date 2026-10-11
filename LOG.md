@@ -10,6 +10,21 @@ Newest first.
   Konsole in the clone's folder. Tested against real git repos made for the tests; your own clones weren't touched.
   - Also: a branch whose newest commit is your version is no longer asked about (it's the same, no request).
   - The scanned-repo window check now waits for each comparison to come back, rather than a fixed time.
+- Polish pass (tested every feature again; screenshots in Aero, Breeze Dark, offline and rate-limited):
+  - An open repo page reloads when a check found something newer (it stayed on "Loading…").
+  - Without a connection, a check keeps each repo's last result, marked "(not rechecked)", instead of replacing it
+    with an error; the summary says how many couldn't be checked (it said "All up to date" when none could be).
+    A row says "Couldn't check" in a few words, with the reason on hover; git's "unable to access" became
+    "Couldn't reach github.com. Check your internet connection."
+  - List toolbar: Check Now and Settings stay visible; Scan moves to the overflow menu when space runs out. The
+    Update button's tooltip says when it asks for a password. "All up to date" instead of "0 updates".
+  - Repo page: Tracking shows only once loaded (it showed misleading values on an error). Shorter scanning
+    explanations on the welcome screen and in Settings. A scan says when a find can't be updated from here.
+  - Removing a repo clears its last result. Duplicated code merged (downloads, saving check results). README brought
+    up to date. Tests 12 s -> 1.5 s.
+  - Test windows draw with OpenGL, like the desktop: the software renderer had drawn list icons over dialogs, which
+    the desktop never does. The small-font line spacing in screenshots is also a test-window effect (checked against
+    the real session's fonts).
 - Dropped Undo Last Update and the "delete old versions after…" setting, as unnecessary: an update now removes the
   version it replaced once the new one is in place, so nothing piles up (D11 changed). Removed from Settings and the
   welcome screen too. The download-and-check code shared by AppImages, programs and RPMs is now one function; an

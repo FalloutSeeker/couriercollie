@@ -387,10 +387,21 @@ class Backend(QObject):
 
     def _check_dict(self, repo_id: str) -> dict:
         result = self._checks.results.get(repo_id)
+        failed = bool(result) and result.status in (checker.FAILED, checker.UNREACHABLE)
+        kept = bool(result) and result.not_rechecked
+        # A row says it in a few words; why is in its tooltip.
+        if failed:
+            text, detail = "Couldn\u2019t check", result.text.removeprefix("Couldn\u2019t check: ")
+        elif kept:
+            text = f"{result.text} (not rechecked)"
+            detail = ("The site\u2019s hourly limit for requests was reached" if result.retry_after
+                      else "The site couldn\u2019t be reached") + "; this is the last check\u2019s result."
+        else:
+            text, detail = (result.text if result else ""), ""
         return {
             "checkStatus": result.status if result else "",
-            "checkText": (result.text + (" (not rechecked: hourly limit)" if result.not_rechecked else ""))
-                         if result else "",
+            "checkText": text,
+            "checkDetail": detail,
             "updateAvailable": bool(result) and result.status == checker.UPDATE,
         }
 
@@ -403,11 +414,15 @@ class Backend(QObject):
         """For the list's header: how many updates, when it last checked, when it checks next, and problems."""
         tracked = {r.id for r in self._config.repos}
         results = {k: v for k, v in self._checks.results.items() if k in tracked}
-        limited = [v for v in results.values() if v.status == checker.RATE_LIMITED or v.not_rechecked]
+        limited = [v for v in results.values() if v.status == checker.RATE_LIMITED or (v.not_rechecked and v.retry_after)]
         reset = next((v.retry_after for v in limited if v.retry_after), "")
         s = self._config.settings
         return {
             "updates": sum(1 for v in results.values() if v.status == checker.UPDATE),
+            # Not checked this time: a failure, or no answer (also when the last result was kept).
+            "failed": sum(1 for v in results.values() if v.status in (checker.FAILED, checker.UNREACHABLE)
+                          or (v.not_rechecked and not v.retry_after)),
+            "checked": len(results),
             "lastChecked": _when_text(self._checks.last_run),
             "nextCheck": _when_text(_plus_hours(self._checks.last_run, s.check_interval_hours))
                          if s.auto_check and self._checks.last_run else "",

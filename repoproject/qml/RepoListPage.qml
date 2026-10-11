@@ -189,7 +189,11 @@ Kirigami.ScrollablePage {
                         return "Checking for updates\u2026";
                     const parts = [];
                     if (c.lastChecked)
-                        parts.push(c.updates === 0 ? "All up to date" : c.updates === 1 ? "1 update" : `${c.updates} updates`,
+                        parts.push(c.checked > 0 && c.failed === c.checked
+                                   ? "Couldn\u2019t check any" + (c.updates > 0 ? ` (${c.updates} known from before)` : "")
+                                   : c.updates === 0 && c.failed === 0 ? "All up to date"
+                                   : c.updates === 0 ? "No updates" : c.updates === 1 ? "1 update" : `${c.updates} updates`,
+                                   ...(c.failed > 0 && c.failed < c.checked ? [`${c.failed} couldn\u2019t be checked`] : []),
                                    `checked ${c.lastChecked}`);
                     else
                         parts.push("Not checked yet");
@@ -663,6 +667,15 @@ Kirigami.ScrollablePage {
                                 wrapMode: Text.Wrap
                                 maximumLineCount: 2
                                 elide: Text.ElideRight
+
+                                // Why a check failed, on hover.
+                                HoverHandler {
+                                    id: resultHover
+                                }
+
+                                QQC2.ToolTip.text: row.modelData.checkDetail || ""
+                                QQC2.ToolTip.visible: resultHover.hovered && QQC2.ToolTip.text !== ""
+                                QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
                             }
                         }
                     }

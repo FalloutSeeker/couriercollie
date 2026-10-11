@@ -39,6 +39,10 @@ class BadAnswer(SourceError):
     """The site answered, but with an unexpected error code or something that isn't JSON."""
 
 
+class Unreachable(SourceError):
+    """The site didn't answer (no connection, or it's down). Nothing is known about the project either way."""
+
+
 class RateLimited(SourceError):
     def __init__(self, message: str, reset_at: datetime | None = None):
         super().__init__(message)
@@ -188,9 +192,9 @@ def http_get_json(url: str, headers: dict | None = None):
             raise RateLimited(f"{domain} says too many requests were made.{when}", reset) from e
         raise BadAnswer(f"{domain} answered with an error ({e.code}). Try again later.") from e
     except urllib.error.URLError as e:
-        raise SourceError(f"Couldn’t reach {domain}. Check your internet connection.") from e
+        raise Unreachable(f"Couldn’t reach {domain}. Check your internet connection.") from e
     except (TimeoutError, OSError) as e:
-        raise SourceError(f"{domain} took too long to answer. Try again later.") from e
+        raise Unreachable(f"{domain} took too long to answer. Try again later.") from e
     except ValueError as e:  # not JSON, or not text at all
         raise BadAnswer(f"{domain} sent an answer that isn’t from a GitHub or GitLab site.") from e
 
@@ -408,7 +412,11 @@ def branches(ref: RepoRef) -> tuple[str, list[Branch]]:
     except FileNotFoundError as e:
         raise SourceError("git isn’t installed, so branches can’t be listed.") from e
     except subprocess.TimeoutExpired as e:
-        raise SourceError(f"{ref.domain} took too long to list branches. Try again later.") from e
+        raise Unreachable(f"{ref.domain} took too long to list branches. Try again later.") from e
     if result.returncode != 0:
-        raise SourceError(f"Couldn’t list branches from {ref.domain}: {result.stderr.strip() or 'unknown error'}")
+        said = result.stderr.strip()
+        if any(s in said.lower() for s in ("could not resolve", "unable to access", "could not connect",
+                                           "failed to connect", "network is unreachable", "timed out")):
+            raise Unreachable(f"Couldn\u2019t reach {ref.domain}. Check your internet connection.")
+        raise SourceError(f"Couldn\u2019t list branches from {ref.domain}: {said.splitlines()[-1] if said else 'unknown error'}")
     return parse_ls_remote(result.stdout)

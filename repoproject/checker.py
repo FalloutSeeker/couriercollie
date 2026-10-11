@@ -29,6 +29,7 @@ OTHER = "other"  # your version is ahead of, or not on, the followed branch: not
 NO_RELEASES = "no-releases"
 FAILED = "failed"
 RATE_LIMITED = "rate-limited"
+UNREACHABLE = "unreachable"  # the site didn't answer (no connection): says nothing about the repo
 
 CHECKS_AT_ONCE = 4
 
@@ -170,6 +171,8 @@ def check_repo(repo: TrackedRepo, github_limited: threading.Event | None = None)
         until = f" (until {e.reset_at.astimezone():%H:%M})" if e.reset_at else ""
         return Result(RATE_LIMITED, f"Not checked: {ref.domain}’s hourly limit was reached{until}",
                       retry_after=e.reset_at.isoformat() if e.reset_at else "", checked_at=now().isoformat())
+    except sources.Unreachable as e:
+        return Result(UNREACHABLE, f"Couldn’t check: {e}", checked_at=now().isoformat())
     except SourceError as e:
         return Result(FAILED, f"Couldn’t check: {e}", checked_at=now().isoformat())
     result.checked_at = now().isoformat(timespec="seconds")
@@ -210,10 +213,11 @@ def check_all(repos: list[TrackedRepo], previous: State | None = None) -> tuple[
     for r in results.values():
         if r.status == RATE_LIMITED and not r.retry_after:
             r.retry_after = reset
-    # A repo the limit stopped keeps its last result (an update is still an update), marked as not rechecked.
+    # A repo the limit stopped, or whose site didn't answer, keeps its last result (an update is still an update),
+    # marked as not rechecked. (retry_after says which: set for the hourly limit, empty for no answer.)
     for repo_id, r in list(results.items()):
         old = previous.results.get(repo_id)
-        if r.status == RATE_LIMITED and old and old.status not in (RATE_LIMITED, FAILED):
+        if r.status in (RATE_LIMITED, UNREACHABLE) and old and old.status not in (RATE_LIMITED, UNREACHABLE, FAILED):
             results[repo_id] = dataclasses.replace(old, not_rechecked=True, retry_after=r.retry_after)
     state = State(last_run=now().isoformat(timespec="seconds"), results=results,
                   notified={k: v for k, v in previous.notified.items() if k in results})
