@@ -3,6 +3,9 @@
 Used by the scripts next to this file. Nothing here touches your real settings: each run uses a fresh settings file
 (optionally a copy of yours). Screenshots go to RepoProject/.uicheck/ (ignored by git).
 
+Screenshots differ from the desktop in one known way: off-screen windows don't get the desktop's font fallback, so
+wrapped text in the small font looks double-spaced. On the desktop it isn't (checked 2026-10-11).
+
     python3 -I devtools/check_scan.py
 """
 
@@ -21,6 +24,10 @@ def start(copy_settings_from: Path | None = None, settings: dict | None = None, 
     real start would have them; the welcome screen is marked done unless they say otherwise."""
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
     os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "org.kde.desktop")
+    # Drawn with OpenGL, as on the desktop. Off-screen windows otherwise use Qt's software renderer, which draws some
+    # icons on top of open dialogs (never seen on the desktop).
+    os.environ.setdefault("QT_QUICK_BACKEND", "rhi")
+    os.environ.setdefault("QSG_RHI_BACKEND", "opengl")
     config_path = Path(tempfile.mkdtemp()) / "repos.toml"
     if copy_settings_from and copy_settings_from.exists():
         shutil.copy(copy_settings_from, config_path)
