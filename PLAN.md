@@ -90,8 +90,8 @@ Each update removes the version it replaced once the new one is in place (no Und
   - Done: installing them: `.deb` with apt, Arch packages with pacman, RPMs with zypper on openSUSE (each through
     pkexec, like dnf), and the scan finding packages installed from downloaded files (zypper, apt; not pacman, which
     can't tell them from AUR builds). Tested for real in containers (`devtools/check_distros.sh`).
-  - Single-file `.flatpak` bundles in releases: installed from a file they usually never update, like an RPM from a
-    downloaded file, so the app could install and update them. (Installed Flatpaks stay Flatpak's to update.)
+  - Done: single-file `.flatpak` bundles in releases: installed and updated for you with flatpak, found by a scan
+    (bundle-installed apps, which Flatpak never updates). Tested for real (`devtools/check_flatpak.py`).
   - Done: an Arch package (`packaging/arch/PKGBUILD`, for the AUR at release): built with makepkg, installed with
     pacman and started in an Arch container (`devtools/build_arch.sh`). Maybe a `.deb` later.
   - Not a Flatpak of the app itself: its sandbox blocks scanning folders, running git, dnf and pkexec,

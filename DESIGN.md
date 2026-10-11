@@ -129,6 +129,7 @@ What "Update" does depends on the kind:
 | Kind        | Update does                                                                     |
 | ----------- | ------------------------------------------------------------------------------- |
 | Package     | Downloads the new `.rpm`/`.deb`/Arch package; the package manager installs it  |
+| Flatpak bundle | Downloads the new `.flatpak` and installs it for you with flatpak            |
 | AppImage    | Downloads the new file and swaps it in, keeping the old one until it works      |
 | Program     | Downloads, unpacks, and swaps in the new program file                           |
 | Git clone   | Pulls the new commits. Re-running the project's install script is a separate, deliberate step |
@@ -184,6 +185,14 @@ package for this distro: an `.rpm` (dnf on Fedora, zypper on openSUSE), a `.deb`
 - From then on the version is read from the installed package, like one a scan found.
 - **Tested for real** in Fedora, openSUSE, Ubuntu and Arch containers (`devtools/check_distros.sh`): install, version
   read back, found by a scan (not on Arch, below), update, and a renamed package refused.
+
+**Flatpak bundles (built 2026-10-11).** For repos that follow a single-file `.flatpak` in each release. A bundle
+installed from a file has no address to update from (its origin is disabled, with no URL), so Flatpak never updates
+it; the app does. Installed for you only (`flatpak install --user --bundle`), so no password. The bundle must hold the
+app you have (its ID is read from the file first) and suit this computer's processor. Its version is read from the
+app's own release list. A scan finds bundle-installed apps whose homepage is a project's. One installed for all users
+is tracked, but not updated from here: flatpak would read the file as root from a folder you can write to, with no
+way to check it again there. Tested for real with `devtools/check_flatpak.py`, in a temporary Flatpak folder.
 
 **Programs (built 2026-10-11).** For repos that follow a release archive (`.tar.gz`, `.tgz`, `.tar.xz`, `.tar.bz2`,
 `.tar.zst`, `.zip`) with a ready-made program inside, e.g. ripgrep or LocalSend's tarball.

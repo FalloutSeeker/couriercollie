@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import assets, packages, sources, updater
+from . import assets, flatpaks, packages, sources, updater
 from .config import FOLLOW_BRANCH, SOURCE_SCANNED, Config, TrackedRepo
 from .sources import RepoRef, SourceError
 
@@ -207,6 +207,20 @@ def find_zypper_rpms(run=_run_out) -> list[Found]:
     return _from_homepages(assets.KIND_RPM, run("rpm", "-q", "--qf", "%{NAME}|%{VERSION}|%{URL}\n", *names) or "")
 
 
+def find_flatpak_bundles() -> list[Found]:
+    """Flatpaks installed from a bundle file (Flatpak never updates those), kept if their homepage is a project's."""
+    found = []
+    for app_id, where in flatpaks.from_bundles():
+        try:
+            ref = sources.parse_url(flatpaks.homepage(app_id))
+        except ValueError:
+            continue
+        found.append(Found(id=ref.id, name=app_id.rsplit(".", 1)[-1], url=ref.web_url, host="",
+                           path=flatpaks.place(app_id, where), kind=assets.KIND_FLATPAK,
+                           version=flatpaks.installed_version(app_id)[0]))
+    return found
+
+
 def find_packages() -> list[Found]:
     """Packages installed from a downloaded file that the package manager doesn't update: RPMs (dnf, or zypper),
     and Debian packages (apt). Not Arch's: pacman can't tell a downloaded package from one built from the AUR, which
@@ -264,15 +278,17 @@ def find_appimages(dirs: Iterable[str]) -> list[Found]:
 
 
 def find_all(folders: Iterable[str] = DEFAULT_SCAN_FOLDERS, rpms: Callable[[], list[Found]] = find_packages,
+             bundles: Callable[[], list[Found]] = find_flatpak_bundles,
              max_depth: int = MAX_DEPTH) -> list[Found]:
     """Everything on this computer, with each project listed once (extra places go in `other_paths`)."""
     roots = scan_roots(folders)
     clones, appimage_files = walk(roots, max_depth)
     hidden = [d for d in HIDDEN_APPIMAGE_DIRS if any(_inside(Path(d).expanduser().resolve(), r) for r in roots)]
-    items = clones + rpms() + [f for p in appimage_files if (f := _appimage(p))] + find_appimages(hidden)
+    items = (clones + rpms() + [f for p in appimage_files if (f := _appimage(p))] + find_appimages(hidden)
+             + bundles())
     for item in items:
-        if item.kind in packages.LABELS:
-            continue  # packages are always updated through the package manager, which asks for the password itself
+        if item.kind in packages.LABELS or item.kind == assets.KIND_FLATPAK:
+            continue  # packages: through the package manager, which asks for the password itself; Flatpaks: for you
         # Updating a clone changes its folder; updating an AppImage replaces the file in its folder.
         target = item.path if item.kind == assets.KIND_GIT else str(Path(item.path).parent)
         item.needs_password = not os.access(target, os.W_OK)
@@ -292,6 +308,8 @@ def version_on_disk(path: str, releases: bool = False) -> tuple[str, bool]:
     name, or a package's installed version (packages.py)."""
     if package := packages.from_place(path):
         return packages.installed_version(*package)
+    if app_id := flatpaks.from_place(path)[0]:
+        return flatpaks.installed_version(app_id)
     p = Path(path)
     if p.is_symlink() and (version := updater.program_version(p)):
         return version, True  # a program the app installed: its link points into that version's folder

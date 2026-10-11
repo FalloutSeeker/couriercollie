@@ -19,7 +19,7 @@ from PySide6.QtWidgets import QApplication
 
 from . import assets, checker, config, icons, integration, packages, scan, sources, updater
 from .account import Account
-from .updating import (Updating, _can_clone, _can_update, _head, _is_appimage, _is_clone, _is_package, _is_program,
+from .updating import (Updating, _can_clone, _can_update, _head, _is_appimage, _is_clone, _is_flatpak, _is_package, _is_program,
                        _needs_password, _newest_version)
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, Config, ConfigError, TrackedRepo
 from .sources import RepoRef, SourceError
@@ -29,6 +29,7 @@ KIND_ICONS = {
     assets.KIND_RPM: "application-x-rpm",
     assets.KIND_DEB: "application-vnd.debian.binary-package",
     assets.KIND_ARCH: "package-x-generic",
+    assets.KIND_FLATPAK: "application-vnd.flatpak",
     assets.KIND_APPIMAGE: "application-vnd.appimage",
     assets.KIND_PROGRAM: "application-x-executable",
     assets.KIND_FILE: "application-x-executable",
@@ -1169,7 +1170,9 @@ class Backend(QObject, Updating, Account):
             "packageTool": packages.tool_for(repo.kind) if repo and _is_package(repo) else "",
             "updatePhase": self._phases.get(repo_id, ""),
             "isProgram": bool(repo) and _is_program(repo),
-            "isDownload": bool(repo) and (_is_appimage(repo) or _is_program(repo) or _is_package(repo)),
+            "isDownload": bool(repo) and (_is_appimage(repo) or _is_program(repo) or _is_package(repo)
+                                          or _is_flatpak(repo)),
+            "isFlatpak": bool(repo) and _is_flatpak(repo),
             "programChoices": self._program_choices.get(repo_id, []),
             "program": repo.program if repo else "",
             # The command an installed program is run as, and where its link is.

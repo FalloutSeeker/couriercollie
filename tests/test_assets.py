@@ -40,7 +40,11 @@ class ClassifyTest(unittest.TestCase):
         self.check("app-1.0.x86_64.rpm", KIND_RPM, True)
         self.assertEqual(note("app-1.0-1-x86_64.pkg.tar.zst"), "Arch package: not supported on your distro")
         self.assertEqual(note("app_1.0_amd64.deb"), "Debian package: not supported on your distro")
-        self.assertEqual(note("app-1.0-x86_64.flatpak"), "Flatpak: install it with your software center instead")
+        self.assertEqual(note("app.flatpakref"), "Flatpak: install it with your software center instead")
+        self.assertEqual(note("app-1.0-x86_64.flatpak"), "Flatpak: flatpak isn\u2019t installed")
+        assets.PACKAGE_TOOLS = {"dnf", "flatpak"}
+        self.check("app-1.0-x86_64.flatpak", assets.KIND_FLATPAK, True)  # a bundle: installed for you, with flatpak
+        assets.PACKAGE_TOOLS = {"dnf"}
         assets.PACKAGE_TOOLS = {"pacman"}  # Arch
         self.assertEqual(note("app-1.0.x86_64.rpm"), "RPM: not supported on your distro")
         self.check("app-1.0-1-x86_64.pkg.tar.zst", KIND_ARCH, True)
@@ -151,6 +155,41 @@ class PackagesTest(unittest.TestCase):
         self.assertEqual((place, packages.from_place(place)), ("Debian package “tool”", (assets.KIND_DEB, "tool")))
         self.assertIsNone(packages.from_place("/home/you/tool"))
         self.assertEqual(packages.A_LABEL[assets.KIND_RPM], "an RPM package")
+
+
+class FlatpaksTest(unittest.TestCase):
+    def test_bundles_and_places(self):
+        import subprocess
+        import tempfile
+        from pathlib import Path
+
+        from colliecourier import flatpaks
+
+        with tempfile.TemporaryDirectory() as d:
+            bundle = Path(d) / "tool.flatpak"
+            bundle.write_bytes(b"\x00flatpak\x00" + b"app/org.example.Tool/x86_64/stable\x00" + b"\x01" * 100)
+            self.assertEqual(flatpaks.bundle_app(bundle), ("org.example.Tool", "x86_64"))
+            bundle.write_bytes(b"not a bundle")
+            self.assertEqual(flatpaks.bundle_app(bundle), ("", ""))
+        self.assertEqual(flatpaks.from_place(flatpaks.place("org.example.Tool")), ("org.example.Tool", "user"))
+        self.assertEqual(flatpaks.from_place(flatpaks.place("org.example.Tool", "system")), ("org.example.Tool", "system"))
+        self.assertEqual(flatpaks.from_place("/home/you/tool"), ("", ""))
+
+        # Installed from a bundle: its origin has no address. From Flathub: it has one, so Flatpak updates it.
+        answers = {
+            "list": "org.example.Tool\ttool-origin\tuser\norg.flathub.App\tflathub\tsystem\n",
+            "remotes --user": "tool-origin\t\n",
+            "remotes --system": "flathub\thttps://dl.flathub.org/repo/\n",
+        }
+
+        def fake(*args, timeout=60):
+            key = args[0] if args[0] == "list" else f"{args[0]} {args[1]}"
+            return subprocess.CompletedProcess(args, 0, answers.get(key, ""), "")
+
+        saved = flatpaks._flatpak
+        flatpaks._flatpak = fake
+        self.addCleanup(setattr, flatpaks, "_flatpak", saved)
+        self.assertEqual(flatpaks.from_bundles(), [("org.example.Tool", "user")])
 
 
 if __name__ == "__main__":

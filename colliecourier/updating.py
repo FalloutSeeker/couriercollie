@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QProcess, Slot
 
-from . import assets, checker, config, icons, packages, sources, updater
+from . import assets, checker, config, flatpaks, icons, packages, sources, updater
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, TrackedRepo
 from .sources import RepoRef
 
@@ -55,6 +55,12 @@ def _is_package(repo: TrackedRepo) -> bool:
     return repo.follow == FOLLOW_RELEASES and repo.kind in packages.LABELS and bool(repo.asset_pattern)
 
 
+def _is_flatpak(repo: TrackedRepo) -> bool:
+    """Following a Flatpak bundle in each release, installed for you (not one installed for all users: flatpaks.py)."""
+    return (repo.follow == FOLLOW_RELEASES and repo.kind == assets.KIND_FLATPAK and bool(repo.asset_pattern)
+            and flatpaks.from_place(repo.local_path)[1] != "system")
+
+
 def _package_name(repo: TrackedRepo) -> str:
     """The name of the package you have, once it's on this computer: its place reads 'RPM package “name”'."""
     found = packages.from_place(repo.local_path) if repo.source == config.SOURCE_SCANNED else None
@@ -72,7 +78,8 @@ def _can_update(repo: TrackedRepo) -> bool:
     """Whether Update (or Install) can do anything for this repo: a git clone found by a scan (pulled, or moved to
     the newest release's tag), a release's AppImage, program archive or package (downloaded, checked and put in
     place), or a project to clone."""
-    return _is_clone(repo) or _is_appimage(repo) or _is_program(repo) or _is_package(repo) or _can_clone(repo)
+    return (_is_clone(repo) or _is_appimage(repo) or _is_program(repo) or _is_package(repo) or _is_flatpak(repo)
+            or _can_clone(repo))
 
 
 def _needs_password(repo: TrackedRepo) -> bool:
@@ -206,13 +213,14 @@ class Updating:
         menu entry; a program is unpacked into its own folder, with a link in ~/.local/bin."""
         repo_id, d = repo.id, self._details.get(repo.id)
         is_program, is_package, package, kind = _is_program(repo), _is_package(repo), _package_name(repo), repo.kind
+        is_flatpak, app_id = _is_flatpak(repo), flatpaks.from_place(repo.local_path)[0]
         here_link = Path(repo.local_path) if is_program and repo.local_path else None
         wanted = repo.program or (here_link.name if here_link and here_link.is_symlink() else "")
         hints = [RepoRef.from_id(repo.id).name, repo.name, repo.asset_pattern.split("-")[0].split("*")[0]]
         ref, host, pattern, name, icon = RepoRef.from_id(repo.id), repo.host, repo.asset_pattern, repo.name, repo.icon
         known = d.releases if d and d.state == "ready" else None
         here = Path(repo.local_path) if repo.source == config.SOURCE_SCANNED and repo.local_path else None
-        old = here if here and here.is_file() and not is_program and not is_package else None
+        old = here if here and here.is_file() and not (is_program or is_package or is_flatpak) else None
         folder = old.parent if old else updater.apps_dir()
         self._updating.add(repo_id)
         self._update_notes.pop(repo_id, None)
@@ -246,6 +254,9 @@ class Updating:
                 found, _version, verified, tool = updater.install_package(asset, release.assets, kind, package,
                                                                           progress, installing)
                 return release.tag, found, verified, bool(package), tool
+            if is_flatpak:
+                found, verified = updater.install_flatpak(asset, release.assets, app_id, progress)
+                return release.tag, found, verified, bool(app_id)
             if is_program:
                 link, verified, replaced = updater.install_program(repo_id, release.tag, asset, release.assets, wanted,
                                                                     hints, progress)
@@ -278,6 +289,16 @@ class Updating:
                     " The project publishes no checksum for it, so the download couldn\u2019t be checked."
                 what = f"Updated to {tag} with {tool}." if had_it else \
                     f"Installed {tag} with {tool} (package \u201c{found}\u201d)."
+                self._update_notes[repo_id] = ("done" if verified else "warning", what + check)
+            elif repo and is_flatpak:
+                tag, found, verified, had_it = result
+                # From now on its version is read from the installed app, like one a scan found.
+                repo.source, repo.local_path, repo.installed = config.SOURCE_SCANNED, flatpaks.place(found), tag
+                self._version_changed(repo)
+                self._changed(repo_id)
+                check = " Checked against the project\u2019s published checksum." if verified else \
+                    " The project publishes no checksum for it, so the download couldn\u2019t be checked."
+                what = f"Updated to {tag}." if had_it else f"Installed {tag} with Flatpak, for you (“{found}”)."
                 self._update_notes[repo_id] = ("done" if verified else "warning", what + check)
             elif repo:
                 tag, new, verified, replaced = result

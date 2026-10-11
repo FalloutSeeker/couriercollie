@@ -220,7 +220,7 @@ class FindOnDiskTest(unittest.TestCase):
     def test_each_project_listed_once(self):
         make_clone(self.home / "aero/aerothemeplasma", "https://gitgud.io/wackyideas/aerothemeplasma.git")
         make_clone(self.home / "aero/aerothemeplasma/aerothemeplasma", "https://gitgud.io/WackyIdeas/aerothemeplasma")
-        found = scan.find_all([str(self.home)], rpms=list)
+        found = scan.find_all([str(self.home)], rpms=list, bundles=list)
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0].other_paths, [str(self.home / "aero/aerothemeplasma/aerothemeplasma")])
 
@@ -258,15 +258,15 @@ class ScanFoldersTest(unittest.TestCase):
         make_clone(opt / "tool", "https://github.com/someone/tool")
         (self.home / "Downloads/apps").mkdir(parents=True)
         (self.home / "Downloads/apps/LocalSend-1.18.2-linux-x86-64.AppImage").write_bytes(APPIMAGE_BYTES)
-        found = {f.id: f for f in scan.find_all(["~", str(opt)], rpms=list)}
+        found = {f.id: f for f in scan.find_all(["~", str(opt)], rpms=list, bundles=list)}
         self.assertEqual(set(found), {"github.com/someone/tool", "github.com/localsend/localsend"})
         self.assertEqual(found["github.com/localsend/localsend"].version, "1.18.2")
 
     def test_hidden_appimage_folder_only_when_its_home_is_scanned(self):
         (self.home / ".local/bin").mkdir(parents=True)
         (self.home / ".local/bin/LocalSend-1.18.2-linux-x86-64.AppImage").write_bytes(APPIMAGE_BYTES)
-        self.assertEqual(len(scan.find_all(["~"], rpms=list)), 1)
-        self.assertEqual(scan.find_all([str(self.root / "elsewhere")], rpms=list), [])
+        self.assertEqual(len(scan.find_all(["~"], rpms=list, bundles=list)), 1)
+        self.assertEqual(scan.find_all([str(self.root / "elsewhere")], rpms=list, bundles=list), [])
 
     @unittest.skipIf(os.geteuid() == 0, "root can write to read-only folders")
     def test_folders_this_user_cant_change_need_a_password_to_update(self):
@@ -274,7 +274,7 @@ class ScanFoldersTest(unittest.TestCase):
         make_clone(opt / "system-tool", "https://github.com/someone/system-tool")
         make_clone(self.home / "mine", "https://github.com/someone/mine")
         (opt / "system-tool").chmod(0o555)
-        found = {f.id: f for f in scan.find_all(["~", str(opt)], rpms=list)}
+        found = {f.id: f for f in scan.find_all(["~", str(opt)], rpms=list, bundles=list)}
         self.assertTrue(found["github.com/someone/system-tool"].needs_password)
         self.assertFalse(found["github.com/someone/mine"].needs_password)
 

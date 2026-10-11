@@ -12,6 +12,7 @@ from dataclasses import dataclass
 KIND_RPM = "RPM"
 KIND_DEB = "Debian package"
 KIND_ARCH = "Arch package"
+KIND_FLATPAK = "Flatpak bundle"
 KIND_APPIMAGE = "AppImage"
 KIND_PROGRAM = "Program"
 KIND_GIT = "git"
@@ -52,7 +53,7 @@ PACKAGE_TOOLS: set[str] | None = None
 def has(tool: str) -> bool:
     global PACKAGE_TOOLS
     if PACKAGE_TOOLS is None:
-        PACKAGE_TOOLS = {t for t in ("dnf", "apt", "pacman", "zypper") if shutil.which(t)}
+        PACKAGE_TOOLS = {t for t in ("dnf", "apt", "pacman", "zypper", "flatpak") if shutil.which(t)}
     return tool in PACKAGE_TOOLS
 
 
@@ -82,8 +83,10 @@ def _foreign_package(name: str) -> AssetInfo:
 
 def _kind_of(lower: str) -> "str | AssetInfo":
     """What kind of file a name is, other than a package: or why it doesn't suit, as an AssetInfo."""
-    if lower.endswith((".flatpak", ".flatpakref")):
+    if lower.endswith(".flatpakref"):
         return AssetInfo(KIND_OTHER, False, "Flatpak: install it with your software center instead")
+    if lower.endswith(".flatpak"):
+        return KIND_FLATPAK if has("flatpak") else AssetInfo(KIND_OTHER, False, "Flatpak: flatpak isn\u2019t installed")
     if lower.endswith(".snap"):
         return AssetInfo(KIND_OTHER, False, "Snap: not supported")
     # A file belonging to another system's package, e.g. "app-x86_64.apk.idsig": check before the processor type,

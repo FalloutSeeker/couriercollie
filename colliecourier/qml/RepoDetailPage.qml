@@ -522,6 +522,8 @@ Kirigami.ScrollablePage {
                                                   : `Clones the project\u2019s ${page.currentBranch} branch into a folder in ${page.details.clonesFolder}.`)
                           : page.details.isPackage
                           ? `Downloads the newest release\u2019s ${page.repo.assetPattern} and installs it with ${page.details.packageTool}.`
+                          : page.details.isFlatpak
+                          ? `Downloads the newest release\u2019s ${page.repo.assetPattern} and installs it with Flatpak, for you only.`
                           : page.details.isProgram
                           ? `Downloads the newest release\u2019s ${page.repo.assetPattern}, unpacks it into ${page.details.programsFolder}, and puts a link to its program in ${page.details.binFolder}, so it runs as a command.`
                           : `Downloads the newest release\u2019s ${page.repo.assetPattern || "file"} into ${page.details.installFolder}, and adds it to the menu.`

@@ -4,6 +4,10 @@ Newest first.
 
 ## 2026-10-11
 
+- Flatpak bundles: a release's `.flatpak` installs and updates for you with flatpak (no password), and a scan finds
+  apps installed from a bundle, which Flatpak never updates. One installed for all users is tracked but not updated
+  here (flatpak would read the file as root from a folder you can write to). Tested with the real flatpak, in a
+  temporary Flatpak folder: your own Flatpaks weren't touched.
 - Stage 6, other distros: release packages install and update with each distro's package manager (dnf, zypper, apt,
   pacman; `packages.py`), with the same safety as RPMs had (checked download, a copy only root can change, full
   paths). The scan finds packages installed from downloaded files with zypper and apt too. Tested for real in Fedora,

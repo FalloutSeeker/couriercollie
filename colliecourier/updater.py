@@ -16,6 +16,7 @@ window you can watch (and type your password into, if it asks).
 
 import hashlib
 import os
+import platform
 import shlex
 import shutil
 import subprocess
@@ -25,7 +26,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-from . import packages, sources
+from . import flatpaks, packages, sources
 
 # Fetching can take a while for a big project on a slow connection.
 FETCH_TIMEOUT = 300
@@ -695,6 +696,36 @@ def install_package(asset, others: list, kind: str, package: str = "", progress=
         if result.returncode != 0:
             raise UpdateError(f"{tool} couldn\u2019t install it: {_last_line(result)}")
         return found, version, verified, tool
+    finally:
+        part.unlink(missing_ok=True)
+        file.unlink(missing_ok=True)
+
+
+def install_flatpak(asset, others: list, app_id: str = "", progress=None, get_text=fetch_text) -> tuple[str, bool]:
+    """Downloads a release's Flatpak bundle, checks it, and installs it for you (flatpaks.py). `app_id`: the app you
+    have, which the bundle must hold. Returns (the app's ID, whether the download was checked against a published
+    checksum). The download is deleted afterwards."""
+    folder = downloads_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    name = Path(asset.name).name
+    part, file = folder / f".{name}.part", folder / name
+    try:
+        verified = _download_checked(asset, part, others, progress, get_text)
+        os.replace(part, file)
+        found, arch = flatpaks.bundle_app(file)
+        if not found:
+            raise UpdateError(f"{name} isn\u2019t a Flatpak bundle, so it wasn\u2019t installed.")
+        if app_id and found != app_id:
+            raise UpdateError(f"The new file holds the app “{found}”, not “{app_id}” that you have, so it "
+                              "wasn\u2019t installed. The project may have renamed it.")
+        if arch != platform.machine():
+            raise UpdateError(f"The new file is for {arch} computers, not this one, so it wasn\u2019t installed.")
+        result = flatpaks.install(file)
+        if result is None:
+            raise UpdateError("Couldn\u2019t run flatpak.")
+        if result.returncode != 0:
+            raise UpdateError(f"flatpak couldn\u2019t install it: {_last_line(result)}")
+        return found, verified
     finally:
         part.unlink(missing_ok=True)
         file.unlink(missing_ok=True)

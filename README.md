@@ -110,6 +110,7 @@ python3 -I devtools/check_appimage.py        # installs then updates LocalSend's
 python3 -I devtools/check_program.py         # installs then updates ripgrep from its .tar.gz, in temporary folders
 python3 -I devtools/check_rpm.py             # bottom's real .rpm up to dnf, which is a stand-in: nothing is installed
 devtools/check_distros.sh [fedora opensuse ubuntu arch]  # packages installed for real, in each distro's container
+python3 -I devtools/check_flatpak.py         # a Flatpak bundle installed and updated for real, in a temporary folder
 ```
 
 ## Code layout
@@ -125,6 +126,7 @@ devtools/check_distros.sh [fedora opensuse ubuntu arch]  # packages installed fo
 | `colliecourier/integration.py` | Menu entry, notifications, taskbar badge, background timer, one copy at a time |
 | `colliecourier/updater.py`   | Updating: pulling and cloning, downloads checked and put in place, packages     |
 | `colliecourier/packages.py`  | Packages per distro: which tool installs each kind, reading names and versions  |
+| `colliecourier/flatpaks.py`  | Flatpak bundles: which app a bundle holds, installing it for you, finding them  |
 | `colliecourier/backend.py`   | Connects the window to the above; runs network work in the background          |
 | `colliecourier/updating.py`  | The backend's Update and Install buttons and install scripts (part of it)      |
 | `colliecourier/github_login.py` | Signing in to GitHub: the code sign-in, and keeping it in the password store |
