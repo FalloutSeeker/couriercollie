@@ -10,7 +10,7 @@ The choices behind couriercollie, and why. Numbered so the code can point to the
 ## D2. GitHub and GitLab
 
 - GitHub, plus any GitLab site, including self-hosted ones (e.g. gitgud.io).
-- Other hosts (Codeberg, sourcehut, …) are told apart and refused with a clear message, not a confusing error.
+- Other hosts (Codeberg, sourcehut, etc.) are told apart and refused with a clear message, not a confusing error.
 
 ## D3. A release's file, or a branch
 
@@ -72,7 +72,7 @@ github.com/FalloutSeeker/couriercollie.
 ## D10. Name
 
 **couriercollie**, all lowercase everywhere: window, menu, command, package, repository and folders. Environment
-variables are upper case as usual (`COURIERCOLLIE_CONFIG`, …).
+variables are upper case as usual (`COURIERCOLLIE_CONFIG`, etc.).
 
 ## D11. Old versions aren't kept
 

@@ -26,7 +26,7 @@ Off until turned on (D12). When on, **Scan** lists what it finds; you tick what 
   - **Arch:** never listed, because pacman can't tell a downloaded package from an AUR build (which AUR helpers update).
   - **Flatpak bundles:** their origin has no address, so Flatpak can't update them.
 - **Scan folders:** your home folder, `/opt`, `/usr/local` and `/srv` by default; change them in Settings. Hidden and
-  build folders (`node_modules`, `build`, …) are skipped. A scan runs as you, so a folder you can't open is skipped,
+  build folders (`node_modules`, `build`, etc.) are skipped. A scan runs as you, so a folder you can't open is skipped,
   and Settings says so.
 - **No duplicates:** a find matching a tracked repo, by address or an old address, updates that entry instead.
 
