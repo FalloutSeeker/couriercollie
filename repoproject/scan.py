@@ -24,7 +24,12 @@ MAX_DEPTH = 6
 # Folders not worth looking in: dependencies, build output, caches. Hidden folders (".cache", ".local", …) are skipped
 # too.
 SKIP_DIRS = {"node_modules", "__pycache__", "venv", "site-packages", "vendor", "target", "build", "dist"}
-APPIMAGE_DIRS = ("~/Applications", "~/AppImages", "~/Downloads", "~/.local/bin", "~/bin", "/opt")
+# Where hand-installed software usually lives (DECISIONS.md, D12): the home folder, and the standard places for
+# software installed outside the package manager. Changeable in Settings.
+DEFAULT_SCAN_FOLDERS = ("~", "/opt", "/usr/local", "/srv")
+# Hidden folders that often hold AppImages. Hidden folders aren't walked, so these are looked in directly, when
+# they're inside a scan folder.
+HIDDEN_APPIMAGE_DIRS = ("~/.local/bin",)
 # RPMs that came from a downloaded file rather than a package repository.
 RPM_FROM_FILE = {"@commandline", "<unknown>", "@System"}
 
@@ -44,6 +49,7 @@ class Found:
     description: str = ""
     other_paths: list[str] = field(default_factory=list)  # the same project found in more places
     aliases: list[str] = field(default_factory=list)  # old addresses it was found under
+    needs_password: bool = False  # in a folder this user can't change (e.g. owned by the system in /opt)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -75,19 +81,45 @@ def _clone_info(path: str) -> Found | None:
     )
 
 
+def _inside(path: Path, root: Path) -> bool:
+    return path == root or root in path.parents
+
+
+def scan_roots(folders: Iterable[str]) -> list[Path]:
+    """The folders to walk: existing ones only, and none inside another (so nothing is scanned twice)."""
+    paths = []
+    for folder in folders:
+        path = Path(folder).expanduser()
+        if path.is_dir():
+            paths.append(path.resolve())
+    paths = sorted(set(paths), key=lambda p: len(p.parts))
+    roots: list[Path] = []
+    for path in paths:
+        if not any(_inside(path, r) for r in roots):
+            roots.append(path)
+    return roots
+
+
+def walk(roots: Iterable[Path], max_depth: int = MAX_DEPTH) -> tuple[list[Found], list[Path]]:
+    """Git clones, and AppImage files, in these folders and their subfolders (except hidden and dependency
+    folders). Folders that can't be read are skipped."""
+    clones, appimages = [], []
+    for root in roots:
+        base_depth = len(root.parts)
+        for dirpath, dirnames, filenames in os.walk(root):
+            if ".git" in dirnames or ".git" in filenames:
+                if item := _clone_info(dirpath):
+                    clones.append(item)
+            appimages += [Path(dirpath, f) for f in sorted(filenames) if f.lower().endswith(".appimage")]
+            # Keep looking inside clones: some projects keep other clones in subfolders.
+            dirnames[:] = sorted(d for d in dirnames if not d.startswith(".") and d not in SKIP_DIRS)
+            if len(Path(dirpath).parts) - base_depth >= max_depth:
+                dirnames[:] = []
+    return clones, appimages
+
+
 def find_git_clones(root: Path, max_depth: int = MAX_DEPTH) -> list[Found]:
-    found = []
-    root = root.expanduser()
-    base_depth = len(root.parts)
-    for dirpath, dirnames, filenames in os.walk(root):
-        if ".git" in dirnames or ".git" in filenames:
-            if item := _clone_info(dirpath):
-                found.append(item)
-        # Keep looking inside clones: some projects keep other clones in subfolders.
-        dirnames[:] = sorted(d for d in dirnames if not d.startswith(".") and d not in SKIP_DIRS)
-        if len(Path(dirpath).parts) - base_depth >= max_depth:
-            dirnames[:] = []
-    return found
+    return walk(scan_roots([str(root)]), max_depth)[0]
 
 
 def parse_rpm_list(text: str) -> list[Found]:
@@ -143,27 +175,38 @@ def appimage_source(path: Path) -> RepoRef | None:
     return RepoRef("github.com", f"{m.group(1).decode()}/{m.group(2).decode()}") if m else None
 
 
-def find_appimages(dirs: Iterable[str] = APPIMAGE_DIRS) -> list[Found]:
-    """AppImages that say where they came from. Others can't be matched to a project, so they're left out; they can
+def _appimage(path: Path) -> Found | None:
+    """An AppImage that says where it came from. Others can't be matched to a project, so they're left out; they can
     still be added by hand."""
+    if not path.is_file() or not (ref := appimage_source(path)):
+        return None
+    return Found(id=ref.id, name=ref.name, url=ref.web_url, host="github", path=str(path),
+                 kind=assets.KIND_APPIMAGE, version=appimage_version(path.name))
+
+
+def find_appimages(dirs: Iterable[str]) -> list[Found]:
+    """AppImages directly in these folders (not their subfolders)."""
     found = []
     for d in dirs:
         folder = Path(d).expanduser()
-        if not folder.is_dir():
-            continue
-        for path in sorted(folder.iterdir()):
-            if path.suffix.lower() != ".appimage" or not path.is_file():
-                continue
-            if ref := appimage_source(path):
-                found.append(Found(id=ref.id, name=ref.name, url=ref.web_url, host="github", path=str(path),
-                                   kind=assets.KIND_APPIMAGE, version=appimage_version(path.name)))
+        if folder.is_dir():
+            found += [f for p in sorted(folder.iterdir()) if p.suffix.lower() == ".appimage" and (f := _appimage(p))]
     return found
 
 
-def find_all(home: Path | None = None, appimage_dirs: Iterable[str] = APPIMAGE_DIRS,
-             rpms: Callable[[], list[Found]] = find_rpms) -> list[Found]:
+def find_all(folders: Iterable[str] = DEFAULT_SCAN_FOLDERS, rpms: Callable[[], list[Found]] = find_rpms,
+             max_depth: int = MAX_DEPTH) -> list[Found]:
     """Everything on this computer, with each project listed once (extra places go in `other_paths`)."""
-    items = find_git_clones(home or Path.home()) + rpms() + find_appimages(appimage_dirs)
+    roots = scan_roots(folders)
+    clones, appimage_files = walk(roots, max_depth)
+    hidden = [d for d in HIDDEN_APPIMAGE_DIRS if any(_inside(Path(d).expanduser().resolve(), r) for r in roots)]
+    items = clones + rpms() + [f for p in appimage_files if (f := _appimage(p))] + find_appimages(hidden)
+    for item in items:
+        if item.kind == assets.KIND_RPM:
+            continue  # RPMs are always updated through dnf, which asks for the password itself
+        # Updating a clone changes its folder; updating an AppImage replaces the file in its folder.
+        target = item.path if item.kind == assets.KIND_GIT else str(Path(item.path).parent)
+        item.needs_password = not os.access(target, os.W_OK)
     by_id: dict[str, Found] = {}
     for item in items:
         key = item.id.lower()

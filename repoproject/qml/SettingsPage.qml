@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls as QQC2
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
@@ -68,8 +69,81 @@ Kirigami.ScrollablePage {
         QQC2.Label {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 24
             text: page.s.scanning
-                ? "Looks for git clones and downloaded apps, reads which version you have, and lets you choose which to track. A Scan button appears in the main window. You can still add repos by hand; if a scan later finds one on this computer, it switches to the version found there."
+                ? "Looks for git clones and downloaded apps, reads which version is installed, and lets you choose which to track. A Scan button appears in the main window. Repos can still be added by hand; if a scan later finds one on this computer, it switches to the version found there."
                 : "Off: tracking is manual. You add repos yourself, and for each one set which version you have, or mark it as up to date."
+            wrapMode: Text.Wrap
+            opacity: 0.7
+        }
+
+        ColumnLayout {
+            Kirigami.FormData.label: "Folders to scan:"
+            Kirigami.FormData.labelAlignment: Qt.AlignTop
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+            enabled: page.s.scanning
+            spacing: 0
+
+            Repeater {
+                model: page.s.scanFolders
+
+                delegate: RowLayout {
+                    id: folderRow
+
+                    required property var modelData
+
+                    Layout.fillWidth: true
+
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: folderRow.modelData.label
+                        elide: Text.ElideMiddle
+                    }
+
+                    Tag {
+                        visible: folderRow.modelData.isDefault
+                        text: "Default"
+                    }
+
+                    QQC2.ToolButton {
+                        objectName: "removeFolder:" + folderRow.modelData.path
+                        icon.name: "edit-delete-remove"
+                        text: `Remove ${folderRow.modelData.label}`
+                        display: QQC2.AbstractButton.IconOnly
+                        QQC2.ToolTip.text: text
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                        onClicked: backend.removeScanFolder(folderRow.modelData.path)
+                    }
+                }
+            }
+
+            QQC2.Label {
+                visible: page.s.scanFolders.length === 0
+                text: "No folders. Only RPMs will be found."
+                opacity: 0.7
+            }
+
+            RowLayout {
+                Layout.topMargin: Kirigami.Units.smallSpacing
+
+                QQC2.Button {
+                    text: "Add Folder…"
+                    icon.name: "folder-add"
+                    onClicked: folderDialog.open()
+                }
+
+                QQC2.Button {
+                    objectName: "restoreFolders"
+                    visible: !page.s.scanFoldersAreDefault
+                    text: "Restore Defaults"
+                    icon.name: "edit-reset"
+                    onClicked: backend.resetScanFolders()
+                }
+            }
+        }
+
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+            text: "Folders marked Default are scanned unless removed: they’re where software installed by hand usually lives. Subfolders are included, except hidden ones."
             wrapMode: Text.Wrap
             opacity: 0.7
         }
@@ -102,5 +176,12 @@ Kirigami.ScrollablePage {
             wrapMode: Text.Wrap
             opacity: 0.7
         }
+    }
+
+    FolderDialog {
+        id: folderDialog
+
+        title: "Add Folder to Scan"
+        onAccepted: backend.addScanFolder(selectedFolder.toString())
     }
 }

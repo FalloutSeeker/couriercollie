@@ -103,9 +103,11 @@ Kirigami.Dialog {
 
         QQC2.Label {
             Layout.fillWidth: true
+            // Long text would otherwise widen the dialog to its full, unwrapped length.
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 26
             Layout.leftMargin: Kirigami.Units.gridUnit * 1.5
             text: scanBox.checked
-                ? "Looks for git clones and downloaded apps, and reads which version you have. You’ll choose which ones to track, and can still add others by hand."
+                ? `Looks in ${backend.settings.scanFoldersText} for git clones and downloaded apps. These folders are scanned by default; more can be added in Settings. Only the repos you choose are tracked, and others can still be added by hand.`
                 : "Off: tracking is manual. You add repos yourself, and for each one set which version you have, or mark it as up to date."
             wrapMode: Text.Wrap
             opacity: 0.7

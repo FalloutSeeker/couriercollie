@@ -4,6 +4,7 @@ The window calls the slots here and shows the properties. Anything that touches 
 so the window never freezes; results are handed back to the main thread through `_deliver`.
 """
 
+import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -101,6 +102,14 @@ def _match_tag(repo: TrackedRepo, d: Details) -> bool:
     if tag:
         repo.installed = tag
     return bool(tag)
+
+
+def _join_folders(folders: list[str]) -> str:
+    """"~", "/opt", "/usr/local" -> "the home folder, /opt, and /usr/local"."""
+    names = ["the home folder" if f == "~" else f for f in folders]
+    if len(names) <= 2:
+        return " and ".join(names)
+    return ", ".join(names[:-1]) + ", and " + names[-1]
 
 
 def _fetch_branches(ref: RepoRef) -> tuple[str, list[sources.Branch], str]:
@@ -245,6 +254,13 @@ class Backend(QObject):
             "checkIntervalHours": s.check_interval_hours,
             "toasts": s.toasts,
             "scanning": s.scanning,
+            "scanFolders": [
+                {"path": f, "label": "Home folder (~)" if f == "~" else f,
+                 "isDefault": f in config.DEFAULT_SCAN_FOLDERS}
+                for f in s.scan_folders
+            ],
+            "scanFoldersAreDefault": s.scan_folders == config.DEFAULT_SCAN_FOLDERS,
+            "scanFoldersText": _join_folders(s.scan_folders),
             "deleteOld": s.delete_old,
             "deleteOldDays": s.delete_old_days,
         }
@@ -271,6 +287,33 @@ class Backend(QObject):
             s.check_interval_hours = int(changes["checkIntervalHours"])
         if int(changes.get("deleteOldDays", 0) or 0) in config.DELETE_AFTER_DAYS:
             s.delete_old_days = int(changes["deleteOldDays"])
+        self._save()
+        self.settingsChanged.emit()
+
+    @Slot(str)
+    def addScanFolder(self, folder):
+        """Add a folder to scan. Takes a path or a file:// link (from the folder picker)."""
+        path = urllib.parse.unquote(folder.removeprefix("file://"))
+        if not path:
+            return
+        home = str(Path.home())
+        if path == home or path.startswith(home + "/"):
+            path = "~" + path[len(home):]  # stays right if the home folder moves
+        if path not in self._config.settings.scan_folders:
+            self._config.settings.scan_folders.append(path)
+            self._save()
+            self.settingsChanged.emit()
+
+    @Slot(str)
+    def removeScanFolder(self, folder):
+        if folder in self._config.settings.scan_folders:
+            self._config.settings.scan_folders.remove(folder)
+            self._save()
+            self.settingsChanged.emit()
+
+    @Slot()
+    def resetScanFolders(self):
+        self._config.settings.scan_folders = list(config.DEFAULT_SCAN_FOLDERS)
         self._save()
         self.settingsChanged.emit()
 
@@ -384,8 +427,10 @@ class Backend(QObject):
         # Addresses already on the list: those finds need no request to their site.
         known = {r.id.lower() for r in self._config.repos} | {a.lower() for r in self._config.repos for a in r.aliases}
 
+        folders = list(self._config.settings.scan_folders)
+
         def work():
-            return scan.identify(scan.find_all(), known=lambda repo_id: repo_id.lower() in known)
+            return scan.identify(scan.find_all(folders), known=lambda repo_id: repo_id.lower() in known)
 
         self._scan_state, self._scan_error = "scanning", ""
         self.scanChanged.emit()
@@ -413,7 +458,13 @@ class Backend(QObject):
             elif c.problem:
                 note = c.problem
             else:
-                note = f"Also in {len(f.other_paths)} other place(s)" if f.other_paths else ""
+                notes = []
+                if f.other_paths:
+                    notes.append("Also in 1 other place." if len(f.other_paths) == 1
+                                 else f"Also in {len(f.other_paths)} other places.")
+                if f.needs_password:
+                    notes.append("Its folder belongs to the system, so updating it will ask for your password.")
+                note = " ".join(notes)
             self._scan_finds[key] = f
             self._scan_items.append({
                 "key": key,

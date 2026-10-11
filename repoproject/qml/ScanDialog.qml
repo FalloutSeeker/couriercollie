@@ -74,7 +74,7 @@ Kirigami.Dialog {
             QQC2.Label {
                 objectName: "scanStatus"
                 Layout.fillWidth: true
-                text: backend.scanState === "scanning" ? "Looking for git clones, downloaded apps and RPMs, then checking each with its site…"
+                text: backend.scanState === "scanning" ? `Looking in ${backend.settings.scanFoldersText} for git clones and downloaded apps, and through installed RPMs, then checking each with its site…`
                     : backend.scanError !== "" ? "The scan didn’t finish."
                     : backend.scanItems.length === 0 ? "Nothing new found. Everything found is already tracked."
                     : `Found ${backend.scanItems.length} new. Only ticked ones are tracked.`

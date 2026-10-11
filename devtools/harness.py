@@ -67,28 +67,36 @@ class Harness:
             return [p.x, p.y, !!item.checked];
         })""")
 
-    def find(self, name):
-        """[x, y, checked] of a visible item with this objectName, or None. Looks in dialogs too."""
-        return self._find.call([self.engine.newQObject(self.win.contentItem()), name]).toVariant()
+    def window(self, title):
+        """Another open window (e.g. "Settings"), or None."""
+        from PySide6.QtGui import QGuiApplication
 
-    def click(self, name):
+        return next((w for w in QGuiApplication.topLevelWindows() if w.isVisible() and w.title() == title), None)
+
+    def find(self, name, window=None):
+        """[x, y, checked] of a visible item with this objectName, or None. Looks in dialogs too."""
+        window = window or self.win
+        return self._find.call([self.engine.newQObject(window.contentItem()), name]).toVariant()
+
+    def click(self, name, window=None):
         from PySide6.QtCore import QPoint, Qt
         from PySide6.QtTest import QTest
 
-        where = self.find(name)
+        window = window or self.win
+        where = self.find(name, window)
         if not where:
             self.fail(f"not visible: {name}")
             return
-        QTest.mouseClick(self.win, Qt.LeftButton, Qt.NoModifier, QPoint(int(where[0]), int(where[1])))
+        QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, QPoint(int(where[0]), int(where[1])))
 
     def call(self, object_name, method):
         from PySide6.QtCore import QMetaObject, QObject
 
         QMetaObject.invokeMethod(self.win.findChild(QObject, object_name), method)
 
-    def shot(self, name):
+    def shot(self, name, window=None):
         path = OUT / f"{name}.png"
-        self.win.grabWindow().save(str(path))
+        (window or self.win).grabWindow().save(str(path))
         print("screenshot:", path)
 
     def check(self, label, ok, detail=""):

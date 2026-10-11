@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from repoproject import config
+from repoproject import config, scan
 from repoproject.backend import Backend
 
 
@@ -60,6 +60,30 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(self.backend.settings["checkIntervalHours"], 24)
         self.assertEqual(self.backend.settings["deleteOldDays"], 30)
         self.assertFalse(self.backend.settings["autoCheck"])
+
+    def test_scan_folders_default(self):
+        self.assertEqual([f["path"] for f in self.backend.settings["scanFolders"]], ["~", "/opt", "/usr/local", "/srv"])
+        self.assertTrue(all(f["isDefault"] for f in self.backend.settings["scanFolders"]))
+        self.assertEqual(self.backend.settings["scanFolders"][0]["label"], "Home folder (~)")
+        self.assertEqual(self.backend.settings["scanFoldersText"], "the home folder, /opt, /usr/local, and /srv")
+        # The same list the scanner uses on its own.
+        self.assertEqual(tuple(config.DEFAULT_SCAN_FOLDERS), scan.DEFAULT_SCAN_FOLDERS)
+
+    def test_add_remove_and_restore_scan_folders(self):
+        self.backend.addScanFolder("file:///mnt/data")
+        self.backend.addScanFolder(str(Path.home() / "Projects"))  # saved relative to the home folder
+        self.backend.addScanFolder("/mnt/data")  # already there
+        self.backend.removeScanFolder("/srv")
+        folders = config.load(self.path).settings.scan_folders
+        self.assertEqual(folders, ["~", "/opt", "/usr/local", "/mnt/data", "~/Projects"])
+        self.assertFalse(self.backend.settings["scanFoldersAreDefault"])
+        self.assertEqual([f["isDefault"] for f in self.backend.settings["scanFolders"]][-2:], [False, False])
+        self.backend.resetScanFolders()
+        self.assertTrue(self.backend.settings["scanFoldersAreDefault"])
+
+    def test_older_settings_files_get_the_default_folders(self):
+        self.path.write_text("[settings]\nscanning = true\n")
+        self.assertEqual(config.load(self.path).settings.scan_folders, ["~", "/opt", "/usr/local", "/srv"])
 
     def test_one_change_leaves_the_rest(self):
         self.backend.updateSettings({"toasts": False})

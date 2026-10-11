@@ -23,6 +23,8 @@ SOURCE_SCANNED = "scanned"
 # In hours: daily, every 7 days, every 14 days, monthly (4 weeks).
 CHECK_INTERVALS_HOURS = (24, 168, 336, 672)
 DELETE_AFTER_DAYS = (7, 30, 90)
+# Scanned by default (DECISIONS.md, D12). Kept in sync with scan.DEFAULT_SCAN_FOLDERS (a test checks).
+DEFAULT_SCAN_FOLDERS = ["~", "/opt", "/usr/local", "/srv"]
 
 
 @dataclass
@@ -32,6 +34,7 @@ class Settings:
     check_interval_hours: int = 24
     toasts: bool = True
     scanning: bool = False
+    scan_folders: list[str] = field(default_factory=lambda: list(DEFAULT_SCAN_FOLDERS))
     delete_old: bool = False
     delete_old_days: int = 30
 

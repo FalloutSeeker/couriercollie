@@ -177,9 +177,62 @@ class FindOnDiskTest(unittest.TestCase):
     def test_each_project_listed_once(self):
         make_clone(self.home / "aero/aerothemeplasma", "https://gitgud.io/wackyideas/aerothemeplasma.git")
         make_clone(self.home / "aero/aerothemeplasma/aerothemeplasma", "https://gitgud.io/WackyIdeas/aerothemeplasma")
-        found = scan.find_all(self.home, appimage_dirs=[], rpms=list)
+        found = scan.find_all([str(self.home)], rpms=list)
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0].other_paths, [str(self.home / "aero/aerothemeplasma/aerothemeplasma")])
+
+
+APPIMAGE_BYTES = b"\x7fELF" + b"\0" * 100 + b"gh-releases-zsync|localsend|localsend|latest|*.zsync\0"
+
+
+class ScanFoldersTest(unittest.TestCase):
+    """Default folders: home, /opt, /usr/local, /srv (DECISIONS.md, D12); more can be added in Settings."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.dir.name).resolve()
+        self.home = self.root / "home"
+        self.home.mkdir()
+        self.old_home = os.environ.get("HOME")
+        os.environ["HOME"] = str(self.home)
+
+    def tearDown(self):
+        os.environ["HOME"] = self.old_home
+        for path in self.root.rglob("*"):
+            path.chmod(0o755)  # undo read-only folders so they can be cleaned up
+        self.dir.cleanup()
+
+    def test_defaults(self):
+        self.assertEqual(scan.DEFAULT_SCAN_FOLDERS, ("~", "/opt", "/usr/local", "/srv"))
+
+    def test_overlapping_and_missing_folders(self):
+        (self.home / "Projects").mkdir()
+        roots = scan.scan_roots(["~/Projects", "~", str(self.root / "missing"), "~"])
+        self.assertEqual(roots, [self.home])
+
+    def test_clones_and_appimages_in_every_folder(self):
+        opt = self.root / "opt"
+        make_clone(opt / "tool", "https://github.com/someone/tool")
+        (self.home / "Downloads/apps").mkdir(parents=True)
+        (self.home / "Downloads/apps/LocalSend-1.18.2-linux-x86-64.AppImage").write_bytes(APPIMAGE_BYTES)
+        found = {f.id: f for f in scan.find_all(["~", str(opt)], rpms=list)}
+        self.assertEqual(set(found), {"github.com/someone/tool", "github.com/localsend/localsend"})
+        self.assertEqual(found["github.com/localsend/localsend"].version, "1.18.2")
+
+    def test_hidden_appimage_folder_only_when_its_home_is_scanned(self):
+        (self.home / ".local/bin").mkdir(parents=True)
+        (self.home / ".local/bin/LocalSend-1.18.2-linux-x86-64.AppImage").write_bytes(APPIMAGE_BYTES)
+        self.assertEqual(len(scan.find_all(["~"], rpms=list)), 1)
+        self.assertEqual(scan.find_all([str(self.root / "elsewhere")], rpms=list), [])
+
+    def test_folders_this_user_cant_change_need_a_password_to_update(self):
+        opt = self.root / "opt"
+        make_clone(opt / "system-tool", "https://github.com/someone/system-tool")
+        make_clone(self.home / "mine", "https://github.com/someone/mine")
+        (opt / "system-tool").chmod(0o555)
+        found = {f.id: f for f in scan.find_all(["~", str(opt)], rpms=list)}
+        self.assertTrue(found["github.com/someone/system-tool"].needs_password)
+        self.assertFalse(found["github.com/someone/mine"].needs_password)
 
 
 def info(repo_id, host="gitlab", name="", description=""):

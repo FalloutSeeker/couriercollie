@@ -19,12 +19,20 @@ during first launch (see 6) or later in Settings (see 7). While it's off, the Sc
 When it's on, a **Scan** button looks through the machine for things that came from GitHub/GitLab and lists them.
 Nothing is ticked to start with. You tick the ones to track, or use **Select all**.
 
-| Kind                         | Where it looks                                       | How it finds the source                          |
-| ---------------------------- | ---------------------------------------------------- | ------------------------------------------------ |
-| Git clones                   | Your home folder (skips caches, `node_modules`)      | The clone's own remote URL (`git remote`)        |
-| RPMs installed from a file   | dnf's record of packages not from any repo           | The package's homepage URL, if it's a Git host   |
-| AppImages                    | `~/Applications`, `~/Downloads`, `~/.local/bin`, `/opt` | Info embedded in the AppImage, else ask you   |
-| Loose programs               | `~/.local/bin`, `/usr/local/bin`, `/opt`             | Can't be detected reliably; you link them by hand |
+**Where it looks.** Folders to scan, by default the home folder, `/opt`, `/usr/local` and `/srv`: where software
+installed by hand usually lives. Each is marked "Default" in Settings, where folders can be added (e.g. a second
+drive) or removed. Subfolders are included up to 6 levels deep, except hidden ones and dependency or build folders
+(`node_modules`, `build`, …), so a scan stays fast.
+
+| Kind                         | Where it looks                                          | How it finds the source                      |
+| ---------------------------- | ------------------------------------------------------- | -------------------------------------------- |
+| Git clones                   | The folders to scan                                     | The clone's own remote URL (`git remote`)    |
+| AppImages                    | The folders to scan, plus `~/.local/bin` (hidden)       | Update info embedded in the AppImage         |
+| RPMs installed from a file   | The whole system, through dnf's list of installed RPMs  | The package's homepage, if it's a Git host   |
+| Loose programs               | Not scanned                                             | Can't be detected reliably; add them by hand |
+
+Finds in folders that belong to the system (common in `/opt`) are tracked like any other. Updating them will ask
+for the password, on the user's click.
 
 Anything already looked after by dnf or Flatpak is left out, since those update themselves.
 
