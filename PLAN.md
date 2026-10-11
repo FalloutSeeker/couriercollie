@@ -64,6 +64,9 @@ Each update removes the version it replaced once the new one is in place (no Und
 
 ## Stage 6: Finishing
 
+Left (2026-10-11): GNOME's dark mode, which needs a real GNOME session (a VM or live USB) to check; and installing
+the RPM on your own desktop once, to see it in the menu. Everything else is done.
+
 - Done (2026-10-11): **Sign in to GitHub** (DESIGN.md §8), optional, on the welcome screen and in Settings: with a
   code (device flow, kept in the desktop's password store; not the GitHub CLI's login, D7). Release lists are asked for with their ETag; an
   unchanged one (304) costs nothing signed in (tried), and no download signed out.
