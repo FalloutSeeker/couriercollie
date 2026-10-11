@@ -66,6 +66,23 @@ class DeviceFlowTest(unittest.TestCase):
         with self.assertRaisesRegex(github_login.LoginError, "cancelled"):
             github_login.wait(self.code, cancelled, self.post([]), pause=bool)
 
+    def test_odd_answers(self):
+        import io
+        import urllib.request
+
+        # Not an object (a proxy's page, say): said plainly.
+        saved = urllib.request.urlopen
+        urllib.request.urlopen = lambda req, timeout=None: io.BytesIO(b"[1, 2]")
+        self.addCleanup(setattr, urllib.request, "urlopen", saved)
+        with self.assertRaisesRegex(github_login.LoginError, "couldn’t be read"):
+            github_login.start()
+        # "Slow down" without a usable interval: waits 5 seconds longer.
+        waits = []
+        github_login.wait(self.code, threading.Event(),
+                          self.post([{"error": "slow_down", "interval": "soon"}, {"access_token": "t"}]),
+                          pause=waits.append)
+        self.assertEqual(waits, [5, 10])
+
 
 class KeepingTest(unittest.TestCase):
     """The password store, through a stand-in secret-tool (yours isn't touched)."""

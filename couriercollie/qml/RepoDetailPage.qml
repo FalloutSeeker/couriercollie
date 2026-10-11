@@ -297,9 +297,9 @@ Kirigami.ScrollablePage {
             objectName: "statusBox"
             Layout.fillWidth: true
             Layout.maximumWidth: Kirigami.Units.gridUnit * 34
-            Layout.topMargin: Kirigami.Units.smallSpacing
+            Layout.topMargin: Kirigami.Units.largeSpacing
             visible: page.ready && kind !== ""
-            implicitHeight: statusContent.implicitHeight + Kirigami.Units.largeSpacing * 2
+            implicitHeight: statusContent.implicitHeight + Kirigami.Units.gridUnit * 2
             radius: Kirigami.Units.cornerRadius
             color: Kirigami.ColorUtils.tintWithAlpha(Kirigami.Theme.backgroundColor, tone, 0.12)
             border.width: 1
@@ -311,7 +311,7 @@ Kirigami.ScrollablePage {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: Kirigami.Units.largeSpacing
+                anchors.margins: Kirigami.Units.gridUnit
                 spacing: Kirigami.Units.largeSpacing
 
                 RowLayout {
@@ -571,7 +571,7 @@ Kirigami.ScrollablePage {
 
         // Only once the page has loaded: what it says depends on the project's releases and branches.
         Kirigami.Heading {
-            Layout.topMargin: Kirigami.Units.largeSpacing
+            Layout.topMargin: Kirigami.Units.gridUnit
             visible: page.ready
             level: 3
             text: "Tracking"
@@ -747,6 +747,7 @@ Kirigami.ScrollablePage {
             readonly property var choices: page.details.fileChoices || []
 
             Layout.fillWidth: true
+            Layout.topMargin: Kirigami.Units.gridUnit
             visible: page.followsReleases && page.ready && choices.length > 0 && !page.details.isClone
             spacing: 0
 
@@ -826,6 +827,7 @@ Kirigami.ScrollablePage {
         // Nothing in the newest release runs on this computer: versions only, as with scanning off.
         ColumnLayout {
             Layout.fillWidth: true
+            Layout.topMargin: Kirigami.Units.gridUnit
             visible: page.followsReleases && page.ready && page.details.versionOnly === true && !page.details.isClone
             spacing: Kirigami.Units.smallSpacing
 
@@ -847,6 +849,7 @@ Kirigami.ScrollablePage {
         // ---- Releases (for reading; the file is chosen above) ------------------------------------------------------
 
         Kirigami.Heading {
+            Layout.topMargin: Kirigami.Units.gridUnit
             visible: page.followsReleases && page.ready
             level: 3
             text: "Releases"
@@ -1017,6 +1020,7 @@ Kirigami.ScrollablePage {
         // ---- Branches -----------------------------------------------------------------------------------------------
 
         Kirigami.Heading {
+            Layout.topMargin: Kirigami.Units.gridUnit
             visible: !page.followsReleases && page.ready
             level: 3
             text: "Branches"

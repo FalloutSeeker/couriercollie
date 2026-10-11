@@ -246,11 +246,23 @@ class BackendTest(unittest.TestCase):
         self.backend.checkNow()
         row = self.backend.repo(LOCALSEND)
         self.assertEqual((row["checkText"], row["updateAvailable"], row["canUpdate"]),
-                         ("Installed with dnf", False, False))
+                         ("Installed with Package Manager", False, False))
         self.assertEqual(self.backend._config.find(LOCALSEND).managed_by, "dnf")
         managed.clear()  # removed with dnf: couriercollie's to update again
         self.backend.checkNow()
         self.assertEqual(self.backend._config.find(LOCALSEND).managed_by, "")
+
+    def test_the_page_and_the_list_agree_on_v_or_not(self):
+        # "1.18.2" (a package's version, say) is the release tagged "v1.18.2": up to date, on the page as in the list.
+        repo = self.backend._config.find(LOCALSEND)
+        self.backend.loadDetails(LOCALSEND, True)
+        newest = self.backend.details(LOCALSEND)["newestText"]
+        repo.installed = newest.removeprefix("v")
+        self.backend._version_changed(repo)
+        d = self.backend.details(LOCALSEND)
+        self.assertEqual((d["headline"], d["updateAvailable"]), ("Up to date", False))
+        self.assertTrue(d["releases"][0]["isInstalled"])
+        self.assertEqual(self.backend.repo(LOCALSEND)["checkText"], "Up to date")
 
     def test_branch_with_no_shared_history(self):
         # Added by hand on "main"; "dev" was started from scratch.
@@ -506,11 +518,11 @@ class ScannedClonePageTest(unittest.TestCase):
         self.assertEqual(d["managedElsewhere"], "Your package manager keeps this up to date.")
         # Even with a version of its own read from disk and new commits upstream: shown only, never updated here.
         self.assertEqual((d["managedBy"], d["statusKind"], d["headline"], d["versionText"]),
-                         ("dnf", "managed", "Installed with dnf", "1.0"))
+                         ("dnf", "managed", "Installed with Package Manager", "1.0"))
         self.assertEqual((d["canUpdate"], d["updateAvailable"], d["installClones"]), (False, False, False))
         row = self.backend.repo(smod)
         self.assertEqual((row["canUpdate"], row["updateAvailable"], row["checkText"]),
-                         (False, False, "Installed with dnf"))
+                         (False, False, "Installed with Package Manager"))
 
     def test_reopening_the_page_asks_nothing(self):
         # Loaded the first time it's opened; after that only Refresh (or a check that found something newer) reloads.

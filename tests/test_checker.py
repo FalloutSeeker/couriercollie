@@ -108,6 +108,14 @@ class CheckRepoTest(unittest.TestCase):
                      source="scanned", local_path=str(Path(d) / "smod"))
             self.assertEqual(self.check(r).status, checker.UP_TO_DATE)
 
+    def test_something_unexpected_fails_only_that_repo(self):
+        def broken(*a, **k):
+            raise RuntimeError("surprise")
+        sources.releases = broken
+        r = self.check(repo("github.com/a/app", installed="v1"))
+        self.assertEqual(r.status, checker.FAILED)
+        self.assertIn("RuntimeError", r.text)
+
     def test_problems(self):
         def broken(ref, host, **_):
             raise sources.SourceError("Couldn’t reach github.com. Check your internet connection.")
@@ -133,7 +141,7 @@ class CheckAllTest(unittest.TestCase):
         checker.find_managed = lambda repos: {"github.com/a/two": "dnf"}
         self.addCleanup(setattr, checker, "find_managed", saved)
         state, fresh = checker.check_all(self.repos)
-        self.assertEqual(state.results["github.com/a/two"].text, "Installed with dnf")
+        self.assertEqual(state.results["github.com/a/two"].text, "Installed with Package Manager")
         self.assertNotIn("github.com/a/two", fresh)  # nothing announced
         self.assertEqual([r.managed_by for r in self.repos], ["", "dnf", "", ""])
 
@@ -223,7 +231,7 @@ class ManagedTest(unittest.TestCase):
     def test_releases(self):
         for yours in ("", "-", "v1", "v2"):
             r = checker.releases_result([release("v2"), release("v1")], yours, managed_by="dnf")
-            self.assertEqual((r.status, r.text), (checker.OTHER, "Installed with dnf"), yours)
+            self.assertEqual((r.status, r.text), (checker.OTHER, "Installed with Package Manager"), yours)
 
     def test_branch(self):
         r = checker.branch_result("main", "h" * 40, "x" * 40, None, managed_by="Flatpak")

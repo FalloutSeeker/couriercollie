@@ -153,10 +153,24 @@ def version_of(tag: str) -> str:
     return tag[m.start():] if m else ""
 
 
+def _numbers(version: str) -> tuple[int, ...] | None:
+    """A version made of numbers only ("1.2.0", "2024.10.01") as those numbers, without trailing zeros, else None."""
+    if not re.fullmatch(r"\d+(?:\.\d+)*", version):
+        return None
+    numbers = [int(n) for n in version.split(".")]
+    while len(numbers) > 1 and numbers[-1] == 0:
+        numbers.pop()
+    return tuple(numbers)
+
+
 def same_version(a: str, b: str) -> bool:
-    """Whether two versions are the same: "v1.2.3" and "1.2.3" are. Tags without a number ("nightly", "stable") are
-    only the same as themselves."""
-    return a == b or (bool(version_of(a)) and version_of(a) == version_of(b))
+    """Whether two versions are the same: "v1.2.3" and "1.2.3" are, and so are "1.2" and "1.2.0" (a package's
+    version and the project's tag often differ like that). Tags without a number ("nightly", "stable") are only the
+    same as themselves."""
+    va, vb = version_of(a), version_of(b)
+    if a == b or (va and va == vb):
+        return True
+    return _numbers(va) is not None and _numbers(va) == _numbers(vb)
 
 
 # What "*" in a pattern matches: a version number. Starts with a digit; may contain dashes only before another
@@ -174,6 +188,10 @@ def pattern_for(asset_name: str, tag: str) -> str:
     # between releases (2.fc45): that part is matched as freely as the version.
     if pattern.endswith(".rpm"):
         pattern = re.sub(r"^(.*\*-)\d.*(\.[A-Za-z0-9_]+\.rpm)$", r"\1*\2", pattern)
+    # A Debian or Arch package's carries the packager's revision ("tool_1.2-1_amd64.deb", "tool-1.2-1-x86_64.pkg
+    # .tar.zst"), which can change too ("-2"): the "*" takes it in, as a version may end in "-<number>".
+    elif pattern.endswith(".deb") or ".pkg.tar." in pattern:
+        pattern = re.sub(r"\*-\d+(?=[_-])", "*", pattern, count=1)
     return pattern
 
 

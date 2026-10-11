@@ -79,8 +79,8 @@ REPOS = [
     ("github.com/example/notes", "Notes", 'follow = "branch"\nbranch = "main"\ninstalled = "-"'),
 ]
 
-if README:  # no made-up projects, and nothing broken
-    REPOS = [r for r in REPOS if "/example/" not in r[0]]
+if README:  # no made-up projects, nothing broken, and nothing pretending to be installed
+    REPOS = [r for r in REPOS if "/example/" not in r[0] and r[0] != "github.com/KDE/dolphin"]
 settings = work / "repos.toml"
 lines = ['categories = ["Tools"]\n']
 for repo_id, name, extra in REPOS:

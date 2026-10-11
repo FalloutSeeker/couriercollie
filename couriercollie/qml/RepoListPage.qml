@@ -202,6 +202,9 @@ Kirigami.ScrollablePage {
                     return parts.join(" \u00b7 ");
                 }
                 font.bold: !backend.checking && backend.checks.updates > 0
+                // Beside a repo's page the list is narrow: two lines rather than cutting off the next check's time.
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
                 elide: Text.ElideRight
             }
         }
@@ -558,6 +561,8 @@ Kirigami.ScrollablePage {
                 QQC2.ItemDelegate {
                     objectName: "repo:" + row.modelData.id
                     highlighted: applicationWindow().currentRepoId === row.modelData.id
+                    topPadding: Kirigami.Units.largeSpacing
+                    bottomPadding: Kirigami.Units.largeSpacing
                     onClicked: applicationWindow().openRepo(row.modelData.id)
 
                     contentItem: RowLayout {
@@ -582,7 +587,7 @@ Kirigami.ScrollablePage {
 
                         ColumnLayout {
                             Layout.fillWidth: true
-                            spacing: 0
+                            spacing: Kirigami.Units.smallSpacing / 2
 
                             QQC2.Label {
                                 Layout.fillWidth: true
@@ -646,13 +651,19 @@ Kirigami.ScrollablePage {
 
                             QQC2.Label {
                                 // Narrow (a repo's page open beside the list): two short lines, so the name keeps room.
-                                Layout.maximumWidth: Kirigami.Units.gridUnit * (row.width < Kirigami.Units.gridUnit * 26 ? 6 : 10)
+                                Layout.maximumWidth: Kirigami.Units.gridUnit * (narrow ? 6 : 10)
                                 horizontalAlignment: Text.AlignRight
                                 // Bold through the text itself: setting font.bold here would replace the small font.
+                                // Narrow, an update says what and which on a line each ("Update available" over
+                                // "v1.18.2"), rather than breaking wherever the line runs out.
                                 text: {
                                     const t = Labels.escaped(row.modelData.checkText);
-                                    return row.modelData.updateAvailable ? `<b>${t}</b>` : t;
+                                    if (!row.modelData.updateAvailable)
+                                        return t;
+                                    const at = t.indexOf(": ");
+                                    return narrow && at > 0 ? `<b>${t.slice(0, at)}</b><br>${t.slice(at + 2)}` : `<b>${t}</b>`;
                                 }
+                                readonly property bool narrow: row.width < Kirigami.Units.gridUnit * 26
                                 textFormat: Text.StyledText
                                 font: Kirigami.Theme.smallFont
                                 opacity: row.modelData.updateAvailable ? 1 : 0.7

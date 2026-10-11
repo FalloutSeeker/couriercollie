@@ -93,6 +93,42 @@ class HttpErrorsTest(unittest.TestCase):
         with self.assertRaisesRegex(sources.BadAnswer, "isn’t from a GitHub or GitLab site"):
             self.answer(404, b"<html>nope</html>")
 
+    def test_a_reset_time_out_of_range(self):
+        with self.assertRaisesRegex(sources.RateLimited, "Try again later"):
+            self.answer(403, b"{}", {"x-ratelimit-remaining": "0", "x-ratelimit-reset": "9" * 30})
+
+    def test_the_connection_dropping_partway(self):
+        import http.client
+        import io
+        import urllib.request
+
+        class Cut(io.BytesIO):
+            def read(self, *a):
+                raise http.client.IncompleteRead(b"[{")
+
+        saved = urllib.request.urlopen
+        urllib.request.urlopen = lambda req, timeout=None: Cut()
+        self.addCleanup(setattr, urllib.request, "urlopen", saved)
+        with self.assertRaisesRegex(sources.Unreachable, "stopped answering partway"):
+            sources.http_get_json("https://api.github.com/x")
+
+    def test_answers_of_the_wrong_shape(self):
+        # A proxy's or captive portal's JSON, or a site's bug: said plainly, never an error that stops a check.
+        for data in (None, 5, "text", {"message": "x"}, [None], [{}], [{"tag_name": None}],
+                     [{"tag_name": "v1", "assets": [None]}], [{"tag_name": "v1", "assets": [{"name": "a"}]}]):
+            for parse in (sources.parse_github_releases,
+                          lambda d: sources.parse_gitlab_releases("gitlab.com", "a/b", d)):
+                with self.assertRaises(sources.BadAnswer, msg=repr(data)):
+                    parse(data)
+        for data in (None, [], {"full_name": None, "name": "b"}):
+            with self.assertRaises(sources.BadAnswer):
+                sources.parse_github_project(data)
+        with self.assertRaises(sources.BadAnswer):
+            sources.parse_github_compare({"commits": [{"sha": "a"}]})
+        # Odd but harmless fields are fine: no date, no files.
+        rel = sources.parse_github_releases([{"tag_name": "v1", "assets": None, "published_at": 5}])[0]
+        self.assertEqual((rel.tag, rel.date, rel.assets), ("v1", None, []))
+
     def test_answers_that_arent_json(self):
         for body in (b"<html>", b"\xff\xfe\x00garbage"):
             with self.assertRaises(sources.BadAnswer):

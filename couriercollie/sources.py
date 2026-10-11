@@ -4,7 +4,9 @@ Releases come from each site's API. Branches come from `git ls-remote`, which do
 (DECISIONS.md, D7).
 """
 
+import functools
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -277,7 +279,7 @@ def _reset_time(headers) -> datetime | None:
         if value := headers.get(name):
             try:
                 return datetime.fromtimestamp(int(value), tz=timezone.utc)
-            except ValueError:
+            except (ValueError, OverflowError, OSError):  # not a time, or one out of range
                 pass
     return None
 
@@ -324,6 +326,8 @@ def http_get_json(url: str, headers: dict | None = None, _without_login: bool = 
         raise BadAnswer(f"{domain} answered with an error ({e.code}). Try again later.") from e
     except urllib.error.URLError as e:
         raise Unreachable(f"Couldn’t reach {domain}. Check your internet connection.") from e
+    except http.client.HTTPException as e:  # the connection dropped partway through the answer
+        raise Unreachable(f"{domain} stopped answering partway. Try again later.") from e
     except (TimeoutError, OSError) as e:
         raise Unreachable(f"{domain} took too long to answer. Try again later.") from e
     except ValueError as e:  # not JSON, or not text at all
@@ -331,12 +335,31 @@ def http_get_json(url: str, headers: dict | None = None, _without_login: bool = 
 
 
 def _parse_date(text: str | None) -> datetime | None:
-    if not text:
+    if not text or not isinstance(text, str):
         return None
     try:
         return datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def _readable(parse):
+    """For a function reading a site's answer: an answer of the wrong shape (a proxy's or captive portal's page, a
+    site's bug) raises BadAnswer, which is said as is, rather than an error that would stop a whole check."""
+    @functools.wraps(parse)
+    def read(*args):
+        try:
+            return parse(*args)
+        except (KeyError, TypeError, AttributeError, ValueError, IndexError) as e:
+            raise BadAnswer("The site sent an answer that couldn\u2019t be read. Try again later.") from e
+    return read
+
+
+def _text(value) -> str:
+    """A field that must be text (a tag, a file's name or address)."""
+    if not isinstance(value, str) or not value:
+        raise TypeError(f"expected text, got {value!r}")
+    return value
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -345,20 +368,22 @@ def _parse_date(text: str | None) -> datetime | None:
 _GITHUB_HEADERS = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
 
 
+@_readable
 def parse_github_project(data: dict) -> ProjectInfo:
     owner = data.get("owner") or {}
     # GitHub has no project icons; an organization's picture is usually the project's logo.
     icon = owner.get("avatar_url") or "" if owner.get("type") == "Organization" else ""
     return ProjectInfo(
-        ref=RepoRef("github.com", data["full_name"]),
+        ref=RepoRef("github.com", _text(data["full_name"])),
         host="github",
-        name=data["name"],
+        name=_text(data["name"]),
         description=data.get("description") or "",
         default_branch=data.get("default_branch") or "",
         icon_url=icon,
     )
 
 
+@_readable
 def parse_github_releases(data: list) -> list[Release]:
     releases = []
     for r in data:
@@ -366,15 +391,15 @@ def parse_github_releases(data: list) -> list[Release]:
             continue
         releases.append(
             Release(
-                tag=r["tag_name"],
+                tag=_text(r["tag_name"]),
                 title=r.get("name") or r["tag_name"],
                 date=_parse_date(r.get("published_at") or r.get("created_at")),
                 prerelease=bool(r.get("prerelease")),
                 notes=r.get("body") or "",
                 url=r.get("html_url") or "",
                 assets=[
-                    Asset(a["name"], a["browser_download_url"], a.get("size"), a.get("digest") or "")
-                    for a in r.get("assets", [])
+                    Asset(_text(a["name"]), _text(a["browser_download_url"]), a.get("size"), a.get("digest") or "")
+                    for a in r.get("assets") or []
                 ],
             )
         )
@@ -389,13 +414,14 @@ def _gitlab_api(domain: str, path: str) -> str:
     return f"https://{domain}/api/v4/projects/{urllib.parse.quote(path, safe='')}"
 
 
+@_readable
 def parse_gitlab_project(domain: str, data: dict) -> ProjectInfo:
     namespace = data.get("namespace") or {}
     icon = data.get("avatar_url") or (namespace.get("avatar_url") if namespace.get("kind") == "group" else "") or ""
     if icon.startswith("/"):
         icon = f"https://{domain}{icon}"  # some sites give it relative to themselves
     return ProjectInfo(
-        ref=RepoRef(domain, data["path_with_namespace"]),
+        ref=RepoRef(domain, _text(data["path_with_namespace"])),
         host="gitlab",
         name=data.get("name") or data["path"],
         description=data.get("description") or "",
@@ -404,13 +430,14 @@ def parse_gitlab_project(domain: str, data: dict) -> ProjectInfo:
     )
 
 
+@_readable
 def parse_gitlab_releases(domain: str, path: str, data: list) -> list[Release]:
     releases = []
     for r in data:
-        links = r.get("assets", {}).get("links", [])
+        links = (r.get("assets") or {}).get("links") or []
         releases.append(
             Release(
-                tag=r["tag_name"],
+                tag=_text(r["tag_name"]),
                 title=r.get("name") or r["tag_name"],
                 date=_parse_date(r.get("released_at") or r.get("created_at")),
                 # GitLab has no "pre-release" flag; "upcoming" (scheduled for later) is the closest.
@@ -418,7 +445,7 @@ def parse_gitlab_releases(domain: str, path: str, data: list) -> list[Release]:
                 notes=r.get("description") or "",
                 url=(r.get("_links") or {}).get("self") or f"https://{domain}/{path}/-/releases/{r['tag_name']}",
                 # GitLab doesn't give file sizes for release links.
-                assets=[Asset(l["name"], l.get("direct_asset_url") or l["url"]) for l in links],
+                assets=[Asset(_text(l["name"]), _text(l.get("direct_asset_url") or l["url"])) for l in links],
             )
         )
     return releases
@@ -494,6 +521,7 @@ def _first_line(text: str | None) -> str:
     return text.splitlines()[0] if text else ""
 
 
+@_readable
 def parse_github_compare(data: dict) -> Comparison:
     commits = [Commit(c["sha"], _first_line(c["commit"].get("message"))) for c in data.get("commits", [])]
     # GitHub describes the branch relative to yours, so its "ahead" means you're behind.
@@ -502,6 +530,7 @@ def parse_github_compare(data: dict) -> Comparison:
     return Comparison(relation, data.get("ahead_by", len(commits)), commits[::-1])
 
 
+@_readable
 def parse_gitlab_compare(data: dict) -> list[Commit]:
     return [Commit(c["id"], c.get("title") or "") for c in data.get("commits", [])][::-1]
 

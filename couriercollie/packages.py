@@ -87,22 +87,27 @@ def suits(arch: str) -> bool:
 
 
 def installed_version(kind: str, name: str) -> tuple[str, bool]:
-    """(the installed version, whether it's installed). ("", True) if it can't be told."""
+    """(the installed version, whether it's installed). ("", True) if it can't be told. One line per installed copy:
+    a package can be installed for two processors at once (x86_64 and i686, for Steam's sake)."""
     try:
         if kind == assets.KIND_RPM:
-            out = _run("rpm", "-q", "--qf", "%{VERSION}", name)
+            out = _run("rpm", "-q", "--qf", "%{VERSION}\\n", name)
         elif kind == assets.KIND_DEB:
-            out = _run("dpkg-query", "--show", "--showformat=${Version}|${db:Status-Status}", name)
+            out = _run("dpkg-query", "--show", "--showformat=${Version}|${db:Status-Status}\\n", name)
             if out.returncode == 0:
-                version, _, status = out.stdout.partition("|")
-                return (upstream_version(version), True) if status == "installed" else ("", False)
+                for line in out.stdout.splitlines():
+                    version, _, status = line.partition("|")
+                    if status == "installed":
+                        return upstream_version(version), True
+                return "", False
         else:
             out = _run("pacman", "-Q", name)
             if out.returncode == 0:
                 return upstream_version(out.stdout.split()[-1]), True
     except (OSError, subprocess.TimeoutExpired):
         return "", True
-    return (out.stdout.strip(), True) if out.returncode == 0 else ("", False)
+    first = next(iter(out.stdout.split()), "")
+    return (first, True) if out.returncode == 0 else ("", False)
 
 
 def files_of(kind: str, name: str) -> list[str]:

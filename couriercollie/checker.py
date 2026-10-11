@@ -122,6 +122,12 @@ def _yours(repo: TrackedRepo) -> str:
 CHECK_RELEASES = 5
 
 
+def installed_with(managed_by: str) -> str:
+    """How the list and the page name what installed it: "Installed with Package Manager", or "… with Flatpak". Not
+    which package manager: that's the same on every repo of this computer, so it says nothing."""
+    return f"Installed with {'Flatpak' if managed_by == 'Flatpak' else 'Package Manager'}"
+
+
 def releases_result(shown: list[sources.Release], yours: str, managed_by: str = "") -> Result:
     """The result for a repo following releases, from the releases it shows (newest first) and your version.
     `managed_by`: what installed it and keeps it updated ("dnf"), if that's the package manager or Flatpak: then
@@ -130,7 +136,7 @@ def releases_result(shown: list[sources.Release], yours: str, managed_by: str = 
         return Result(NO_RELEASES, "No releases yet")
     newest = shown[0].tag
     if managed_by:
-        return Result(OTHER, f"Installed with {managed_by}", newest)
+        return Result(OTHER, installed_with(managed_by), newest)
     if not yours or yours == NOT_INSTALLED:
         return Result(NOT_INSTALLED_YET, f"Not installed · newest {newest}", newest)
     if assets.same_version(yours, newest):
@@ -143,7 +149,7 @@ def branch_result(branch: str, head: str, yours: str, c: sources.Comparison | No
     """The result for a repo following a branch, from its newest commit, your version, how they compare (None: they
     couldn't be compared), for a clone the branch it's on, and what else installed it (as for releases_result)."""
     if managed_by:
-        return Result(OTHER, f"Installed with {managed_by}", head)
+        return Result(OTHER, installed_with(managed_by), head)
     if not yours or yours == NOT_INSTALLED:
         return Result(NOT_INSTALLED_YET, f"Not installed · following {branch}", head)
     if yours == head or (c and c.relation == sources.SAME):
@@ -205,6 +211,9 @@ def check_repo(repo: TrackedRepo, github_limited: threading.Event | None = None)
         return Result(UNREACHABLE, f"Couldn’t check: {e}", checked_at=stamp())
     except SourceError as e:
         return Result(FAILED, f"Couldn’t check: {e}", checked_at=stamp())
+    except Exception as e:  # noqa: BLE001 - one repo's surprise mustn't stop the check of all the others
+        return Result(FAILED, f"Couldn’t check: something unexpected went wrong ({type(e).__name__}).",
+                      checked_at=stamp())
     result.checked_at = stamp()
     return result
 

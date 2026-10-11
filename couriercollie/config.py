@@ -80,7 +80,7 @@ class TrackedRepo:
     # never. The app can't see whether the script worked, only that it was started.
     script_run_at: str = ""
     # What installed it, when that's something that keeps it up to date ("dnf", "Flatpak"): found when its page
-    # loads, so the list and checks say "Installed with dnf" rather than "Not installed".
+    # loads and on every check, so nothing here updates it (checker.installed_with).
     managed_by: str = ""
 
 

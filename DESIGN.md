@@ -61,7 +61,7 @@ Details:
   as a Flatpak from Flathub, it's shown only, never updated here. Two updaters would fight over the same files.
   - **The page:** a warning ("Your package manager keeps this up to date."), the installed version, and no
     Update, Install, Mark or Set as My Version buttons, nor install scripts.
-  - **The list:** "Installed with dnf" (or apt, pacman, zypper, Flatpak), never an update.
+  - **The list:** "Installed with Package Manager" (or "with Flatpak"), never an update.
   - **Found on every check**, and on opening the page, so a repo never opened is covered too.
   - **Matched by homepage, never by name.** KDE's and GNOME's GitHub mirrors count as the same project as their own
     sites (github.com/KDE/dolphin is invent.kde.org/system/dolphin).

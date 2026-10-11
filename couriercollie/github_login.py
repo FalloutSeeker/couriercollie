@@ -10,6 +10,7 @@ repositories, which a read-only app has no business holding.)
 The login is only ever sent to api.github.com (sources.py).
 """
 
+import http.client
 import json
 import shutil
 import subprocess
@@ -53,13 +54,16 @@ def _post(url: str, fields: dict) -> dict:
                                                           "User-Agent": "couriercollie"})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-            return json.load(resp)
+            answer = json.load(resp)
     except urllib.error.HTTPError as e:
         raise LoginError(f"GitHub answered with an error ({e.code}). Try again later.") from e
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
+    except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as e:
         raise LoginError("Couldn’t reach github.com. Check your internet connection.") from e
     except ValueError as e:
         raise LoginError("GitHub sent an answer that couldn’t be read.") from e
+    if not isinstance(answer, dict):
+        raise LoginError("GitHub sent an answer that couldn’t be read.")
+    return answer
 
 
 def start(post=_post) -> DeviceCode:
@@ -88,7 +92,10 @@ def wait(code: DeviceCode, cancelled: threading.Event, post=_post, pause=None) -
             return token
         error = answer.get("error")
         if error == "slow_down":
-            interval = int(answer.get("interval", interval + 5))
+            try:
+                interval = int(answer.get("interval", interval + 5))
+            except (TypeError, ValueError):
+                interval += 5
         elif error == "expired_token" or time.monotonic() > deadline:
             raise LoginError("The code expired before it was entered. Sign in again for a new one.")
         elif error == "access_denied":

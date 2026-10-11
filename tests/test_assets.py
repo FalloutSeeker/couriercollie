@@ -270,6 +270,39 @@ class VersionEdgeCasesTest(unittest.TestCase):
         self.assertFalse(assets.matches(pattern, "app-1.3.0-2.fc45.aarch64.rpm"))
         self.assertFalse(assets.matches(pattern, "app-debuginfo-1.3.0-2.fc45.x86_64.rpm"))
 
+    def test_a_debian_or_arch_packages_revision_can_change(self):
+        deb = assets.pattern_for("tool_1.2.3-1_amd64.deb", "v1.2.3")
+        self.assertTrue(assets.matches(deb, "tool_1.3.0-2_amd64.deb"))
+        self.assertTrue(assets.matches(deb, "tool_1.3.0_amd64.deb"))
+        self.assertFalse(assets.matches(deb, "tool-dbgsym_1.3.0-2_amd64.deb"))
+        self.assertFalse(assets.matches(deb, "tool_1.3.0-2_arm64.deb"))
+        arch = assets.pattern_for("bottom-0.10.2-1-x86_64.pkg.tar.zst", "0.10.2")
+        self.assertTrue(assets.matches(arch, "bottom-0.11.0-2-x86_64.pkg.tar.zst"))
+        self.assertFalse(assets.matches(arch, "bottom-0.11.0-2-aarch64.pkg.tar.zst"))
+
+    def test_trailing_zeros_dont_make_a_new_version(self):
+        # A package says "1.2" where the project's tag says "v1.2.0": the same version, not an update forever.
+        self.assertTrue(assets.same_version("v1.2.0", "1.2"))
+        self.assertTrue(assets.same_version("2024.10.01", "2024.10.1"))
+        self.assertFalse(assets.same_version("1.10", "1.1"))
+        self.assertFalse(assets.same_version("v1", "v1.0.1"))
+        self.assertFalse(assets.same_version("2.0-rc1", "2.0"))
+
+    def test_a_package_installed_for_two_processors(self):
+        # x86_64 and i686 (for Steam): rpm and dpkg answer once per copy. Their versions were run together.
+        import subprocess
+
+        from couriercollie import packages
+
+        answers = {"rpm": "2.43\n2.43\n", "dpkg-query": "2.43-1|installed\n2.43-1|installed\n"}
+        saved = packages._run
+        packages._run = lambda *a: subprocess.CompletedProcess(a, 0, answers[a[0]], "")
+        self.addCleanup(setattr, packages, "_run", saved)
+        self.assertEqual(packages.installed_version(KIND_RPM, "glibc"), ("2.43", True))
+        self.assertEqual(packages.installed_version(KIND_DEB, "libc6"), ("2.43", True))
+        answers["dpkg-query"] = "2.43-1|config-files\n"  # removed, its settings left behind
+        self.assertEqual(packages.installed_version(KIND_DEB, "libc6"), ("", False))
+
 
 if __name__ == "__main__":
     unittest.main()

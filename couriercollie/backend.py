@@ -1184,7 +1184,7 @@ class Backend(QObject, Updating, Account):
                 "url": rel.url,
                 "assets": files,
                 "hasSelected": any(f["selected"] for f in files),
-                "isInstalled": bool(repo) and rel.tag == repo.installed,
+                "isInstalled": bool(repo) and assets.same_version(rel.tag, repo.installed),
             })
         current_branch = (repo.branch if repo else "") or d.default_branch
         # The one place to choose which file to follow: the newest release's files, those for this PC first.
@@ -1296,12 +1296,12 @@ class Backend(QObject, Updating, Account):
             newer_text, update_headline = f"Newer version available: {newest}", "Update available"
         if repo.managed_by:
             text, status, kind, headline = d.managed_version or "Installed", \
-                f"{repo.managed_by} installed it, and keeps it up to date. The newest here is {newest_text}.", \
-                STATUS_MANAGED, f"Installed with {repo.managed_by}"
+                f"{'Flatpak' if repo.managed_by == 'Flatpak' else 'Your package manager'} installed it, and keeps it " \
+                f"up to date. The newest here is {newest_text}.", STATUS_MANAGED, checker.installed_with(repo.managed_by)
         elif installed == NOT_INSTALLED:
             text, status, kind, headline = "Not installed", f"The newest is {newest_text}.", STATUS_NOT_INSTALLED, \
                 "Not installed"
-        elif installed == newest:
+        elif installed == newest or (repo.follow != FOLLOW_BRANCH and assets.same_version(installed, newest)):
             text, status, kind, headline = yours_text, "Up to date", STATUS_CURRENT, "Up to date"
         elif installed:
             text, status, kind, headline = yours_text, f"{newer_text} (you have {yours_text})", STATUS_UPDATE, \
