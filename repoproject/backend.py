@@ -74,11 +74,12 @@ def _newest_version(repo: TrackedRepo, d: Details) -> str:
 
 
 def _set_baseline(repo: TrackedRepo, d: Details) -> bool:
-    """If your version isn't known yet, assume you have the newest. You can change it on the repo page."""
-    if repo.installed or d.state != "ready":
+    """If your version isn't known yet: a repo added by hand starts as "Not installed" (adding it doesn't mean you have
+    it); you set your version once you do. A scanned repo's version comes from disk instead."""
+    if repo.installed or d.state != "ready" or repo.source == config.SOURCE_SCANNED:
         return False
-    repo.installed = _newest_version(repo, d)
-    return bool(repo.installed)
+    repo.installed = NOT_INSTALLED
+    return True
 
 
 def _fit_files(repo: TrackedRepo, d: Details) -> bool:

@@ -31,6 +31,8 @@ _NOT_SOFTWARE = (".sha256", ".sha512", ".sha256sum", ".sha512sum", ".sig", ".asc
 _FOREIGN_OS = re.compile(
     r"(?<![a-z])(windows|win32|win64|darwin|macos|osx|mac|android|ios|freebsd|openbsd|netbsd)(?![a-z])", re.I
 )
+# Windows-only even without saying so: installers ("App.Setup.1.2.zip", "app-setup-x64.zip") and screensavers (".scr").
+_WINDOWS_HINT = re.compile(r"(?<![a-z])setup(?![a-z])|\.scr(?![a-z])", re.I)
 
 _ARCH_WORDS = {
     "x86_64": ("x86_64", "x86-64", "amd64", "x64", "linux64"),
@@ -65,6 +67,8 @@ def _classify_name(lower: str, machine: str) -> AssetInfo:
     for ext, system in _FOREIGN_EXT.items():
         if ext + "." in lower:
             return AssetInfo(KIND_OTHER, False, f"for {system}")
+    if _WINDOWS_HINT.search(lower) and not lower.endswith((".rpm", ".appimage")):
+        return AssetInfo(KIND_OTHER, False, "for Windows")
     if lower.endswith(_NOT_SOFTWARE):
         return AssetInfo(KIND_OTHER, False, "checksum or signature")
     if lower.endswith(".src.rpm"):

@@ -53,7 +53,7 @@ The app then fetches the project's releases and shows them, so you can pick whic
 Clicking a tracked repo shows:
 
 - **Your version** and a status line ("Up to date" / "Newer version available: …"). Your version is a release, a
-  commit (when following a branch), or "Not installed". When a repo is added it starts at the newest version. To
+  commit (when following a branch), or "Not installed". A repo added by hand starts as "Not installed" (adding it doesn't mean you have it). To
   change it, open a release in the list and click "This is my version", or use "Mark as up to date" / "Mark as not
   installed".
   For repos found by a scan, your version is read from disk each time the page opens (a clone's commit, an

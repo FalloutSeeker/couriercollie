@@ -104,14 +104,23 @@ class BackendTest(unittest.TestCase):
             sources.Asset("app-x86_64-release.apk", "u"), sources.Asset("app-x86_64-release.apk.idsig", "u")]
         self.assertFalse(self.backend.details(LOCALSEND)["anyFileSuits"])
 
-    def test_your_version_starts_at_the_newest(self):
+    def test_hand_added_repos_start_not_installed(self):
+        # Adding a repo doesn't mean you have it (e.g. "aerial", added by hand to watch it).
         repo = self.backend._config.find(LOCALSEND)
         self.assertTrue(_set_baseline(repo, self.backend._details[LOCALSEND]))
         d = self.backend.details(LOCALSEND)
-        self.assertEqual(repo.installed, "v1.18.2")
-        self.assertEqual(d["status"], "Up to date")
+        self.assertEqual((repo.installed, d["versionText"], d["status"]), ("-", "Not installed", "The newest is v1.18.2."))
         self.assertFalse(d["updateAvailable"])
-        self.assertTrue(d["releases"][0]["isInstalled"])
+        self.assertFalse(any(r["isInstalled"] for r in d["releases"]))
+        # Once you have it, "Mark as Up to Date" (or "Set as My Version") records it.
+        self.backend.markUpToDate(LOCALSEND)
+        self.assertEqual(self.backend.details(LOCALSEND)["status"], "Up to date")
+
+    def test_scanned_repos_get_no_assumed_version(self):
+        repo = self.backend._config.find(LOCALSEND)
+        repo.source = "scanned"
+        self.assertFalse(_set_baseline(repo, self.backend._details[LOCALSEND]))
+        self.assertEqual(repo.installed, "")
 
     def test_older_version_shows_an_update(self):
         self.backend.setInstalled(LOCALSEND, "v1.18.1")
@@ -148,6 +157,7 @@ class BackendTest(unittest.TestCase):
         # Added by hand on "main"; "dev" was started from scratch.
         self.relations["b" * 40] = sources.DIVERGED
         self.backend.setFollow(LOCALSEND, "branch")
+        self.backend.markUpToDate(LOCALSEND)  # you have main's newest commit
         self.backend.setBranch(LOCALSEND, "dev")
         d = self.backend.details(LOCALSEND)
         self.assertEqual(d["status"], "Not comparable with dev: your version (commit aaaaaaa) isn\u2019t part of it.")
@@ -155,6 +165,8 @@ class BackendTest(unittest.TestCase):
 
     def test_branch_versions_are_commits(self):
         self.backend.setFollow(LOCALSEND, "branch")
+        self.assertEqual(self.saved(LOCALSEND).installed, "-")  # not installed until you say so
+        self.backend.markUpToDate(LOCALSEND)
         repo = self.saved(LOCALSEND)
         self.assertEqual(repo.installed, "a" * 40)  # newest commit on "main"
         self.assertEqual(self.backend.details(LOCALSEND)["status"], "Up to date")

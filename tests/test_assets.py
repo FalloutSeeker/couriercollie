@@ -33,6 +33,15 @@ class ClassifyTest(unittest.TestCase):
         self.check("app-x86_64-release.apk.sha256.sig", KIND_OTHER, False)
         self.check("app-release.apk.idsig", KIND_OTHER, False)
 
+    def test_windows_installers_and_screensavers(self):
+        # Aerial ("Apple TV screen saver for Windows") names neither file after Windows.
+        self.assertIn("Windows", self.check("Aerial.Setup.1.2.1.zip", KIND_OTHER, False).note)
+        self.check("Aerial.v1.2.1.SCR.zip", KIND_OTHER, False)
+        self.check("tool-setup-x64.zip", KIND_OTHER, False)
+        # "setup" as part of a word, or in a Linux package, is fine.
+        self.check("setuptools-helper-1.0-linux-x86_64.tar.gz", KIND_PROGRAM, True)
+        self.check("app-setup-1.0.x86_64.rpm", KIND_RPM, True)
+
     def test_arm_computer(self):
         self.check("LocalSend-1.18.2-linux-arm64.AppImage", KIND_APPIMAGE, True, machine="aarch64")
         self.check("LocalSend-1.18.2-linux-x86-64.AppImage", KIND_APPIMAGE, False, machine="aarch64")

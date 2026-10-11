@@ -4,6 +4,12 @@ Newest first.
 
 ## 2026-10-10
 
+- Repos added by hand now start as "Not installed" instead of assuming the newest version (the user added "aerial"
+  to watch it and it claimed v1.2.1; the "Test" repo's "fake commit" had the same cause). "Set as My Version" or
+  "Mark as Up to Date" records a version once you have it. Scanned repos still read theirs from disk.
+- Files named like Windows installers or screensavers ("Aerial.Setup.1.2.1.zip", "….SCR.zip") no longer count as
+  fitting this computer; Aerial ("Apple TV screen saver for Windows") is now versions-only.
+- Fixed a leftover reference to the old "Which file you use" heading (now "Your Build File").
 - Bug: on the hand-added "Test" repo (gitgud.io/atmk/app-store), choosing the "flatpak" branch said the user's commit
   wasn't on gitgud.io, as if it were fake. "flatpak" was started from scratch and shares no history with "master",
   so gitgud.io answers "Merge Base Not Found". That's now read as "split apart": "Not comparable with flatpak: your

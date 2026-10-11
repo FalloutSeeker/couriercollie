@@ -269,7 +269,7 @@ Kirigami.ScrollablePage {
             }
         }
 
-        // ---- Which file you use: the one place to choose ----------------------------------------------------------
+        // ---- Your build file: the one place to choose -------------------------------------------------------------
 
         ColumnLayout {
             id: picker
@@ -442,7 +442,7 @@ Kirigami.ScrollablePage {
                         Layout.topMargin: Kirigami.Units.smallSpacing
                         text: release.modelData.assets.length === 0 ? "No download files in this release (only the source code)."
                             : page.details.versionOnly === true ? `${release.modelData.assets.length} files, none for this computer.`
-                            : page.repo.assetPattern === "" ? `${release.modelData.assets.length} files. Choose yours under \u201cWhich file you use\u201d.`
+                            : page.repo.assetPattern === "" ? `${release.modelData.assets.length} files. Choose yours under \u201cYour Build File\u201d.`
                             : release.yourFile ? `Your file: ${release.yourFile.name}` + (release.yourFile.details ? ` (${release.yourFile.details})` : "")
                             : "Your file isn’t in this release."
                         wrapMode: Text.Wrap
