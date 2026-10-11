@@ -103,6 +103,11 @@ Each update removes the version it replaced once the new one is in place (no Und
      updated). The first check alone would let a GitHub-hosted package like that through.
 
   If dnf can't answer, no RPMs are listed. (Details in DESIGN.md §1.)
+  Also why these folders are scanned by default (D12), in plain words: your home folder is where you clone and
+  download things; `/opt` and `/usr/local` are the standard places for software installed by hand outside the package
+  manager; `/srv` holds things a computer serves (often cloned projects). The rest of the system (`/usr` and so on)
+  belongs to the package manager, so it's slow to look through and has nothing to find. Folders can be added or
+  removed in Settings.
 - Added (2026-10-11) at your request.
 
 ## Later, not planned yet
