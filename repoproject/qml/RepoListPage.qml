@@ -616,8 +616,31 @@ Kirigami.ScrollablePage {
                             Kirigami.Icon {
                                 objectName: "updateIcon:" + row.modelData.id
                                 Layout.alignment: Qt.AlignRight
-                                visible: row.modelData.updateAvailable
+                                visible: row.modelData.updateAvailable && !row.modelData.canUpdate
                                 source: "update-low"
+                                Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                                Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                            }
+
+                            // Repos Update can handle: the icon is the Update button (DECISIONS.md, D4).
+                            QQC2.ToolButton {
+                                objectName: "updateButton:" + row.modelData.id
+                                Layout.alignment: Qt.AlignRight
+                                visible: row.modelData.updateAvailable && row.modelData.canUpdate
+                                         && !row.modelData.updating
+                                icon.name: "update-low"
+                                text: "Update"
+                                display: QQC2.AbstractButton.IconOnly
+                                QQC2.ToolTip.text: "Update: pull the new commits"
+                                QQC2.ToolTip.visible: hovered
+                                QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                                onClicked: backend.updateRepo(row.modelData.id)
+                            }
+
+                            QQC2.BusyIndicator {
+                                Layout.alignment: Qt.AlignRight
+                                visible: row.modelData.updating
+                                running: visible
                                 Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                                 Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
                             }

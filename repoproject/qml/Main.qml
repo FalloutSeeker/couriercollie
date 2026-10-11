@@ -77,6 +77,12 @@ Kirigami.ApplicationWindow {
             root.requestActivate();
         }
 
+        // An update clicked in the list didn't work: open the repo's page, where it says why.
+        function onUpdateFailed(repoId) {
+            if (root.currentRepoId !== repoId)
+                root.openRepo(repoId);
+        }
+
         target: backend
     }
 

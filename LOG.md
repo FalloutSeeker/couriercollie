@@ -4,6 +4,12 @@ Newest first.
 
 ## 2026-10-11
 
+- Stage 5, git clones: Update pulls a scanned clone's followed branch (fast-forward only) from the repo page or the
+  list's ⬆ button, and refuses with the reason when the clone is on another branch, has its own commits, has changes
+  that would be overwritten, or isn't yours to write. Install scripts get "Show and Run…": shown in full, then run in
+  Konsole in the clone's folder. Tested against real git repos made for the tests; your own clones weren't touched.
+  - Also: a branch whose newest commit is your version is no longer asked about (it's the same, no request).
+  - The scanned-repo window check now waits for each comparison to come back, rather than a fixed time.
 - Review before stage 5, for requests and weight:
   - A branch is only compared after it stays chosen for 0.4 s, so clicking quickly through branches makes one
     request, not one per click.

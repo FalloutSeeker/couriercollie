@@ -14,7 +14,7 @@ from pathlib import Path
 from PySide6.QtCore import Property, QFileSystemWatcher, QObject, QProcess, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QGuiApplication
 
-from . import assets, checker, config, icons, integration, scan, sources
+from . import assets, checker, config, icons, integration, scan, sources, updater
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, Config, ConfigError, TrackedRepo
 from .sources import RepoRef, SourceError
 
@@ -56,6 +56,8 @@ class Details:
     # A scanned repo that's no longer where the scan found it, and the branch checked out where it was found.
     local_missing: bool = False
     branch_on_disk: str = ""
+    # A scanned clone's install scripts (updater.install_scripts), offered to run by hand.
+    install_scripts: list[str] = field(default_factory=list)
 
 
 def _whole_number(value) -> int | None:
@@ -165,10 +167,19 @@ def _compare(ref: RepoRef, host: str, yours: str, head: str) -> sources.Comparis
     """How your version relates to a branch's newest commit. None if there's nothing to compare, or it couldn't be."""
     if not head or not yours or yours == NOT_INSTALLED:
         return None
+    if yours == head:
+        return sources.Comparison(sources.SAME)  # no need to ask
     try:
         return sources.compare(ref, host, yours, head)
     except SourceError:
         return None
+
+
+def _can_update(repo: TrackedRepo) -> bool:
+    """Whether Update can do anything for this repo yet. Stage 5 so far: git clones found by a scan, following a
+    branch."""
+    return repo.source == config.SOURCE_SCANNED and repo.kind == assets.KIND_GIT and repo.follow == FOLLOW_BRANCH \
+        and bool(repo.local_path)
 
 
 def _on_disk(scanned: bool, local_path: str) -> tuple[tuple[str, bool] | None, str]:
@@ -192,6 +203,7 @@ class Backend(QObject):
     addingChanged = Signal()
     addFinished = Signal(str)  # repo id
     addFailed = Signal(str)  # message for the user
+    updateFailed = Signal(str)  # repo id; why is in its details ("updateNote")
     detailsChanged = Signal(str)  # repo id
     settingsChanged = Signal()
     scanChanged = Signal()
@@ -209,6 +221,9 @@ class Backend(QObject):
         self._find_icons = find_icons
         # How long a branch must stay chosen before what's new on it is asked for (_refresh_whats_new).
         self.compare_delay_ms = 400
+        # Updates running now, and how the last one for each repo went: (kind, text), kind "done" or "error".
+        self._updating: set[str] = set()
+        self._update_notes: dict[str, tuple[str, str]] = {}
         self._desktop = desktop
         self._icons_pending: set[str] = set()
         self._path = config_path
@@ -283,7 +298,8 @@ class Backend(QObject):
 
     @staticmethod
     def _error_text(error: Exception) -> str:
-        return str(error) if isinstance(error, (SourceError, ValueError)) else f"Something went wrong: {error}"
+        return str(error) if isinstance(error, (SourceError, ValueError, updater.UpdateError)) \
+            else f"Something went wrong: {error}"
 
     def _repo_dict(self, r: TrackedRepo) -> dict:
         ref = RepoRef.from_id(r.id)
@@ -309,6 +325,8 @@ class Backend(QObject):
             "followText": follow_text,
             "scanned": r.source == config.SOURCE_SCANNED,
             "localPath": r.local_path,
+            "canUpdate": _can_update(r),
+            "updating": r.id in self._updating,
             **self._check_dict(r.id),
         }
 
@@ -925,7 +943,8 @@ class Backend(QObject):
             yours = on_disk[0] if on_disk and on_disk[0] else installed
             head = next((b.sha for b in branches if b.name == (branch or default)), "")
             comparison = _compare(ref, host, yours, head) if follow == FOLLOW_BRANCH else None
-            return rels, default, branches, branch_error, on_disk, branch_on_disk, yours, head, comparison
+            scripts = updater.install_scripts(local_path) if scanned and (Path(local_path) / ".git").exists() else []
+            return rels, default, branches, branch_error, on_disk, branch_on_disk, yours, head, comparison, scripts
 
         def done(result, error):
             if not self._config.find(repo_id):
@@ -933,11 +952,12 @@ class Backend(QObject):
             if error:
                 self._details[repo_id] = Details(state="error", error=self._error_text(error))
             else:
-                rels, default, branches, branch_error, on_disk, branch_on_disk, yours, head, comparison = result
+                rels, default, branches, branch_error, on_disk, branch_on_disk, yours, head, comparison, scripts = result
                 self._details[repo_id] = Details(
                     state="ready", releases=rels, default_branch=default, branches=branches, branch_error=branch_error,
                     comparison=comparison, commits_base=yours, commits_head=head,
                     local_missing=bool(on_disk) and not on_disk[1], branch_on_disk=branch_on_disk,
+                    install_scripts=scripts,
                 )
                 if repo := self._config.find(repo_id):
                     # A scanned repo's version is whatever's on disk now (e.g. after a `git pull` outside the app).
@@ -1012,6 +1032,11 @@ class Backend(QObject):
             # A file was picked, but the newest release doesn't have it (renamed or dropped by the project).
             "yourFileMissing": bool(pattern) and latest is not None and not latest["hasSelected"],
             "branchError": d.branch_error,
+            "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing,
+            "updating": repo_id in self._updating,
+            "updateNoteKind": self._update_notes.get(repo_id, ("", ""))[0],
+            "updateNote": self._update_notes.get(repo_id, ("", ""))[1],
+            "installScripts": d.install_scripts,
             "branches": [
                 {"name": b.name, "sha": b.sha[:7], "isDefault": b.name == d.default_branch,
                  "selected": b.name == current_branch}
@@ -1186,6 +1211,82 @@ class Backend(QObject):
             QTimer.singleShot(self.compare_delay_ms, start)
         else:
             start()
+
+    # -- updating (stage 5) ------------------------------------------------------------------------------------------
+
+    @Slot(str)
+    def updateRepo(self, repo_id):
+        """Update clicked: pull a clone's new commits (updater.pull). Your version then follows what's on disk."""
+        repo = self._config.find(repo_id)
+        if not repo or repo_id in self._updating or not _can_update(repo):
+            return
+        branch = repo.branch or self._details.get(repo_id, Details()).default_branch
+        path, ids = repo.local_path, [repo.id, *repo.aliases]
+        self._updating.add(repo_id)
+        self._update_notes.pop(repo_id, None)
+        self.reposChanged.emit()
+        self.detailsChanged.emit(repo_id)
+
+        def done(result, error):
+            self._updating.discard(repo_id)
+            repo = self._config.find(repo_id)
+            if repo and error:
+                self._update_notes[repo_id] = ("error", self._error_text(error))
+            elif repo:
+                _before, after, count = result
+                self._pulled(repo, branch, after)
+                self._update_notes[repo_id] = ("done", "Already up to date." if not count else
+                                               "Pulled 1 new commit." if count == 1 else f"Pulled {count} new commits.")
+            self.reposChanged.emit()
+            self.detailsChanged.emit(repo_id)
+            if repo and error:
+                self.updateFailed.emit(repo_id)
+
+        self._run(lambda: updater.pull(path, branch, ids), done)
+
+    def _pulled(self, repo: TrackedRepo, branch: str, head: str):
+        """After a pull, the clone is at the branch's newest commit (as just fetched): your version, the page and the
+        list's result all say so, without asking the site."""
+        if d := self._details.get(repo.id):
+            for b in d.branches:
+                if b.name == branch:
+                    b.sha = head
+            d.comparison, d.commits_base, d.commits_head = sources.Comparison(sources.SAME), head, head
+        if (old := self._checks.results.get(repo.id)) and old.status in (checker.UPDATE, checker.UP_TO_DATE):
+            self._checks.results[repo.id] = dataclasses.replace(old, status=checker.UP_TO_DATE, text="Up to date",
+                                                                newest=head, not_rechecked=False)
+            try:
+                checker.save_state(self._checks, self._state_path)
+            except OSError:
+                pass
+            self.checksChanged.emit()
+            self._update_badge()
+        if head and head != repo.installed:
+            repo.installed = head
+            self._changed(repo.id)
+
+    @Slot(str, str, result=str)
+    def scriptText(self, repo_id, name):
+        """An install script's text, to read before running it; or why it can't be shown."""
+        repo = self._config.find(repo_id)
+        try:
+            return updater.script_text(repo.local_path if repo else "", name)
+        except (updater.UpdateError, OSError) as e:
+            return f"# {e}"
+
+    @Slot(str, str, result=str)
+    def runInstallScript(self, repo_id, name):
+        """Run an install script in a terminal window, from the clone's folder. Only ever from a click, after the
+        script was shown (DECISIONS.md, D6). Returns why it couldn't start, or ""."""
+        repo = self._config.find(repo_id)
+        if not repo or not _can_update(repo):
+            return "This repo has no clone on this computer to run a script in."
+        try:
+            program, args = updater.terminal_command(repo.local_path, name)
+        except updater.UpdateError as e:
+            return str(e)
+        started, _pid = QProcess.startDetached(program, args, repo.local_path)
+        return "" if started else f"Couldn\u2019t open {Path(program).name}."
 
     @Slot(str, str, str)
     def pickAsset(self, repo_id, tag, asset_name):

@@ -13,6 +13,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import harness  # noqa: E402
 
 REPO = sys.argv[1] if len(sys.argv) > 1 else "gitgud.io/aeroshell/smod"
+def compared():
+    d = b._details.get(REPO)
+    return bool(d) and not d.comparing
+
+
 h = harness.start(copy_settings_from=Path.home() / ".config/repoproject/repos.toml")
 b = h.backend
 repo = b._config.find(REPO)
@@ -59,14 +64,17 @@ h.run([
     # Other branches aren't updates: SMOD's master is behind the clone, hidpi-functionality split off earlier.
     *([] if REPO != "gitgud.io/aeroshell/smod" else [
         (0, lambda: h.click("branch:master")),
+        h.until(compared, 30000),
         (2500, lambda: h.check("master: your version is newer",
                                b.details(REPO)["status"] == "Your version is newer than master", b.details(REPO)["status"])),
         (0, lambda: h.click("branch:hidpi-functionality")),
+        h.until(compared, 30000),
         (2500, lambda: h.check("hidpi-functionality: not comparable, clone is on Plasma/6.7",
                                b.details(REPO)["status"] == "Not comparable with hidpi-functionality: your clone is on Plasma/6.7.",
                                b.details(REPO)["status"])),
         (0, lambda: h.shot("scanned-repo-other-branch")),
         (0, lambda: h.click("branch:Plasma/6.7")),
+        h.until(compared, 30000),
         (2500, lambda: h.check("back on Plasma/6.7: newer commits", b.details(REPO)["updateAvailable"])),
     ]),
 ])

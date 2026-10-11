@@ -59,6 +59,7 @@ python3 -I devtools/check_scanned_repo.py    # a scanned clone's page: version f
 python3 -I devtools/check_icons.py           # looks up icons for your repos (temporary cache folder)
 python3 -I devtools/check_updates.py         # Check Now, the status line, results, the rate-limit bar
 python3 -I devtools/check_categories.py      # new category, dragging, renaming, deleting one
+python3 -I devtools/check_update_clone.py    # Update on a temporary clone, refusals, showing and running a script
 ```
 
 ## Code layout

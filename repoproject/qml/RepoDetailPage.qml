@@ -21,6 +21,9 @@ Kirigami.ScrollablePage {
                                             && details.status !== "Up to date"
     readonly property bool canMarkNotInstalled: ready && !details.versionFromDisk && details.versionText !== ""
                                                 && details.installed !== "-"
+    // Update pulls a scanned clone's new commits (stage 5: clones only, so far).
+    readonly property bool canUpdate: ready && details.canUpdate === true && details.updateAvailable === true
+                                      && !details.updating
 
     function reload() {
         repo = backend.repo(repoId);
@@ -73,6 +76,75 @@ Kirigami.ScrollablePage {
         }
 
         target: backend
+    }
+
+    Kirigami.Dialog {
+        id: scriptDialog
+
+        property string name
+        property string error
+
+        function show(name) {
+            scriptDialog.name = name;
+            error = "";
+            scriptText.text = backend.scriptText(page.repoId, name);
+            open();
+        }
+
+        objectName: "scriptDialog"
+        title: `Run ${name}?`
+        padding: Kirigami.Units.largeSpacing
+        preferredWidth: Kirigami.Units.gridUnit * 40
+        standardButtons: Kirigami.Dialog.NoButton
+        customFooterActions: [
+            Kirigami.Action {
+                text: "Run in Terminal"
+                icon.name: "utilities-terminal"
+                onTriggered: {
+                    scriptDialog.error = backend.runInstallScript(page.repoId, scriptDialog.name);
+                    if (scriptDialog.error === "")
+                        scriptDialog.close();
+                }
+            },
+            Kirigami.Action {
+                text: "Cancel"
+                icon.name: "dialog-cancel"
+                onTriggered: scriptDialog.close()
+            }
+        ]
+
+        ColumnLayout {
+            spacing: Kirigami.Units.largeSpacing
+
+            Kirigami.InlineMessage {
+                Layout.fillWidth: true
+                visible: scriptDialog.error !== ""
+                type: Kirigami.MessageType.Error
+                text: scriptDialog.error
+            }
+
+            QQC2.Label {
+                Layout.fillWidth: true
+                text: `It runs in a terminal window, in ${page.repo.localPath}, as you. It may ask for your password itself (for example through sudo), and can change anything that allows. Read it first; scripts it calls aren\u2019t shown here.`
+                wrapMode: Text.Wrap
+            }
+
+            // As tall as the script, up to about 20 lines; longer ones scroll.
+            QQC2.ScrollView {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(scriptText.implicitHeight, Kirigami.Units.gridUnit * 20)
+
+                QQC2.TextArea {
+                    id: scriptText
+
+                    objectName: "scriptText"
+                    readOnly: true
+                    font: Kirigami.Theme.fixedWidthFont
+                    wrapMode: TextEdit.NoWrap
+                    textFormat: TextEdit.PlainText
+                }
+            }
+        }
     }
 
     Kirigami.PromptDialog {
@@ -314,8 +386,45 @@ Kirigami.ScrollablePage {
                     elide: Text.ElideRight
                 }
 
+                // Pulling, and how the last update went.
                 RowLayout {
-                    visible: page.canMarkUpToDate || page.canMarkNotInstalled
+                    visible: page.details.updating === true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    QQC2.BusyIndicator {
+                        running: parent.visible
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                    }
+
+                    QQC2.Label {
+                        text: "Pulling the new commits\u2026"
+                    }
+                }
+
+                Kirigami.InlineMessage {
+                    objectName: "updateNote"
+                    Layout.fillWidth: true
+                    visible: !page.details.updating && (page.details.updateNote || "") !== ""
+                    type: page.details.updateNoteKind === "error" ? Kirigami.MessageType.Error
+                                                                   : Kirigami.MessageType.Positive
+                    text: page.details.updateNote + (page.details.updateNoteKind === "done"
+                          && (page.details.installScripts || []).length > 0
+                          ? " If the project needs installing again, run its install script (under Tracking)." : "")
+                }
+
+                RowLayout {
+                    visible: page.canUpdate || page.canMarkUpToDate || page.canMarkNotInstalled
+
+                    // Only from this click: nothing is ever updated on its own (DECISIONS.md, D4).
+                    QQC2.Button {
+                        objectName: "updateNow"
+                        visible: page.canUpdate
+                        highlighted: true
+                        text: "Update"
+                        icon.name: "system-software-update"
+                        onClicked: backend.updateRepo(page.repoId)
+                    }
 
                     QQC2.Button {
                         objectName: "markUpToDate"
@@ -443,6 +552,47 @@ Kirigami.ScrollablePage {
                         : "You set your version, with the buttons above."
                     font: Kirigami.Theme.smallFont
                     wrapMode: page.repo.scanned ? Text.WrapAnywhere : Text.Wrap
+                    opacity: 0.7
+                }
+            }
+
+            QQC2.Label {
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                visible: (page.details.installScripts || []).length > 0
+                text: "Install script"
+                opacity: 0.7
+            }
+
+            // Never run on its own, or after an update: shown first, then run in a terminal you can watch (D6).
+            ColumnLayout {
+                Layout.fillWidth: true
+                visible: (page.details.installScripts || []).length > 0
+                spacing: Kirigami.Units.smallSpacing
+
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    Repeater {
+                        model: page.details.installScripts || []
+
+                        delegate: QQC2.Button {
+                            required property string modelData
+
+                            objectName: "showScript:" + modelData
+                            text: `Show and Run ${modelData}\u2026`
+                            icon.name: "run-build"
+                            onClicked: scriptDialog.show(modelData)
+                        }
+                    }
+                }
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    text: "The project\u2019s own installer. It isn\u2019t run by Update; you read it first, then it runs in a terminal window."
+                    font: Kirigami.Theme.smallFont
+                    wrapMode: Text.Wrap
                     opacity: 0.7
                 }
             }
