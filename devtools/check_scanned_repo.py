@@ -27,8 +27,12 @@ on_disk = subprocess.run(["git", "-C", repo.local_path, "rev-parse", "HEAD"], ca
 print(f"  saved version: {repo.installed[:7]}   on disk: {on_disk[:7]}")
 
 
+started = {}
+
+
 def report():
     d = b.details(REPO)
+    started["status"] = d["status"]  # behind or up to date, whichever your clone is today
     print(f"  page: your version {d['versionText']!r}; status {d['status']!r}")
     for c in d["newCommits"]:
         print(f"    {c['sha']}  {c['title']}")
@@ -75,6 +79,7 @@ h.run([
         (0, lambda: h.shot("scanned-repo-other-branch")),
         (0, lambda: h.click("branch:Plasma/6.7")),
         h.until(compared, 30000),
-        (2500, lambda: h.check("back on Plasma/6.7: newer commits", b.details(REPO)["updateAvailable"])),
+        (2500, lambda: h.check("back on Plasma/6.7: as it was at the start", b.details(REPO)["status"] == started["status"],
+                               b.details(REPO)["status"])),
     ]),
 ])

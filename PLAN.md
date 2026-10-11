@@ -13,7 +13,7 @@ AeroThemePlasma and ultrakanban repos), and nothing in a stage can change your s
 | 6     | Old-version cleanup, GitHub sign-in, app icon, installable package    | No                   |
 | 7     | The app tracks its own updates, added on first launch                 | No                   |
 
-**Progress:** stages 1–4 done (2026-10-10). Stage 5: git clones and AppImages done (2026-10-11). The menu entry was pulled forward from stage 6 (notifications and the badge need it).
+**Progress:** stages 1–4 done (2026-10-10). Stage 5: git clones, AppImages and programs done (2026-10-11). The menu entry was pulled forward from stage 6 (notifications and the badge need it).
 
 ## Stage 1: Skeleton (done)
 
@@ -56,8 +56,8 @@ Built kind by kind, simplest first:
    running it.
 2. **AppImages** (done): download, verify the checksum if one is published, swap in, keep the old one, add a menu
    entry. Install, for one you don't have yet, into `~/Applications`.
-3. **Programs** (moved to Later, 2026-10-11: not needed now; such repos are still tracked and notified, only
-   one-click Update is missing).
+3. **Programs** (done): download, unpack into its own folder, link the program from `~/.local/bin`, keep the old
+   version.
 4. **RPMs**: download, verify, install through dnf, which asks for your password.
 
 Plus **Undo last update** for AppImages and programs while the old version is still kept.
@@ -108,8 +108,6 @@ Plus **Undo last update** for AppImages and programs while the old version is st
 
 ## Later, not planned yet
 
-- **Programs** (`.tar.gz` downloads with a ready-made program inside, common for command-line tools): download,
-  unpack, swap the program file in `~/.local/bin`, keep the old one.
 - **Any git host, by git alone** (sourcehut, Bitbucket, kernel.org, self-hosted): new commits, versions from tags and
   Update for clones, without the site's API (no description, icon, release notes or commit list).
 

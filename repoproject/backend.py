@@ -5,6 +5,7 @@ so the window never freezes; results are handed back to the main thread through 
 """
 
 import dataclasses
+import os
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -185,10 +186,15 @@ def _is_appimage(repo: TrackedRepo) -> bool:
     return repo.follow == FOLLOW_RELEASES and repo.kind == assets.KIND_APPIMAGE and bool(repo.asset_pattern)
 
 
+def _is_program(repo: TrackedRepo) -> bool:
+    """Following a release archive with a ready-made program inside."""
+    return repo.follow == FOLLOW_RELEASES and repo.kind == assets.KIND_PROGRAM and bool(repo.asset_pattern)
+
+
 def _can_update(repo: TrackedRepo) -> bool:
     """Whether Update can do anything for this repo yet. Stage 5 so far: git clones found by a scan, following a branch
     (pulled) or releases (moved to the newest release's tag); and AppImages (downloaded and swapped in)."""
-    return _is_clone(repo) or _is_appimage(repo)
+    return _is_clone(repo) or _is_appimage(repo) or _is_program(repo)
 
 
 def _on_disk(scanned: bool, local_path: str, releases: bool = False) -> tuple[tuple[str, bool] | None, str]:
@@ -235,7 +241,8 @@ class Backend(QObject):
         self._updating: set[str] = set()
         self._update_notes: dict[str, tuple[str, str]] = {}
         self._progress: dict[str, float] = {}  # a download's progress, 0 to 1, per repo
-        self._unsupported_hosts: set[str] = set()  # sites a scan found the app can't talk to, while it's open
+        self._unsupported_hosts: set[str] = set()
+        self._program_choices: dict[str, list[str]] = {}  # programs to choose from, when an archive has several  # sites a scan found the app can't talk to, while it's open
         self._desktop = desktop
         self._icons_pending: set[str] = set()
         self._path = config_path
@@ -1086,10 +1093,19 @@ class Backend(QObject):
             "isClone": bool(repo) and _is_clone(repo),
             "updateNeedsPassword": bool(repo) and _is_clone(repo) and updater.needs_password(repo.local_path),
             "isAppImage": bool(repo) and _is_appimage(repo),
+            "isProgram": bool(repo) and _is_program(repo),
+            "isDownload": bool(repo) and (_is_appimage(repo) or _is_program(repo)),
+            "programChoices": self._program_choices.get(repo_id, []),
+            "program": repo.program if repo else "",
+            # The command an installed program is run as, and where its link is.
+            "command": Path(repo.local_path).name if repo and _is_program(repo) and repo.local_path else "",
+            "binFolder": str(updater.bin_dir()),
+            "programsFolder": str(updater.programs_dir()),
             "progress": self._progress.get(repo_id, -1),
             # Where Install puts an AppImage you don't have yet.
             "installFolder": str(updater.apps_dir()),
-            "installedByApp": bool(repo) and bool(repo.local_path) and Path(repo.local_path).parent == updater.apps_dir(),
+            "installedByApp": bool(repo) and bool(repo.local_path) and (
+                Path(repo.local_path).parent == updater.apps_dir() or bool(updater.program_version(Path(repo.local_path)))),
             "updating": repo_id in self._updating,
             "updateNoteKind": self._update_notes.get(repo_id, ("", ""))[0],
             "updateNote": self._update_notes.get(repo_id, ("", ""))[1],
@@ -1337,16 +1353,22 @@ class Backend(QObject):
                   done)
 
     def _update_appimage(self, repo: TrackedRepo):
-        """Download the newest release's AppImage, check it, and swap it in (updater.install_appimage). One you don't
-        have yet is installed into ~/Applications, with a menu entry."""
+        """Download the newest release's AppImage or program archive, check it, and put it in place
+        (updater.install_appimage, install_program). An AppImage you don't have yet goes into ~/Applications, with a
+        menu entry; a program is unpacked into its own folder, with a link in ~/.local/bin."""
         repo_id, d = repo.id, self._details.get(repo.id)
+        is_program = _is_program(repo)
+        here_link = Path(repo.local_path) if is_program and repo.local_path else None
+        wanted = repo.program or (here_link.name if here_link and here_link.is_symlink() else "")
+        hints = [RepoRef.from_id(repo.id).name, repo.name, repo.asset_pattern.split("-")[0].split("*")[0]]
         ref, host, pattern, name, icon = RepoRef.from_id(repo.id), repo.host, repo.asset_pattern, repo.name, repo.icon
         known = d.releases if d and d.state == "ready" else None
         here = Path(repo.local_path) if repo.source == config.SOURCE_SCANNED and repo.local_path else None
-        old = here if here and here.is_file() else None
+        old = here if here and here.is_file() and not is_program else None
         folder = old.parent if old else updater.apps_dir()
         self._updating.add(repo_id)
         self._update_notes.pop(repo_id, None)
+        self._program_choices.pop(repo_id, None)
         self._progress[repo_id] = 0
         self.reposChanged.emit()
         self.detailsChanged.emit(repo_id)
@@ -1368,6 +1390,10 @@ class Backend(QObject):
             if not asset:
                 raise updater.UpdateError(f"The newest release ({release.tag}) doesn\u2019t include your file "
                                           f"({pattern}). Choose it again under Your Build File.")
+            if is_program:
+                link, verified, before = updater.install_program(repo_id, release.tag, asset, release.assets, wanted,
+                                                                  hints, progress)
+                return release.tag, link, verified, before
             new, verified, kept = updater.install_appimage(repo_id, asset, release.assets, folder, old, progress)
             if old:
                 updater.repoint_menu_entries(old, new)
@@ -1383,12 +1409,20 @@ class Backend(QObject):
             repo = self._config.find(repo_id)
             if repo and error:
                 self._update_notes[repo_id] = ("error", self._error_text(error))
+                if isinstance(error, updater.SeveralPrograms):
+                    self._program_choices[repo_id] = error.choices
             elif repo:
                 tag, new, verified, kept = result
                 repo.source, repo.local_path, repo.installed = config.SOURCE_SCANNED, str(new), tag
                 self._version_changed(repo)
                 self._changed(repo_id)
-                what = f"Updated to {tag}." if old else f"Installed {tag} as {new}, with a menu entry."
+                if is_program:
+                    on_path = str(updater.bin_dir()) in os.environ.get("PATH", "").split(os.pathsep)
+                    run = f" Run it as \u201c{new.name}\u201d." if on_path else \
+                        f" Run it as {new} ({updater.bin_dir()} isn\u2019t where your terminal looks for commands)."
+                    what = (f"Updated to {tag}." if kept else f"Installed {tag}.") + run
+                else:
+                    what = f"Updated to {tag}." if old else f"Installed {tag} as {new}, with a menu entry."
                 check = " Checked against the project\u2019s published checksum." if verified else \
                     " The project publishes no checksum for it, so the download couldn\u2019t be checked."
                 keep = " The previous version is kept, so the update can be undone." if kept else ""
@@ -1420,6 +1454,15 @@ class Backend(QObject):
         if head and head != repo.installed:
             repo.installed = head
             self._changed(repo.id)
+
+    @Slot(str, str)
+    def chooseProgram(self, repo_id, name):
+        """Which program in a release's archive to run, when it has several."""
+        if (repo := self._config.find(repo_id)) and name in self._program_choices.get(repo_id, [name]):
+            repo.program = name
+            self._program_choices.pop(repo_id, None)
+            self._update_notes.pop(repo_id, None)
+            self._changed(repo_id)
 
     @Slot(str, str, result=str)
     def scriptText(self, repo_id, name):

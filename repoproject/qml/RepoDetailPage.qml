@@ -23,7 +23,7 @@ Kirigami.ScrollablePage {
                                                 && details.installed !== "-"
     // Update pulls a clone's new commits or moves it to the newest release; for an AppImage it downloads the newest,
     // or installs it if you don't have it yet.
-    readonly property bool installing: details.isAppImage === true && details.statusKind === "notInstalled"
+    readonly property bool installing: details.isDownload === true && details.statusKind === "notInstalled"
     readonly property bool canUpdate: ready && details.canUpdate === true && !details.updating
                                       && (details.updateAvailable === true || installing)
 
@@ -401,7 +401,7 @@ Kirigami.ScrollablePage {
                     }
 
                     QQC2.Label {
-                        text: page.details.isAppImage ? (page.details.progress >= 0
+                        text: page.details.isDownload ? (page.details.progress >= 0
                                   ? `Downloading\u2026 ${Math.round(page.details.progress * 100)}%` : "Downloading\u2026")
                             : page.followsReleases ? "Moving to the new release\u2026" : "Pulling the new commits\u2026"
                     }
@@ -411,7 +411,7 @@ Kirigami.ScrollablePage {
                         objectName: "downloadProgress"
                         Layout.fillWidth: true
                         Layout.preferredHeight: Kirigami.Units.smallSpacing * 2
-                        visible: page.details.isAppImage === true && page.details.progress >= 0
+                        visible: page.details.isDownload === true && page.details.progress >= 0
                         radius: height / 2
                         color: Kirigami.ColorUtils.tintWithAlpha(Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.15)
 
@@ -434,6 +434,25 @@ Kirigami.ScrollablePage {
                     text: page.details.updateNote + (page.details.updateNoteKind !== "error"
                           && (page.details.installScripts || []).length > 0
                           ? " If the project needs installing again, run its install script (under Tracking)." : "")
+                }
+
+                // The archive has several programs: which one to run.
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    visible: (page.details.programChoices || []).length > 0
+                    spacing: 0
+
+                    Repeater {
+                        model: page.details.programChoices || []
+
+                        delegate: QQC2.RadioButton {
+                            required property string modelData
+
+                            objectName: "program:" + modelData
+                            text: modelData
+                            onClicked: backend.chooseProgram(page.repoId, modelData)
+                        }
+                    }
                 }
 
                 RowLayout {
@@ -470,7 +489,9 @@ Kirigami.ScrollablePage {
                 QQC2.Label {
                     Layout.fillWidth: true
                     visible: page.canUpdate && page.installing
-                    text: `Downloads the newest release\u2019s ${page.repo.assetPattern || "file"} into ${page.details.installFolder}, and adds it to the menu.`
+                    text: page.details.isProgram
+                          ? `Downloads the newest release\u2019s ${page.repo.assetPattern}, unpacks it into ${page.details.programsFolder}, and puts a link to its program in ${page.details.binFolder}, so it runs as a command.`
+                          : `Downloads the newest release\u2019s ${page.repo.assetPattern || "file"} into ${page.details.installFolder}, and adds it to the menu.`
                     font: Kirigami.Theme.smallFont
                     wrapMode: Text.Wrap
                     opacity: 0.7
@@ -556,6 +577,21 @@ Kirigami.ScrollablePage {
                     : "Not chosen yet. Choose one below."
                 font.bold: page.details.isClone ? false
                          : page.followsReleases ? page.repo.assetPattern !== "" : page.currentBranch !== ""
+                elide: Text.ElideMiddle
+            }
+
+            QQC2.Label {
+                visible: (page.details.command || "") !== ""
+                text: "Command"
+                opacity: 0.7
+            }
+
+            QQC2.Label {
+                objectName: "programCommand"
+                Layout.fillWidth: true
+                visible: (page.details.command || "") !== ""
+                text: `<b>${page.details.command}</b> (a link in ${page.details.binFolder})`
+                textFormat: Text.StyledText
                 elide: Text.ElideMiddle
             }
 

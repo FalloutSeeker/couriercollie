@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import assets, sources
+from . import assets, sources, updater
 from .config import FOLLOW_BRANCH, SOURCE_SCANNED, Config, TrackedRepo
 from .sources import RepoRef, SourceError
 
@@ -250,6 +250,8 @@ def version_on_disk(path: str, releases: bool = False) -> tuple[str, bool]:
             return "", True  # can't tell; assume it's still there
         return (result.stdout.strip(), True) if result.returncode == 0 else ("", False)
     p = Path(path)
+    if p.is_symlink() and (version := updater.program_version(p)):
+        return version, True  # a program the app installed: its link points into that version's folder
     if (p / ".git").exists():
         tags = _git(path, "tag", "--points-at", "HEAD").split() if releases else []
         return (tags[0] if tags else _git(path, "rev-parse", "HEAD")), True

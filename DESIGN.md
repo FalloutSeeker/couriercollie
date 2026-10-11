@@ -160,6 +160,19 @@ release's file next to the one you have; **Install** (when you don't have it) pu
   AppImage's own icon.
 - From then on the repo's version is read from the file, as for a scanned one ("Installed by RepoProject").
 
+**Programs (built 2026-10-11).** For repos that follow a release archive (`.tar.gz`, `.tgz`, `.tar.xz`, `.tar.bz2`,
+`.tar.zst`, `.zip`) with a ready-made program inside, e.g. ripgrep or LocalSend's tarball.
+
+- Downloaded and checked like an AppImage (published checksum, else a warning), then **unpacked whole** into its own
+  folder, `~/.local/share/repoproject/programs/<repo>/<version>/`, since some programs need the files next to them.
+  Unpacking is safe: nothing may land outside that folder, no device files or setuid, at most 4 GB unpacked.
+- **The program** is the archive's Linux executable (not libraries); if there are several, the one named like the
+  project; otherwise the page lists them to choose from, and the choice is kept for later updates.
+- A **link** in `~/.local/bin` (where Fedora's terminal looks for commands) starts it, e.g. `rg`. Updating unpacks
+  the new version beside the old, then switches the link in one step; the old version's folder stays, to undo.
+- A command in `~/.local/bin` that RepoProject didn't put there is **never replaced**: the update stops and says so.
+- No menu entry: these are mostly command-line tools. The page shows the command under Tracking.
+
 **Install scripts.** A clone's `install.sh`, `install` or `setup.sh` (never `uninstall.sh`) gets a "Show and Run…"
 button under Tracking. The script is shown in full first; Run in Terminal opens Konsole in the clone's folder, as
 you, kept open afterwards so its output can be read. The script asks for a password itself if it needs one. Update

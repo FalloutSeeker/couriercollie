@@ -1,5 +1,8 @@
 """Updating what's tracked (stage 5). Only ever runs because you clicked Update (DECISIONS.md, D4, D6).
 
+Programs (an archive with a ready-made program inside): each version is unpacked into its own folder, and a link in
+~/.local/bin starts it; updating switches the link, and the old version stays, to undo.
+
 AppImages: the new file is downloaded next to yours, checked against the project's published checksum (and that it
 really is an AppImage), then swapped in; the old one is kept, to undo the update.
 
@@ -13,8 +16,10 @@ import os
 import shlex
 import shutil
 import subprocess
+import tarfile
 import urllib.error
 import urllib.request
+import zipfile
 from pathlib import Path
 
 from . import sources
@@ -412,3 +417,151 @@ def menu_entry_for(app: Path) -> bool:
     """Whether any menu entry of yours starts this file."""
     return menu_dir().is_dir() and any(str(app) in e.read_text(encoding="utf-8", errors="replace")
                                        for e in menu_dir().glob("*.desktop"))
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Programs: a release's archive (.tar.gz, .zip, …) with a ready-made program inside. Each version is unpacked whole
+# (some programs need the files next to them) into its own folder, and a link in ~/.local/bin starts the program
+# (D8). Updating unpacks the new version beside the old, then switches the link; the old folder is kept, to undo.
+
+# Unpacked, an archive may not be bigger than this (an archive can unpack to far more than it downloads).
+UNPACKED_MAX_BYTES = 4 * 1024 ** 3
+
+
+class SeveralPrograms(UpdateError):
+    """The archive has more than one program and nothing says which is the one to run. `choices` are their names."""
+
+    def __init__(self, choices: list[str]):
+        super().__init__(f"The archive has {len(choices)} programs ({', '.join(choices)}). Choose the one to run, "
+                         "then try again.")
+        self.choices = choices
+
+
+def programs_dir() -> Path:
+    return _data_home() / "repoproject" / "programs"
+
+
+def bin_dir() -> Path:
+    """Where the link to each program goes: on Fedora, already where the terminal looks for commands."""
+    return Path(os.environ.get("REPOPROJECT_BIN") or Path.home() / ".local" / "bin")
+
+
+def _folder_name(text: str) -> str:
+    """A repo or version as one folder name."""
+    return "".join(c if c.isalnum() or c in "._-" else "_" for c in text).strip(".") or "_"
+
+
+def _unpack(archive: Path, into: Path) -> None:
+    """Unpacks an archive into `into`, refusing anything that would land outside it, links that point outside it,
+    device files, and archives that unpack to more than UNPACKED_MAX_BYTES."""
+    into.mkdir(parents=True)
+    if zipfile.is_zipfile(archive):
+        with zipfile.ZipFile(archive) as z:
+            members = z.infolist()
+            if sum(m.file_size for m in members) > UNPACKED_MAX_BYTES:
+                raise UpdateError("The archive unpacks to more than 4 GB, so it wasn’t unpacked.")
+            for m in members:
+                target = (into / m.filename).resolve()
+                if not target.is_relative_to(into.resolve()):
+                    raise UpdateError(f"The archive tries to put {m.filename} outside its folder, so it wasn’t "
+                                      "unpacked.")
+                z.extract(m, into)
+                mode = (m.external_attr >> 16) & 0o777
+                if mode and not m.is_dir():
+                    target.chmod(mode & 0o755)
+        return
+    try:
+        with tarfile.open(archive, "r:*") as t:
+            if sum(m.size for m in t.getmembers()) > UNPACKED_MAX_BYTES:
+                raise UpdateError("The archive unpacks to more than 4 GB, so it wasn’t unpacked.")
+            t.extractall(into, filter="data")  # Python's safe mode: nothing outside, no devices, no setuid
+    except tarfile.FilterError as e:
+        raise UpdateError(f"The archive has something unsafe in it ({e}), so it wasn’t unpacked.") from e
+    except (tarfile.TarError, EOFError, OSError) as e:
+        raise UpdateError(f"The archive couldn’t be unpacked: {e}") from e
+
+
+def _is_program(path: Path) -> bool:
+    if path.is_symlink() or not path.is_file() or not os.access(path, os.X_OK) or ".so" in path.name:
+        return False
+    with path.open("rb") as f:
+        return f.read(4) == b"\x7fELF"
+
+
+def programs_in(folder: Path) -> list[Path]:
+    """The programs (Linux executables) in an unpacked archive, shallowest first."""
+    found = [p for p in folder.rglob("*") if _is_program(p)]
+    return sorted(found, key=lambda p: (len(p.relative_to(folder).parts), str(p)))
+
+
+def choose_program(folder: Path, wanted: str, hints: list[str]) -> Path:
+    """The program to run: the one called `wanted` (chosen before, or the command already installed); the only one;
+    or the one named like the project. Otherwise SeveralPrograms."""
+    found = programs_in(folder)
+    if not found:
+        raise UpdateError("There’s no program for Linux in the archive, so there’s nothing to run.")
+    if wanted:
+        if named := [p for p in found if p.name == wanted]:
+            return named[0]
+        raise UpdateError(f"The new version has no program called {wanted} any more.")
+    if len(found) == 1:
+        return found[0]
+    for hint in (h.lower().replace("-", "").replace("_", "") for h in hints if h):
+        named = [p for p in found if p.name.lower().replace("-", "").replace("_", "").startswith(hint)]
+        if len({p.name for p in named}) == 1:
+            return named[0]
+    raise SeveralPrograms(sorted({p.name for p in found}))
+
+
+def install_program(repo_id: str, tag: str, asset, others: list, wanted: str = "", hints: list[str] = (),
+                    progress=None, get_text=fetch_text) -> tuple[Path, bool, Path | None]:
+    """Downloads a release's archive, checks it, unpacks it into its own folder, and points the program's link in
+    bin_dir() at it. Returns (the link, whether the download was checked against a published checksum, the version
+    the link pointed at before, if any). Never replaces a command in bin_dir() that it didn't put there."""
+    home = programs_dir() / _folder_name(repo_id)
+    home.mkdir(parents=True, exist_ok=True)
+    part = home / f".{_folder_name(Path(asset.name).name)}.part"
+    unpacking = home / f".{_folder_name(tag)}.unpacking"
+    shutil.rmtree(unpacking, ignore_errors=True)
+    try:
+        got = download(asset.url, part, asset.size, progress)
+        expected = expected_sha256(asset, others, get_text)
+        if expected and got != expected:
+            raise UpdateError("The download doesn’t match the checksum the project published, so it was thrown "
+                              "away. Try again later; if it keeps happening, the file on the site may have been "
+                              "tampered with.")
+        _unpack(part, unpacking)
+        program = choose_program(unpacking, wanted, list(hints))
+        link = bin_dir() / program.name
+        before = link.resolve() if link.is_symlink() else None
+        if (link.exists() or link.is_symlink()) and not (before and before.is_relative_to(home.resolve())):
+            raise UpdateError(f"{link} already exists and wasn’t put there by RepoProject, so it wasn’t "
+                              "replaced. Move it away (or uninstall what it belongs to), then try again.")
+        version = home / _folder_name(tag)
+        if version.exists() and before and before.is_relative_to(version.resolve()):
+            # The same version again (e.g. a broken one reinstalled): move the current one aside first.
+            aside = home / f".{_folder_name(tag)}.old"
+            shutil.rmtree(aside, ignore_errors=True)
+            os.replace(version, aside)
+            before = aside / before.relative_to(version.resolve())
+        elif version.exists():
+            shutil.rmtree(version)
+        os.replace(unpacking, version)
+        bin_dir().mkdir(parents=True, exist_ok=True)
+        new_link = bin_dir() / f".{program.name}.repoproject"
+        new_link.unlink(missing_ok=True)
+        new_link.symlink_to(version / program.relative_to(unpacking))
+        os.replace(new_link, link)  # in one step: the command always works, old or new
+        return link, bool(expected), before
+    finally:
+        part.unlink(missing_ok=True)
+        shutil.rmtree(unpacking, ignore_errors=True)
+
+
+def program_version(link: Path) -> str:
+    """The version a program's link points at (its folder's name under programs_dir()), or ""."""
+    try:
+        target = link.resolve(strict=True).relative_to(programs_dir().resolve())
+    except (OSError, ValueError):
+        return ""
+    return target.parts[1] if len(target.parts) > 2 else ""

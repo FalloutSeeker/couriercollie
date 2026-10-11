@@ -169,3 +169,129 @@ class InstallClickedTest(AppImageCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _archive(kind: str, files: dict[str, tuple[bytes, int]]) -> bytes:
+    """A .tar.gz or .zip holding `files` ({path: (content, mode)})."""
+    import io
+    import tarfile
+    import zipfile
+
+    out = io.BytesIO()
+    if kind == "zip":
+        with zipfile.ZipFile(out, "w") as z:
+            for path, (data, mode) in files.items():
+                info = zipfile.ZipInfo(path)
+                info.external_attr = mode << 16
+                z.writestr(info, data)
+    else:
+        with tarfile.open(fileobj=out, mode="w:gz") as t:
+            for path, (data, mode) in files.items():
+                info = tarfile.TarInfo(path)
+                info.size, info.mode = len(data), mode
+                t.addfile(info, io.BytesIO(data))
+    return out.getvalue()
+
+
+ELF = b"\x7fELF" + b"\x00" * 60
+
+
+class ProgramTest(AppImageCase):
+    def setUp(self):
+        super().setUp()
+        os.environ["REPOPROJECT_BIN"] = str(Path(self.dir.name) / "bin")
+        self.addCleanup(os.environ.pop, "REPOPROJECT_BIN", None)
+        for version in ("1.0", "2.0"):
+            files = {f"tool-{version}/tool": (ELF + version.encode(), 0o755),
+                     f"tool-{version}/lib/libtool.so.1": (ELF, 0o755),  # a library, not the program
+                     f"tool-{version}/README.md": (b"read me", 0o644)}
+            _Files.files[f"tool-{version}.tar.gz"] = _archive("tar", files)
+            _Files.files[f"tool-{version}.zip"] = _archive("zip", files)
+
+    def install(self, tag, name, wanted="", hints=("tool",)):
+        data = _Files.files[name]
+        return updater.install_program("github.com/a/tool", tag, Asset(name, self.url + name, len(data),
+                                       f"sha256:{hashlib.sha256(data).hexdigest()}"), [], wanted, list(hints))
+
+    def test_installs_with_a_link_and_updates_keeping_the_old_version(self):
+        from repoproject import scan
+
+        link, verified, before = self.install("v1.0", "tool-1.0.tar.gz")
+        self.assertEqual((link, verified, before), (updater.bin_dir() / "tool", True, None))
+        self.assertEqual(link.read_bytes(), ELF + b"1.0")  # the link starts the program
+        self.assertTrue((link.resolve().parent / "lib/libtool.so.1").is_file())  # with the files next to it
+        self.assertEqual(scan.version_on_disk(str(link)), ("v1.0", True))
+        link, _, before = self.install("v2.0", "tool-2.0.zip")
+        self.assertEqual(link.read_bytes(), ELF + b"2.0")
+        self.assertTrue(os.access(link, os.X_OK))  # a zip keeps the program runnable
+        self.assertEqual(updater.program_version(link), "v2.0")
+        self.assertTrue(before.is_file() and before.read_bytes() == ELF + b"1.0")  # kept, to undo
+        leftovers = [p.name for p in (updater.programs_dir() / "github.com_a_tool").iterdir()]
+        self.assertEqual(sorted(leftovers), ["v1.0", "v2.0"])  # nothing half-done left behind
+
+    def test_never_replaces_a_command_it_didnt_put_there(self):
+        updater.bin_dir().mkdir(parents=True)
+        (updater.bin_dir() / "tool").write_text("#!/bin/sh\necho mine\n")
+        with self.assertRaisesRegex(updater.UpdateError, "wasn’t put there by RepoProject"):
+            self.install("v1.0", "tool-1.0.tar.gz")
+        self.assertEqual((updater.bin_dir() / "tool").read_text(), "#!/bin/sh\necho mine\n")
+
+    def test_several_programs_are_asked_about(self):
+        _Files.files["two.tar.gz"] = _archive("tar", {"a/alpha": (ELF, 0o755), "a/beta": (ELF, 0o755)})
+        with self.assertRaises(updater.SeveralPrograms) as caught:
+            self.install("v1", "two.tar.gz", hints=("gamma",))
+        self.assertEqual(caught.exception.choices, ["alpha", "beta"])
+        self.assertEqual(self.install("v1", "two.tar.gz", wanted="beta")[0], updater.bin_dir() / "beta")
+
+    def test_an_archive_reaching_outside_its_folder_isnt_unpacked(self):
+        _Files.files["evil.tar.gz"] = _archive("tar", {"../../escaped": (ELF, 0o755)})
+        _Files.files["evil.zip"] = _archive("zip", {"../../escaped": (ELF, 0o755)})
+        for name in ("evil.tar.gz", "evil.zip"):
+            with self.assertRaisesRegex(updater.UpdateError, "outside|unsafe"):
+                self.install("v1", name)
+        self.assertFalse(any(Path(self.dir.name).rglob("escaped")))
+
+    def test_no_program_inside(self):
+        _Files.files["docs.tar.gz"] = _archive("tar", {"docs/README": (b"text", 0o644)})
+        with self.assertRaisesRegex(updater.UpdateError, "no program for Linux"):
+            self.install("v1", "docs.tar.gz")
+
+
+class ProgramClickedTest(InstallClickedTest):
+    """Install clicked for a repo that follows a program archive; one with several programs asks which."""
+
+    def setUp(self):
+        AppImageCase.setUp(self)
+        from repoproject.backend import Backend
+
+        os.environ["REPOPROJECT_BIN"] = str(Path(self.dir.name) / "bin")
+        self.addCleanup(os.environ.pop, "REPOPROJECT_BIN", None)
+        _Files.files["pair-2.0.tar.gz"] = _archive("tar", {"pair/left": (ELF, 0o755), "pair/right": (ELF, 0o755)})
+        self.path = Path(self.dir.name) / "repos.toml"
+        self.id = "github.com/a/pair"
+        config.save(config.Config(repos=[config.TrackedRepo(
+            id=self.id, name="Pair", url="", host="github", asset_pattern="pair-*.tar.gz", kind="Program",
+            installed="-")]), self.path)
+        self.backend = Backend(self.path)
+        self.backend._run = lambda work, done: done(*self._attempt(work))
+        release = Release("v2.0", "v2.0", None, False, "", "", [Asset("pair-2.0.tar.gz", self.url + "pair-2.0.tar.gz")])
+        self.saved = sources.releases
+        sources.releases = lambda ref, host: [release]
+
+    def test_install_puts_it_in_applications_with_a_menu_entry(self):
+        pass  # (an AppImage test; not for programs)
+
+    def test_a_failed_download_says_why(self):
+        pass
+
+    def test_several_programs_ask_which_then_install(self):
+        self.backend.updateRepo(self.id)
+        d = self.backend.details(self.id)
+        self.assertEqual((d["updateNoteKind"], d["programChoices"]), ("error", ["left", "right"]))
+        self.backend.chooseProgram(self.id, "right")
+        self.backend.updateRepo(self.id)
+        d = self.backend.details(self.id)
+        self.assertEqual(d["updateNoteKind"], "warning")  # no checksum published here: said so
+        self.assertEqual((d["command"], config.load(self.path).repos[0].installed), ("right", "v2.0"))
+        self.assertTrue((updater.bin_dir() / "right").is_symlink())
+        self.assertEqual(config.load(self.path).repos[0].program, "right")

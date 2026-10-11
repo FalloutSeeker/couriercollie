@@ -10,6 +10,11 @@ Newest first.
   Konsole in the clone's folder. Tested against real git repos made for the tests; your own clones weren't touched.
   - Also: a branch whose newest commit is your version is no longer asked about (it's the same, no request).
   - The scanned-repo window check now waits for each comparison to come back, rather than a fixed time.
+- Stage 5, programs (brought back from Later): release archives with a program inside are downloaded, checked,
+  unpacked safely into their own folder per version, and linked from ~/.local/bin; updating switches the link and
+  keeps the old version. Several programs in one archive: the page asks which. A command RepoProject didn't put in
+  ~/.local/bin is never replaced. Tested with a local fake server (tar.gz, zip, archives reaching outside their
+  folder), and for real with ripgrep (its `rg --version` runs from the link after install and update).
 - A clone from a site that isn't supported (sourcehut, Codeberg, …) now says so ("git.sr.ht isn't supported yet:
   only GitHub and GitLab sites are."), instead of "not found, may be private". Such a site is asked once per app
   start, not on every scan. Programs (.tar.gz) moved to Later; "any git host by git alone" added to Later.

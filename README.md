@@ -61,6 +61,7 @@ python3 -I devtools/check_updates.py         # Check Now, the status line, resul
 python3 -I devtools/check_categories.py      # new category, dragging, renaming, deleting one
 python3 -I devtools/check_update_clone.py    # Update on a temporary clone, refusals, showing and running a script
 python3 -I devtools/check_appimage.py        # installs then updates LocalSend's AppImage, in temporary folders
+python3 -I devtools/check_program.py         # installs then updates ripgrep from its .tar.gz, in temporary folders
 ```
 
 ## Code layout

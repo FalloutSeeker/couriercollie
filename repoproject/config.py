@@ -69,6 +69,8 @@ class TrackedRepo:
     icon: str = ""
     # The category it's in (one of Config.categories), or empty for Uncategorized.
     category: str = ""
+    # For a release archive with several programs in it: the one to run (its file name). Empty: worked out.
+    program: str = ""
 
 
 @dataclass
