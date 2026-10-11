@@ -295,3 +295,80 @@ class ProgramClickedTest(InstallClickedTest):
         self.assertEqual((d["command"], config.load(self.path).repos[0].installed), ("right", "v2.0"))
         self.assertTrue((updater.bin_dir() / "right").is_symlink())
         self.assertEqual(config.load(self.path).repos[0].program, "right")
+
+
+class RpmTest(AppImageCase):
+    """Installing a release's .rpm with dnf. dnf (and the password) are stand-ins that note what they were asked;
+    nothing is installed."""
+
+    def setUp(self):
+        super().setUp()
+        self.rpm = updater.RPM_MAGIC + os.urandom(50_000)
+        _Files.files["tool-2.0-1.x86_64.rpm"] = self.rpm
+        self.asked = Path(self.dir.name) / "dnf-asked"
+        fake_dnf = Path(self.dir.name) / "dnf"
+        # Notes its arguments, and that the file was there to install; fails if told to by DNF_FAILS.
+        fake_dnf.write_text('#!/bin/sh\nfor a in "$@"; do echo "$a"; done > "$ASKED"\n[ -f "$3" ] && echo exists >> "$ASKED"\n'
+                            'if [ -n "$DNF_FAILS" ]; then echo "Error: $DNF_FAILS" >&2; exit 1; fi\n')
+        fake_dnf.chmod(0o755)
+        saved = updater.ROOT, updater.DNF, updater.rpm_info
+        updater.ROOT, updater.DNF = ["env", f"ASKED={self.asked}"], [str(fake_dnf)]
+        updater.rpm_info = lambda path: ("tool", "2.0", "x86_64")
+        self.addCleanup(lambda: (setattr(updater, "ROOT", saved[0]), setattr(updater, "DNF", saved[1]),
+                                 setattr(updater, "rpm_info", saved[2])))
+        self.addCleanup(os.environ.pop, "DNF_FAILS", None)
+
+    def asset(self, name="tool-2.0-1.x86_64.rpm", digest=None, path=None):
+        data = _Files.files.get(path or name, b"")
+        return Asset(name, self.url + (path or name), len(data),
+                     f"sha256:{hashlib.sha256(data).hexdigest()}" if digest is None else digest)
+
+    def test_installs_with_dnf_and_cleans_up(self):
+        started = []
+        name, version, verified = updater.install_rpm(self.asset(), [], "tool", installing=lambda: started.append(1))
+        self.assertEqual((name, version, verified, started), ("tool", "2.0", True, [1]))
+        asked = self.asked.read_text().split()
+        self.assertEqual(asked[:2], ["install", "-y"])
+        self.assertTrue(asked[2].endswith("tool-2.0-1.x86_64.rpm") and asked[3] == "exists")
+        self.assertEqual(list(updater.downloads_dir().iterdir()), [])  # the download is deleted
+
+    def test_a_different_package_isnt_installed(self):
+        with self.assertRaisesRegex(updater.UpdateError, "not “other” that you have"):
+            updater.install_rpm(self.asset(), [], "other")
+        self.assertFalse(self.asked.exists())  # dnf was never asked
+
+    def test_dnf_failing_says_why(self):
+        os.environ["DNF_FAILS"] = "nothing provides libfoo.so.3"
+        with self.assertRaisesRegex(updater.UpdateError, "dnf couldn’t install it: Error: nothing provides"):
+            updater.install_rpm(self.asset(), [])
+        self.assertEqual(list(updater.downloads_dir().iterdir()), [])
+
+    def test_no_password_nothing_installed(self):
+        updater.ROOT = ["sh", "-c", "exit 126", "polkit"]
+        with self.assertRaisesRegex(updater.UpdateError, "password wasn’t given"):
+            updater.install_rpm(self.asset(), [])
+
+    def test_something_thats_not_an_rpm_isnt_installed(self):
+        with self.assertRaisesRegex(updater.UpdateError, "isn’t an RPM"):
+            updater.install_rpm(self.asset("tool-2.0-1.x86_64.rpm", "", "not-an-app.AppImage"), [])
+        self.assertFalse(self.asked.exists())
+
+    def test_install_clicked(self):
+        from repoproject.backend import Backend
+
+        path = Path(self.dir.name) / "repos.toml"
+        config.save(config.Config(repos=[config.TrackedRepo(
+            id="github.com/a/tool", name="Tool", url="", host="github", asset_pattern="tool-*-1.x86_64.rpm",
+            kind="RPM", installed="-")]), path)
+        backend = Backend(path)
+        self.addCleanup(backend.shutdown)
+        backend._run = lambda work, done: done(*InstallClickedTest._attempt(work))
+        release = Release("v2.0", "v2.0", None, False, "", "", [self.asset()])
+        saved = sources.releases
+        sources.releases = lambda ref, host: [release]
+        self.addCleanup(setattr, sources, "releases", saved)
+        self.assertTrue(backend.details("github.com/a/tool")["updateNeedsPassword"])
+        backend.updateRepo("github.com/a/tool")
+        repo = config.load(path).repos[0]
+        self.assertEqual((repo.installed, repo.local_path), ("v2.0", "RPM package “tool”"))
+        self.assertIn("Installed v2.0 with dnf", backend.details("github.com/a/tool")["updateNote"])

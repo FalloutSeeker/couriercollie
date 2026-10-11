@@ -62,6 +62,7 @@ python3 -I devtools/check_categories.py      # new category, dragging, renaming,
 python3 -I devtools/check_update_clone.py    # Update on a temporary clone, refusals, showing and running a script
 python3 -I devtools/check_appimage.py        # installs then updates LocalSend's AppImage, in temporary folders
 python3 -I devtools/check_program.py         # installs then updates ripgrep from its .tar.gz, in temporary folders
+python3 -I devtools/check_rpm.py             # bottom's real .rpm up to dnf, which is a stand-in: nothing is installed
 ```
 
 ## Code layout

@@ -158,7 +158,19 @@ release's file next to the one you have; **Install** (when you don't have it) pu
 - **Menu entries:** yours that started the old file (e.g. from AppImageLauncher or Gear Lever) are pointed at the
   new one. If none starts it, the app adds one (`~/.local/share/applications/repoproject-<repo>.desktop`) with the
   AppImage's own icon.
-- From then on the repo's version is read from the file, as for a scanned one ("Installed by RepoProject").
+- From then on the repo's version is read from the file, as for a scanned one ("Found on this computer").
+
+**RPMs (built 2026-10-11).** For repos that follow an `.rpm` file. **Install…** / **Update…** (the dots: it asks for
+your password, which the page says beforehand):
+
+- Downloaded (with progress) into `~/.cache/repoproject/downloads`, checked against the published checksum (else a
+  warning), and must really be an RPM. Its header is read with `rpm` (as you, nothing installed): if you have the
+  package already, the file must be that same package (a renamed one stops, saying so), and it must be for this
+  computer's processor or `noarch`.
+- Then `dnf install -y <file>` runs as root through polkit: one password prompt per update. Cancelling it changes
+  nothing. dnf's own error is shown if it fails (e.g. a missing dependency). The download is deleted either way.
+- From then on the version is read from the installed package (`rpm -q`), like an RPM a scan found.
+- No Undo for RPMs: dnf keeps no copy of the old version to go back to.
 
 **Programs (built 2026-10-11).** For repos that follow a release archive (`.tar.gz`, `.tgz`, `.tar.xz`, `.tar.bz2`,
 `.tar.zst`, `.zip`) with a ready-made program inside, e.g. ripgrep or LocalSend's tarball.

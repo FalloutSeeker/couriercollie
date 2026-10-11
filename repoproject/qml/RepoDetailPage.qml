@@ -401,7 +401,8 @@ Kirigami.ScrollablePage {
                     }
 
                     QQC2.Label {
-                        text: page.details.isDownload ? (page.details.progress >= 0
+                        text: page.details.updatePhase === "installing" ? "Installing with dnf\u2026"
+                            : page.details.isDownload ? (page.details.progress >= 0
                                   ? `Downloading\u2026 ${Math.round(page.details.progress * 100)}%` : "Downloading\u2026")
                             : page.followsReleases ? "Moving to the new release\u2026" : "Pulling the new commits\u2026"
                     }
@@ -412,6 +413,7 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         Layout.preferredHeight: Kirigami.Units.smallSpacing * 2
                         visible: page.details.isDownload === true && page.details.progress >= 0
+                                 && page.details.updatePhase !== "installing"
                         radius: height / 2
                         color: Kirigami.ColorUtils.tintWithAlpha(Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.15)
 
@@ -463,7 +465,7 @@ Kirigami.ScrollablePage {
                         objectName: "updateNow"
                         visible: page.canUpdate
                         highlighted: true
-                        text: page.installing ? "Install" : page.details.updateNeedsPassword ? "Update\u2026" : "Update"
+                        text: (page.installing ? "Install" : "Update") + (page.details.updateNeedsPassword ? "\u2026" : "")
                         icon.name: page.installing ? "download" : "system-software-update"
                         onClicked: backend.updateRepo(page.repoId)
                     }
@@ -489,7 +491,9 @@ Kirigami.ScrollablePage {
                 QQC2.Label {
                     Layout.fillWidth: true
                     visible: page.canUpdate && page.installing
-                    text: page.details.isProgram
+                    text: page.details.isRpm
+                          ? `Downloads the newest release\u2019s ${page.repo.assetPattern} and installs it with dnf.`
+                          : page.details.isProgram
                           ? `Downloads the newest release\u2019s ${page.repo.assetPattern}, unpacks it into ${page.details.programsFolder}, and puts a link to its program in ${page.details.binFolder}, so it runs as a command.`
                           : `Downloads the newest release\u2019s ${page.repo.assetPattern || "file"} into ${page.details.installFolder}, and adds it to the menu.`
                     font: Kirigami.Theme.smallFont
@@ -500,7 +504,9 @@ Kirigami.ScrollablePage {
                 QQC2.Label {
                     Layout.fillWidth: true
                     visible: page.canUpdate && page.details.updateNeedsPassword === true
-                    text: "This clone belongs to the system, so Update asks for your password."
+                    text: page.details.isRpm
+                          ? "dnf installs it for the whole system, so it asks for your password."
+                          : "This clone belongs to the system, so Update asks for your password."
                     font: Kirigami.Theme.smallFont
                     wrapMode: Text.Wrap
                 }
@@ -620,8 +626,7 @@ Kirigami.ScrollablePage {
 
                 QQC2.Label {
                     Layout.fillWidth: true
-                    text: page.details.installedByApp ? "Installed by RepoProject"
-                        : page.repo.scanned ? "Found on this computer" : "Added by hand"
+                    text: page.repo.scanned ? "Found on this computer" : "Added by hand"
                 }
 
                 QQC2.Label {

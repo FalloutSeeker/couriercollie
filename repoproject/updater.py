@@ -1,5 +1,7 @@
 """Updating what's tracked (stage 5). Only ever runs because you clicked Update (DECISIONS.md, D4, D6).
 
+RPMs: the new .rpm is downloaded, checked, and installed by dnf, which asks for your password.
+
 Programs (an archive with a ready-made program inside): each version is unpacked into its own folder, and a link in
 ~/.local/bin starts it; updating switches the link, and the old version stays, to undo.
 
@@ -13,6 +15,7 @@ window you can watch (and type your password into, if it asks).
 
 import hashlib
 import os
+import platform
 import shlex
 import shutil
 import subprocess
@@ -565,3 +568,75 @@ def program_version(link: Path) -> str:
     except (OSError, ValueError):
         return ""
     return target.parts[1] if len(target.parts) > 2 else ""
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# RPMs: the release's .rpm is downloaded, checked, and installed by dnf, as root, which asks for your password
+# (DECISIONS.md, D4, D6). Only RPMs installed from a downloaded file are tracked: dnf doesn't update those itself.
+
+DNF = ["dnf"]
+RPM_MAGIC = b"\xed\xab\xee\xdb"
+# Installing can take a while (dnf may download what the package needs), plus typing the password.
+DNF_TIMEOUT = 1800
+
+
+def downloads_dir() -> Path:
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "repoproject" / "downloads"
+
+
+def rpm_info(path: Path) -> tuple[str, str, str]:
+    """(name, version, architecture) from an .rpm file's header, read without installing it."""
+    try:
+        result = subprocess.run(["rpm", "-qp", "--qf", "%{NAME}|%{VERSION}|%{ARCH}", str(path)], capture_output=True,
+                                text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise UpdateError(f"Couldn’t read the RPM: {e}") from e
+    parts = result.stdout.strip().split("|")
+    if result.returncode != 0 or len(parts) != 3:
+        raise UpdateError("The download isn’t a readable RPM, so it wasn’t installed.")
+    return parts[0], parts[1], parts[2]
+
+
+def install_rpm(asset, others: list, package: str = "", progress=None, installing=None,
+                get_text=fetch_text) -> tuple[str, str, bool]:
+    """Downloads a release's .rpm, checks it, and installs it with dnf (asking for the password). `package`: the name
+    of the package you have, which the file must be. `installing()` is called when dnf starts. Returns (package name,
+    version, whether the download was checked against a published checksum). The download is deleted afterwards."""
+    folder = downloads_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    name = Path(asset.name).name
+    part, file = folder / f".{name}.part", folder / name
+    try:
+        got = download(asset.url, part, asset.size, progress)
+        expected = expected_sha256(asset, others, get_text)
+        if expected and got != expected:
+            raise UpdateError("The download doesn’t match the checksum the project published, so it was thrown "
+                              "away. Try again later; if it keeps happening, the file on the site may have been "
+                              "tampered with.")
+        with part.open("rb") as f:
+            if f.read(4) != RPM_MAGIC:
+                raise UpdateError(f"{name} isn’t an RPM, so it wasn’t installed.")
+        os.replace(part, file)  # dnf needs the .rpm name
+        rpm_name, version, arch = rpm_info(file)
+        if package and rpm_name != package:
+            raise UpdateError(f"The new file is the package “{rpm_name}”, not “{package}” that you "
+                              "have, so it wasn’t installed. The project may have renamed it.")
+        if arch not in (platform.machine(), "noarch"):
+            raise UpdateError(f"The new file is for {arch} computers, not this one, so it wasn’t installed.")
+        if installing:
+            installing()
+        try:
+            result = subprocess.run([*ROOT, *DNF, "install", "-y", str(file)], capture_output=True, text=True,
+                                    timeout=DNF_TIMEOUT)
+        except subprocess.TimeoutExpired as e:
+            raise UpdateError("dnf took too long; check Discover or a terminal to see if it’s still busy.") from e
+        except OSError as e:
+            raise UpdateError(f"Couldn’t run dnf: {e}") from e
+        if ROOT and result.returncode in (126, 127):
+            raise UpdateError("The password wasn’t given, so nothing was installed.")
+        if result.returncode != 0:
+            raise UpdateError(f"dnf couldn’t install it: {_last_line(result)}")
+        return rpm_name, version, bool(expected)
+    finally:
+        part.unlink(missing_ok=True)
+        file.unlink(missing_ok=True)

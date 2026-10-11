@@ -6,6 +6,7 @@ so the window never freezes; results are handed back to the main thread through 
 
 import dataclasses
 import os
+import re
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -191,10 +192,21 @@ def _is_program(repo: TrackedRepo) -> bool:
     return repo.follow == FOLLOW_RELEASES and repo.kind == assets.KIND_PROGRAM and bool(repo.asset_pattern)
 
 
+def _is_rpm(repo: TrackedRepo) -> bool:
+    """Following an .rpm file in each release (installed with dnf)."""
+    return repo.follow == FOLLOW_RELEASES and repo.kind == assets.KIND_RPM and bool(repo.asset_pattern)
+
+
+def _rpm_package(repo: TrackedRepo) -> str:
+    """The name of the RPM you have, for a scanned one: its place reads 'RPM package “name”'."""
+    m = re.fullmatch(r"RPM package \u201c(.+)\u201d", repo.local_path) if repo.source == config.SOURCE_SCANNED else None
+    return m.group(1) if m else ""
+
+
 def _can_update(repo: TrackedRepo) -> bool:
     """Whether Update can do anything for this repo yet. Stage 5 so far: git clones found by a scan, following a branch
     (pulled) or releases (moved to the newest release's tag); and AppImages (downloaded and swapped in)."""
-    return _is_clone(repo) or _is_appimage(repo) or _is_program(repo)
+    return _is_clone(repo) or _is_appimage(repo) or _is_program(repo) or _is_rpm(repo)
 
 
 def _on_disk(scanned: bool, local_path: str, releases: bool = False) -> tuple[tuple[str, bool] | None, str]:
@@ -242,7 +254,8 @@ class Backend(QObject):
         self._update_notes: dict[str, tuple[str, str]] = {}
         self._progress: dict[str, float] = {}  # a download's progress, 0 to 1, per repo
         self._unsupported_hosts: set[str] = set()
-        self._program_choices: dict[str, list[str]] = {}  # programs to choose from, when an archive has several  # sites a scan found the app can't talk to, while it's open
+        self._program_choices: dict[str, list[str]] = {}
+        self._phases: dict[str, str] = {}  # "installing" once an RPM's download is done and dnf runs  # programs to choose from, when an archive has several  # sites a scan found the app can't talk to, while it's open
         self._desktop = desktop
         self._icons_pending: set[str] = set()
         self._path = config_path
@@ -1091,10 +1104,12 @@ class Backend(QObject):
             "branchError": d.branch_error,
             "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing,
             "isClone": bool(repo) and _is_clone(repo),
-            "updateNeedsPassword": bool(repo) and _is_clone(repo) and updater.needs_password(repo.local_path),
+            "updateNeedsPassword": bool(repo) and (_is_rpm(repo) or (_is_clone(repo) and updater.needs_password(repo.local_path))),
+            "isRpm": bool(repo) and _is_rpm(repo),
+            "updatePhase": self._phases.get(repo_id, ""),
             "isAppImage": bool(repo) and _is_appimage(repo),
             "isProgram": bool(repo) and _is_program(repo),
-            "isDownload": bool(repo) and (_is_appimage(repo) or _is_program(repo)),
+            "isDownload": bool(repo) and (_is_appimage(repo) or _is_program(repo) or _is_rpm(repo)),
             "programChoices": self._program_choices.get(repo_id, []),
             "program": repo.program if repo else "",
             # The command an installed program is run as, and where its link is.
@@ -1104,8 +1119,6 @@ class Backend(QObject):
             "progress": self._progress.get(repo_id, -1),
             # Where Install puts an AppImage you don't have yet.
             "installFolder": str(updater.apps_dir()),
-            "installedByApp": bool(repo) and bool(repo.local_path) and (
-                Path(repo.local_path).parent == updater.apps_dir() or bool(updater.program_version(Path(repo.local_path)))),
             "updating": repo_id in self._updating,
             "updateNoteKind": self._update_notes.get(repo_id, ("", ""))[0],
             "updateNote": self._update_notes.get(repo_id, ("", ""))[1],
@@ -1357,14 +1370,14 @@ class Backend(QObject):
         (updater.install_appimage, install_program). An AppImage you don't have yet goes into ~/Applications, with a
         menu entry; a program is unpacked into its own folder, with a link in ~/.local/bin."""
         repo_id, d = repo.id, self._details.get(repo.id)
-        is_program = _is_program(repo)
+        is_program, is_rpm, package = _is_program(repo), _is_rpm(repo), _rpm_package(repo)
         here_link = Path(repo.local_path) if is_program and repo.local_path else None
         wanted = repo.program or (here_link.name if here_link and here_link.is_symlink() else "")
         hints = [RepoRef.from_id(repo.id).name, repo.name, repo.asset_pattern.split("-")[0].split("*")[0]]
         ref, host, pattern, name, icon = RepoRef.from_id(repo.id), repo.host, repo.asset_pattern, repo.name, repo.icon
         known = d.releases if d and d.state == "ready" else None
         here = Path(repo.local_path) if repo.source == config.SOURCE_SCANNED and repo.local_path else None
-        old = here if here and here.is_file() and not is_program else None
+        old = here if here and here.is_file() and not is_program and not is_rpm else None
         folder = old.parent if old else updater.apps_dir()
         self._updating.add(repo_id)
         self._update_notes.pop(repo_id, None)
@@ -1390,6 +1403,13 @@ class Backend(QObject):
             if not asset:
                 raise updater.UpdateError(f"The newest release ({release.tag}) doesn\u2019t include your file "
                                           f"({pattern}). Choose it again under Your Build File.")
+            if is_rpm:
+                def installing():
+                    self._deliver.emit(lambda: (self._phases.__setitem__(repo_id, "installing"),
+                                                self.detailsChanged.emit(repo_id)))
+
+                rpm_name, _version, verified = updater.install_rpm(asset, release.assets, package, progress, installing)
+                return release.tag, rpm_name, verified, bool(package)
             if is_program:
                 link, verified, before = updater.install_program(repo_id, release.tag, asset, release.assets, wanted,
                                                                   hints, progress)
@@ -1406,11 +1426,22 @@ class Backend(QObject):
         def done(result, error):
             self._updating.discard(repo_id)
             self._progress.pop(repo_id, None)
+            self._phases.pop(repo_id, None)
             repo = self._config.find(repo_id)
             if repo and error:
                 self._update_notes[repo_id] = ("error", self._error_text(error))
                 if isinstance(error, updater.SeveralPrograms):
                     self._program_choices[repo_id] = error.choices
+            elif repo and is_rpm:
+                tag, rpm_name, verified, had_it = result
+                # From now on its version is read from the installed package, like one a scan found.
+                repo.source, repo.local_path, repo.installed = config.SOURCE_SCANNED, f"RPM package \u201c{rpm_name}\u201d", tag
+                self._version_changed(repo)
+                self._changed(repo_id)
+                check = " Checked against the project\u2019s published checksum." if verified else \
+                    " The project publishes no checksum for it, so the download couldn\u2019t be checked."
+                what = f"Updated to {tag} with dnf." if had_it else f"Installed {tag} with dnf (package \u201c{rpm_name}\u201d)."
+                self._update_notes[repo_id] = ("done" if verified else "warning", what + check)
             elif repo:
                 tag, new, verified, kept = result
                 repo.source, repo.local_path, repo.installed = config.SOURCE_SCANNED, str(new), tag

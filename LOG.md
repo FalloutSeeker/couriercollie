@@ -10,6 +10,12 @@ Newest first.
   Konsole in the clone's folder. Tested against real git repos made for the tests; your own clones weren't touched.
   - Also: a branch whose newest commit is your version is no longer asked about (it's the same, no request).
   - The scanned-repo window check now waits for each comparison to come back, rather than a fixed time.
+- Stage 5, RPMs: Install… / Update… download the release's .rpm, check it (checksum, that it's an RPM, the same
+  package you have, this processor), then `dnf install` through polkit, one password prompt; the download is deleted
+  after. Tested with a stand-in dnf, and with bottom's real .rpm up to the dnf step (nothing installed).
+  - Found while testing: files for loongarch64, powerpc64le, ppc64, mips and sparc were offered as suiting this PC;
+    those processor names are now recognised.
+  - Source stays "Found on this computer" for what the app installed, as wanted.
 - Stage 5, programs (brought back from Later): release archives with a program inside are downloaded, checked,
   unpacked safely into their own folder per version, and linked from ~/.local/bin; updating switches the link and
   keeps the old version. Several programs in one archive: the page asks which. A command RepoProject didn't put in

@@ -106,5 +106,15 @@ class PatternTest(unittest.TestCase):
         self.assertFalse(assets.matches("", "anything"))
 
 
+
+class OtherProcessorsTest(unittest.TestCase):
+    def test_less_common_processor_names_dont_suit_this_pc(self):
+        for name in ("bottom_loongarch64-unknown-linux-gnu.tar.gz", "bottom_powerpc64le-unknown-linux-gnu.tar.gz",
+                     "tool-linux-ppc64.tar.gz", "tool-linux-mips64el.tar.gz", "tool-linux-riscv64.tar.gz",
+                     "tool-linux-sparc64.tar.gz"):
+            self.assertFalse(assets.classify(name, machine="x86_64").suits, name)
+        self.assertTrue(assets.classify("bottom_x86_64-unknown-linux-gnu.tar.gz", machine="x86_64").suits)
+
+
 if __name__ == "__main__":
     unittest.main()

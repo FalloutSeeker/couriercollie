@@ -38,8 +38,9 @@ _ARCH_WORDS = {
     "x86_64": ("x86_64", "x86-64", "amd64", "x64", "linux64"),
     "aarch64": ("aarch64", "arm64", "arm-64", "armv8"),
 }
-_ANY_ARCH = re.compile(r"(x86_64|x86-64|amd64|x64|aarch64|arm64|arm-64|armv7|armhf|armv6|arm32|i386|i686|386|"
-                       r"riscv64|ppc64le|s390x|loong64)", re.I)
+_ANY_ARCH = re.compile(r"(x86_64|x86-64|amd64|x64|aarch64|arm64|arm-64|armv7|armhf|armel|armv6|arm32|i386|i586|i686|"
+                       r"386|riscv64|riscv32|powerpc64le|powerpc64|powerpc|ppc64le|ppc64|ppc|s390x|loongarch64|"
+                       r"loong64|mips64el|mips64|mipsel|mips|sparc64)", re.I)
 
 
 @dataclass

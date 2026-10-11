@@ -47,7 +47,6 @@ def installed():
     h.check("…that runs", runs(link).startswith("ripgrep "), runs(link)[:40])
     h.check("…checked against GitHub's checksum", details()["updateNoteKind"] == "done", details()["updateNote"])
     h.check("…and is your version now", details()["statusKind"] == "current" and details()["command"] == "rg")
-    h.check("…installed by RepoProject", details()["installedByApp"])
 
 
 def pretend_older():
