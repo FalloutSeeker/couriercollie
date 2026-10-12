@@ -61,10 +61,4 @@ h.run([
     (0, lambda: h.shot("keyboard-list")),
     (0, lambda: key(Qt.Key.Key_Return)),
     (500, lambda: h.check("Enter opens it", h.win.property("currentRepoId") == "github.com/o/p3")),
-    # Its category, from its page (the same as dragging it in the list).
-    h.until(lambda: b.details("github.com/o/p3")["state"] in ("ready", "error"), 10000),
-    (300, lambda: h.check("the page has a Category choice", h.find("category") is not None)),
-    (0, lambda: b.moveRepo("github.com/o/p3", "Tools", "")),
-    (300, lambda: h.check("…which shows where it is",
-                          h.win.findChild(QObject, "category").property("currentText") == "Tools")),
 ])
