@@ -12,6 +12,8 @@ work=$(mktemp -d)
 trap 'podman unshare rm -rf "$work"' EXIT
 git archive --format=tar.gz --prefix="couriercollie-$version/" -o "$work/couriercollie-$version.tar.gz" HEAD
 cp packaging/couriercollie.spec packaging/arch/PKGBUILD packaging/debian/control "$work/"
+# The Arch package's version is written in its PKGBUILD: kept in step with the app's, so a release can't forget it.
+sed -i "s/^pkgver=.*/pkgver=$version/" "$work/PKGBUILD"
 mkdir -p dist
 
 # After installing: start the app off-screen for a few seconds, and show anything it complained about.
