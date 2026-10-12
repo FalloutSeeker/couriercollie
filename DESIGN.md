@@ -9,7 +9,7 @@ there's a new version.
 
 ## 1. Scanning
 
-Off until turned on (D12). When on, **Scan** lists what it finds; you tick what to track.
+Off until turned on (D12). When on, **Scan** lists what it finds, with the new ones ticked; you choose what to track.
 
 | Finds | Where | How it knows the project |
 | --- | --- | --- |

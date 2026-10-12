@@ -3,17 +3,21 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
-// Scan results (DESIGN.md §1): nothing ticked to start with; Select all / Select none; Track selected.
+// Scan results (DESIGN.md §1): new finds ticked to start with; Select all / Select none; Track selected.
 Kirigami.Dialog {
     id: dialog
 
     // Ticked finds, by key. Only finds that can be tracked can be ticked.
     property var picked: ({})
+    // Once a scan finishes, its new finds are ticked: you untick what you don't want. Finds that look like a repo
+    // you track (a mirror, say) are left for you to decide.
+    property bool tickWhenDone: false
     readonly property var choosable: backend.scanItems.filter(i => i.status !== "problem")
     readonly property int pickedCount: choosable.filter(i => picked[i.key]).length
 
     function openAndScan() {
         picked = {};
+        tickWhenDone = true;
         open();
         backend.startScan();
     }
@@ -32,6 +36,20 @@ Kirigami.Dialog {
     }
 
     objectName: "scanDialog"
+
+    Connections {
+        function onScanChanged() {
+            if (dialog.tickWhenDone && backend.scanState !== "scanning") {
+                dialog.tickWhenDone = false;
+                const all = {};
+                backend.scanItems.filter(i => i.status === "new").forEach(i => all[i.key] = true);
+                dialog.picked = all;
+            }
+        }
+
+        target: backend
+    }
+
     title: "Scan This Computer"
     padding: Kirigami.Units.largeSpacing
     preferredWidth: Kirigami.Units.gridUnit * 36

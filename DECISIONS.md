@@ -90,7 +90,8 @@ setting. A clone's history is its own and isn't touched.
   lives. The rest of the system belongs to the package manager, so it's slow to search and has nothing to find.
 - **No duplicates:** a find that matches a tracked repo (by address, or an old address it was renamed from) updates
   that entry instead of adding another.
-- Nothing in the results is ticked until you choose.
+- New finds start ticked, so tracking them is one click; untick what you don't want. Finds that look like a repo you
+  already track are left unticked.
 
 ## D13. Repo icons
 

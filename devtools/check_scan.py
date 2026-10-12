@@ -42,8 +42,8 @@ h.run([
     h.until(lambda: b.scanState == "done"),
     (500, after_scan),
     (0, lambda: h.check("every find is shown", all(h.find("found:" + i["address"]) for i in b.scanItems))),
-    (0, lambda: h.check("nothing ticked to start with", not any(
-        (h.find("found:" + i["address"]) or [0, 0, False])[2] for i in b.scanItems))),
+    (0, lambda: h.check("new finds ticked to start with, the rest not", all(
+        (h.find("found:" + i["address"]) or [0, 0, None])[2] == (i["status"] == "new") for i in b.scanItems))),
     (0, lambda: h.click("selectAll")),
     (300, lambda: h.check("Select all ticks every trackable find", all_ticked())),
     (0, lambda: h.shot("scan-2-all-selected")),
