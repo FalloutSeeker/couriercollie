@@ -563,6 +563,24 @@ Kirigami.ScrollablePage {
                     text: Labels.plain(page.details.updateNote)
                 }
 
+                // couriercollie itself, updated while running.
+                Kirigami.InlineMessage {
+                    objectName: "restartNeeded"
+                    Layout.fillWidth: true
+                    visible: page.details.restartNeeded === true
+                    type: Kirigami.MessageType.Information
+                    text: Labels.plain(`couriercollie ${page.details.versionText} is installed. Restart it to use the new version.`
+                                       + (page.details.othersUpdating ? " Once the other updates have finished." : ""))
+                    actions: [
+                        Kirigami.Action {
+                            text: "Restart"
+                            icon.name: "view-refresh"
+                            enabled: !page.details.othersUpdating
+                            onTriggered: backend.restartApp()
+                        }
+                    ]
+                }
+
                 // The archive has several programs: which one to run.
                 ColumnLayout {
                     Layout.fillWidth: true

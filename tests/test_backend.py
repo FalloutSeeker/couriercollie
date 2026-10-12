@@ -1131,3 +1131,46 @@ class OlderReleasesTest(unittest.TestCase):
         self.assertTrue(next(r for r in d["releases"] if r["tag"] == "v25")["isInstalled"])
         self.backend.loadOlderReleases(self.id)  # nothing more to ask for
         self.assertEqual(len(self.asked), 2)
+
+
+class RestartTest(unittest.TestCase):
+    """couriercollie updated itself while running: Restart starts the new version."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.backend = Backend(Path(self.dir.name) / "repos.toml")
+        self.backend._config.repos.append(TrackedRepo(id=Backend.MYSELF, name="couriercollie", url="",
+                                                      host="github", installed="v99.0.0"))
+
+    def tearDown(self):
+        self.backend.shutdown()
+        self.dir.cleanup()
+
+    def test_offered_once_a_newer_version_is_installed(self):
+        from couriercollie import __version__
+
+        self.assertTrue(self.backend.details(Backend.MYSELF)["restartNeeded"])
+        self.backend._config.find(Backend.MYSELF).installed = __version__
+        self.assertFalse(self.backend.details(Backend.MYSELF)["restartNeeded"])
+
+    def test_restart_waits_for_other_updates(self):
+        import couriercollie.backend as backend_module
+
+        started, quit_ = [], []
+        saved = backend_module.QProcess.startDetached, backend_module.QApplication.quit
+        backend_module.QProcess.startDetached = lambda program, args: started.append([program, *args]) or True
+        backend_module.QApplication.quit = lambda: quit_.append(1)
+        self.addCleanup(lambda: (setattr(backend_module.QProcess, "startDetached", saved[0]),
+                                 setattr(backend_module.QApplication, "quit", saved[1])))
+        self.backend._updating.add("github.com/a/b")
+        self.assertTrue(self.backend.details(Backend.MYSELF)["othersUpdating"])
+        self.backend.restartApp()
+        self.assertEqual((started, quit_), ([], []))  # quitting would cut that update short
+        self.backend._updating.clear()
+        self.backend.restartApp()
+        self.assertEqual(quit_, [1])
+        # The new one starts once this one (its process) is gone: before, it would hand over to this one.
+        self.assertEqual(started[0][:2], ["/bin/sh", "-c"])
+        import os
+
+        self.assertEqual(started[0][3], str(os.getpid()))

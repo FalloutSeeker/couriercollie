@@ -29,6 +29,7 @@ import shlex
 import shutil
 import subprocess
 import tarfile
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -767,6 +768,14 @@ _INSTALL_COPY = (
 )
 
 
+# One install by a package manager (or Flatpak) at a time: each locks its database while it works, and a second at once
+# would fail ("could not get lock"). Updating several things at once, the others wait here for their turn.
+_PACKAGE_MANAGER = threading.Lock()
+# What the package managers say when another program (Discover, a terminal) is installing at the moment.
+_BUSY = re.compile(r"could not get lock|unable to lock database|system management is locked|another app is "
+                   r"currently holding|database is locked", re.I)
+
+
 def install_package(asset, others: list, kind: str, package: str = "", progress=None, installing=None,
                     get_text=fetch_text) -> tuple[str, str, bool, str]:
     """Downloads a release's package (an .rpm, .deb or Arch package, by `kind`), checks it, and installs it with this
@@ -790,23 +799,28 @@ def install_package(asset, others: list, kind: str, package: str = "", progress=
                               "have, so it wasn\u2019t installed. The project may have renamed it.")
         if not packages.suits(arch):
             raise UpdateError(f"The new file is for {arch} computers, not this one, so it wasn\u2019t installed.")
-        if installing:
-            installing()
         # The checked file is in a folder you can write to, so as root it's first copied where only root can, and
         # checked again there: nothing can swap it between the checks above and the package manager installing it.
         with file.open("rb") as f:
             checked = hashlib.file_digest(f, "sha256").hexdigest()
-        try:
-            result = subprocess.run([*ROOT, "/bin/sh", "-c", _INSTALL_COPY, "sh", str(file), file.name, checked,
-                                     *packages.INSTALL[tool]], capture_output=True, text=True, timeout=INSTALL_TIMEOUT)
-        except subprocess.TimeoutExpired as e:
-            raise UpdateError(f"{tool} took too long; check a terminal to see if it\u2019s still busy.") from e
-        except OSError as e:
-            raise UpdateError(f"Couldn\u2019t run {tool}: {e}") from e
+        with _PACKAGE_MANAGER:
+            if installing:
+                installing()
+            try:
+                result = subprocess.run([*ROOT, "/bin/sh", "-c", _INSTALL_COPY, "sh", str(file), file.name, checked,
+                                         *packages.INSTALL[tool]], capture_output=True, text=True,
+                                        timeout=INSTALL_TIMEOUT)
+            except subprocess.TimeoutExpired as e:
+                raise UpdateError(f"{tool} took too long; check a terminal to see if it\u2019s still busy.") from e
+            except OSError as e:
+                raise UpdateError(f"Couldn\u2019t run {tool}: {e}") from e
     if ROOT and result.returncode in (126, 127):
         raise UpdateError("The password wasn\u2019t given, so nothing was installed.")
     if result.returncode == _CHANGED:
         raise UpdateError("The downloaded file changed after it was checked, so nothing was installed.")
+    if result.returncode != 0 and _BUSY.search(result.stderr + result.stdout):
+        raise UpdateError(f"Your package manager ({tool}) is busy with something else: another program is "
+                          "installing or updating software. Try again once it\u2019s done.")
     if result.returncode != 0:
         raise UpdateError(f"{tool} couldn\u2019t install it: {_last_line(result, tool)}")
     return found, version, verified, tool
@@ -825,7 +839,8 @@ def install_flatpak(asset, others: list, app_id: str = "", progress=None, get_te
                               "have, so it wasn\u2019t installed. The project may have renamed it.")
         if arch != platform.machine():
             raise UpdateError(f"The new file is for {arch} computers, not this one, so it wasn\u2019t installed.")
-        result = flatpaks.install(file)
+        with _PACKAGE_MANAGER:
+            result = flatpaks.install(file)
     if result is None:
         raise UpdateError("Couldn\u2019t run flatpak.")
     if result.returncode != 0:

@@ -429,6 +429,39 @@ class RpmTest(AppImageCase):
         self.assertTrue(asked[2].endswith("tool-2.0-1.x86_64.rpm") and asked[3] == "exists")
         self.assertEqual(list(updater.downloads_dir().iterdir()), [])  # the download is deleted
 
+    def test_a_package_manager_busy_elsewhere_says_so(self):
+        # Discover (or a terminal) is installing something: the package manager holds its lock.
+        os.environ["DNF_FAILS"] = "Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 4242 (apt)"
+        with self.assertRaisesRegex(updater.UpdateError, "busy with something else"):
+            updater.install_package(self.asset(), [], assets.KIND_RPM, "tool")
+
+    def test_installs_take_turns(self):
+        # Two updates at once: the second's package manager starts only once the first's has finished.
+        import threading
+        import time
+
+        slow = Path(self.dir.name) / "slow-dnf"
+        slow.write_text('#!/bin/sh\necho start >> "$ASKED"; sleep 1; echo end >> "$ASKED"\n')
+        slow.chmod(0o755)
+        packages.INSTALL["dnf"] = [str(slow)]
+        _Files.files["tool-2.0-2.x86_64.rpm"] = self.rpm  # (two projects' files: different names)
+        errors = []
+
+        def install(name):
+            try:
+                updater.install_package(self.asset(name), [], assets.KIND_RPM, "tool")
+            except Exception as e:  # noqa: BLE001
+                errors.append(e)
+
+        both = [threading.Thread(target=install, args=(n,)) for n in ("tool-2.0-1.x86_64.rpm", "tool-2.0-2.x86_64.rpm")]
+        for t in both:
+            t.start()
+            time.sleep(0.2)
+        for t in both:
+            t.join()
+        self.assertEqual(errors, [])
+        self.assertEqual(self.asked.read_text().split(), ["start", "end", "start", "end"])
+
     def test_installs_a_copy_only_root_can_change(self):
         updater.install_package(self.asset(), [], assets.KIND_RPM, "tool")
         installed = Path(self.asked.read_text().split()[2])

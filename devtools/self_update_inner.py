@@ -79,6 +79,7 @@ print(f"  {d['updateNote']}", flush=True)
 check(f"Update installs v{NEW}", d["updateNoteKind"] != "error" and b._config.find(Backend.MYSELF).installed
       in (NEW, f"v{NEW}"), d["updateNote"])
 check("…checked against the published checksum", "published checksum" in d["updateNote"], d["updateNote"])
+check("its page offers to restart it", d["restartNeeded"] and not d["othersUpdating"])
 b.shutdown()
 
 have = packages.installed_version(me.kind, "couriercollie")[0]
@@ -95,6 +96,28 @@ window = subprocess.run(["timeout", "8", "couriercollie"], capture_output=True, 
                         env={**os.environ, "QT_QPA_PLATFORM": "offscreen"})
 check("the new version's window starts", window.returncode == 124, window.stderr[-300:])
 check("its menu entry is still there", Path("/usr/share/applications/couriercollie.desktop").exists())
+
+# Restart, as the button does it (Backend.restartApp): the new copy waits for the old one to quit, then starts.
+import time  # noqa: E402
+
+from couriercollie import integration  # noqa: E402
+
+env = {**os.environ, "QT_QPA_PLATFORM": "offscreen"}
+old = subprocess.Popen(["couriercollie"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+end = time.monotonic() + 15
+while time.monotonic() < end and not integration.tell_running_app("ping"):
+    time.sleep(0.2)
+subprocess.Popen(["/bin/sh", "-c", 'while kill -0 "$0" 2>/dev/null; do sleep 0.2; done; exec "$@"', str(old.pid),
+                  str(integration.LAUNCHER)], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                 start_new_session=True)
+time.sleep(1)
+check("…the new copy waits while the old one is open", integration.tell_running_app("ping") and old.poll() is None)
+old.terminate()
+old.wait(timeout=20)
+end = time.monotonic() + 20
+while time.monotonic() < end and not integration.tell_running_app("ping"):
+    time.sleep(0.2)
+check("…and opens once it has quit", old.poll() is not None and integration.tell_running_app("ping"))
 
 print(f"=== {DISTRO}: {len(failures)} failures", flush=True)
 sys.exit(1 if failures else 0)

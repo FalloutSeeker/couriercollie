@@ -1446,6 +1446,9 @@ class Backend(QObject, Updating, Account):
             "updating": repo_id in self._updating,
             "updateNoteKind": self._update_notes.get(repo_id, ("", ""))[0],
             "updateNote": self._update_notes.get(repo_id, ("", ""))[1],
+            # couriercollie itself, updated while running: the new version is used once it's restarted.
+            "restartNeeded": self._restart_needed(repo),
+            "othersUpdating": bool(self._updating - {repo_id}),
             **self._applying(repo, d),
             "managedElsewhere": d.managed_elsewhere,
             "branches": [
@@ -1573,6 +1576,23 @@ class Backend(QObject, Updating, Account):
         where = f"your clone is on {disk}" if disk else f"your version ({yours_text}) isn\u2019t part of it"
         return {"status": f"Not comparable with {branch}: {where}.", "updateAvailable": False,
                 "statusKind": STATUS_PROBLEM, "headline": "Not comparable"}
+
+    def _restart_needed(self, repo: TrackedRepo | None) -> bool:
+        from . import __version__
+
+        return (bool(repo) and repo.id == self.MYSELF and repo.installed not in ("", NOT_INSTALLED)
+                and not assets.same_version(repo.installed, __version__) and repo.id not in self._updating)
+
+    @Slot()
+    def restartApp(self):
+        """Restart couriercollie (after it updated itself): this copy quits, and the new one starts once it's gone. (Not
+        before: a second start hands over to the one already open.) Not while something is updating: quitting would
+        cut it short."""
+        if self._updating:
+            return
+        wait_then_start = 'while kill -0 "$0" 2>/dev/null; do sleep 0.2; done; exec "$@"'
+        QProcess.startDetached("/bin/sh", ["-c", wait_then_start, str(os.getpid()), str(integration.LAUNCHER)])
+        QApplication.quit()
 
     @Slot(str)
     def markUpToDate(self, repo_id):
