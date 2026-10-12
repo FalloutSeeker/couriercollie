@@ -499,6 +499,7 @@ class Backend(QObject, Updating, Account):
             "canUpdate": _can_update(r) and not _new_copy(r),
             "updateNeedsPassword": _needs_password(r),
             "updating": r.id in self._updating,
+            "category": r.category,
             **self._check_dict(r.id, r),
         }
 

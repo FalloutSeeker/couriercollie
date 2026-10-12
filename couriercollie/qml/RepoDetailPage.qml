@@ -1007,6 +1007,21 @@ Kirigami.ScrollablePage {
                 onToggled: backend.setPrereleases(page.repoId, checked)
             }
 
+            // The same as dragging it in the list, from the keyboard too. Once there are categories to choose.
+            QQC2.Label {
+                visible: backend.categories.length > 0
+                text: "Category"
+                opacity: 0.7
+            }
+
+            QQC2.ComboBox {
+                objectName: "category"
+                visible: backend.categories.length > 0
+                model: ["Uncategorized", ...backend.categories]
+                currentIndex: Math.max(0, backend.categories.indexOf(page.repo.category || "") + 1)
+                onActivated: index => backend.moveRepo(page.repoId, index === 0 ? "" : backend.categories[index - 1], "")
+            }
+
             QQC2.Label {
                 Layout.alignment: Qt.AlignTop
                 text: "Source"

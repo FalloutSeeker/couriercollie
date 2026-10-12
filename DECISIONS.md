@@ -106,7 +106,8 @@ Every repo shows either its own picture or a monogram: its first letter on a col
 
 ## D14. Categories
 
-- Your own headings for the list (e.g. "Themes", "Tools"). Drag repos and categories by their handles.
+- Your own headings for the list (e.g. "Themes", "Tools"). Drag repos and categories by their handles, or choose a
+  repo's category on its page (from the keyboard too).
 - Rename or delete from a heading's ⋮ menu. Deleting a category never removes its repos; they move to Uncategorized.
 
 ## D15. License: GPL-3.0-or-later
