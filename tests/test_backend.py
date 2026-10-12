@@ -964,6 +964,94 @@ class ScanFlowTest(unittest.TestCase):
         self.assertEqual(repo.installed, "v1.18.2")
 
 
+class AddRepoTest(unittest.TestCase):
+    """Adding a project by its address, as a user does: the site's answers are stand-ins."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.backend = Backend(Path(self.dir.name) / "repos.toml")
+        self.backend._run = lambda work, done: done(*self._attempt(work))
+        self.failed, self.added = [], []
+        self.backend.addFailed.connect(self.failed.append)
+        self.backend.addFinished.connect(self.added.append)
+        saved = (sources.project_info, sources.newest_releases, sources.branches)
+        self.addCleanup(lambda: (setattr(sources, "project_info", saved[0]),
+                                 setattr(sources, "newest_releases", saved[1]), setattr(sources, "branches", saved[2])))
+        self.projects = {}  # typed id -> ProjectInfo (its canonical address may differ: renamed)
+        self.releases = {}
+        sources.project_info = lambda ref: self.projects[ref.id]
+        sources.newest_releases = lambda ref, host, count, prereleases: self.releases.get(ref.id, [])
+        sources.branches = lambda ref: ("main", [sources.Branch("main", "a" * 40)])
+
+    def tearDown(self):
+        self.backend.shutdown()
+        self.dir.cleanup()
+
+    @staticmethod
+    def _attempt(work):
+        try:
+            return work(), None
+        except Exception as e:  # noqa: BLE001
+            return None, e
+
+    def project(self, typed, canonical=None, **kw):
+        canonical = canonical or typed
+        self.projects[typed] = sources.ProjectInfo(sources.RepoRef.from_id(canonical), "github",
+                                                   canonical.rsplit("/", 1)[1], "A tool", "main", **kw)
+
+    def release(self, repo_id, *files):
+        self.releases[repo_id] = [sources.Release("v2.0", "v2.0", None, False, "", "",
+                                                  [sources.Asset(f, f"https://x/{f}") for f in files])]
+
+    def test_the_only_file_for_this_computer_is_picked(self):
+        self.project("github.com/a/tool", homepage="https://tool.example")
+        self.release("github.com/a/tool", "tool-2.0-x86_64.AppImage", "tool-2.0-arm64.AppImage", "tool-2.0.exe")
+        self.backend.addRepo("", "https://github.com/a/tool/releases")
+        repo = self.backend._config.find("github.com/a/tool")
+        self.assertEqual(self.added, ["github.com/a/tool"])
+        self.assertEqual((repo.asset_pattern, repo.kind, repo.installed, repo.homepage),
+                         ("tool-*-x86_64.AppImage", "AppImage", "-", "https://tool.example"))
+
+    def test_several_files_for_this_computer_are_left_to_you(self):
+        self.project("github.com/a/tool")
+        self.release("github.com/a/tool", "tool-2.0-x86_64.AppImage", "tool_2.0_x86_64.tar.gz")
+        self.backend.addRepo("", "github.com/a/tool")
+        self.assertEqual(self.backend._config.find("github.com/a/tool").asset_pattern, "")
+
+    def test_no_releases_follows_the_default_branch(self):
+        self.project("github.com/a/theme")
+        self.backend.addRepo("My Theme", "github.com/a/theme")
+        repo = self.backend._config.find("github.com/a/theme")
+        self.assertEqual((repo.name, repo.follow, repo.branch, repo.kind), ("My Theme", "branch", "main", "git"))
+
+    def test_a_renamed_project_remembers_its_old_address(self):
+        self.project("github.com/old/tool", canonical="github.com/new/tool")
+        self.backend.addRepo("", "github.com/old/tool")
+        repo = self.backend._config.find("github.com/new/tool")
+        self.assertEqual(repo.aliases, ["github.com/old/tool"])
+        # Typed again, by either address: already tracked, not added twice.
+        self.backend.addRepo("", "https://github.com/OLD/tool")
+        self.backend.addRepo("", "github.com/new/tool")
+        self.assertEqual(len(self.backend._config.repos), 1)
+        self.assertEqual(len(self.failed), 2)
+        self.assertTrue(all("Already tracking this as" in f for f in self.failed))
+
+    def test_a_redirect_to_a_project_already_tracked_isnt_added_twice(self):
+        self.project("github.com/a/tool")
+        self.backend.addRepo("", "github.com/a/tool")
+        self.project("github.com/someone/fork-that-moved", canonical="github.com/a/tool")
+        self.backend.addRepo("", "github.com/someone/fork-that-moved")
+        self.assertEqual((len(self.backend._config.repos), len(self.failed)), (1, 1))
+
+    def test_what_cant_be_added_says_why(self):
+        self.backend.addRepo("", "not a web address at all")
+        sources.project_info = lambda ref: (_ for _ in ()).throw(sources.Unsupported("codeberg.org isn’t supported yet."))
+        self.backend.addRepo("", "https://codeberg.org/a/b")
+        self.assertEqual(self.backend._config.repos, [])
+        self.assertEqual(len(self.failed), 2)
+        self.assertIn("isn’t supported", self.failed[1])
+
+
 if __name__ == "__main__":
     unittest.main()
 
