@@ -3,7 +3,9 @@ Quit. Closing the window then leaves couriercollie running here; with it off the
 window quits. Needs a desktop that shows tray icons (on GNOME, the AppIndicator extension).
 """
 
-from PySide6.QtCore import QObject, QRectF, Qt
+import ctypes
+
+from PySide6.QtCore import QObject, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
@@ -11,6 +13,13 @@ from . import integration
 
 # Drawn at each size a tray may ask for, so the count stays sharp.
 _SIZES = (16, 22, 24, 32, 48, 64)
+
+
+def _give_back_memory():
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except (OSError, AttributeError):  # not glibc: nothing to do
+        pass
 
 
 def app_icon() -> QIcon:
@@ -69,7 +78,15 @@ class Tray(QObject):
         self._tray.activated.connect(self._clicked)
         backend.settingsChanged.connect(self.refresh)
         backend.checksChanged.connect(self.refresh)
+        window.visibleChanged.connect(self._visible)
         self.refresh()
+
+    def _visible(self, visible: bool):
+        # Put away in the tray, the app may sit there for days: give back the memory the window was using. (Freed
+        # memory otherwise stays with the app, kept for reuse: about 40 MB after looking through a few pages.) A
+        # moment later, once the window's own clean-up has run.
+        if not visible:
+            QTimer.singleShot(1000, _give_back_memory)
 
     @property
     def shown(self) -> bool:

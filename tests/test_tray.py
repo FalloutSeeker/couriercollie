@@ -24,8 +24,11 @@ class FakeBackend(QObject):
         pass
 
 
-class FakeWindow:
+class FakeWindow(QObject):
+    visibleChanged = Signal(bool)
+
     def __init__(self):
+        super().__init__()
         self.visible = self.active = True
 
     def isVisible(self):
@@ -36,6 +39,7 @@ class FakeWindow:
 
     def hide(self):
         self.visible = False
+        self.visibleChanged.emit(False)
 
 
 @unittest.skipUnless(isinstance(app, QApplication), "needs a QApplication")
@@ -80,3 +84,8 @@ class TrayTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GiveBackMemoryTest(unittest.TestCase):
+    def test_harmless_wherever_it_runs(self):
+        tray._give_back_memory()  # glibc: memory handed back; elsewhere: nothing

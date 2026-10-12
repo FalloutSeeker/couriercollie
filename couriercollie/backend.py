@@ -692,12 +692,17 @@ class Backend(QObject, Updating, Account):
         self._notifications.append(process)
 
         def finished(*_):
+            if process not in self._notifications:
+                return  # (a process that couldn't start reports that, and may report finishing too)
             if bytes(process.readAllStandardOutput()).decode().strip() == "default":
                 self.activateRequested.emit()
             self._notifications.remove(process)
             process.deleteLater()
 
         process.finished.connect(finished)
+        # One that can't start (notify-send gone) never finishes: without this it would be kept forever.
+        process.errorOccurred.connect(
+            lambda error: finished() if error == QProcess.ProcessError.FailedToStart else None)
         process.start(command[0], command[1:])
 
     def _update_badge(self):

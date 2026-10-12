@@ -316,3 +316,25 @@ class CheckNowTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NotificationProcessTest(TempHome):
+    def test_one_that_cant_start_isnt_kept(self):
+        # notify-send gone (uninstalled since): the process fails to start, and mustn't be kept forever.
+        import time
+
+        from PySide6.QtCore import QCoreApplication
+
+        QCoreApplication.instance() or QCoreApplication([])  # the app always has one: Qt's signals need it
+        saved = integration.notify_command
+        integration.notify_command = lambda *a: ["/nonexistent/notify-send", "x"]
+        self.addCleanup(setattr, integration, "notify_command", saved)
+        b = Backend(self.root / "repos.toml")
+        self.addCleanup(b.shutdown)
+        b._config.repos.append(TrackedRepo(id="github.com/a/b", name="B", url="", host="github"))
+        b._config.settings.toasts, b._desktop = True, True
+        b._announce(["github.com/a/b"])
+        end = time.monotonic() + 5
+        while b._notifications and time.monotonic() < end:
+            QCoreApplication.processEvents()
+        self.assertEqual(b._notifications, [])

@@ -1297,7 +1297,9 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         Layout.bottomMargin: Kirigami.Units.largeSpacing
                         visible: release.notesShown
-                        text: release.modelData.notes
+                        // Only once asked for: Qt lays out Markdown as soon as it's given it, shown or not, and a
+                        // page has up to 30 releases' notes (some very long).
+                        text: release.notesShown ? release.modelData.notes : ""
                         textFormat: Text.MarkdownText
                         wrapMode: Text.Wrap
                         onLinkActivated: link => Qt.openUrlExternally(link)
