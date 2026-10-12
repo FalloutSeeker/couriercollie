@@ -132,9 +132,7 @@ everything.
 
 ## Coming Soon
 
-- **A `collie` command:** check for updates and update from the terminal.
-
-Ideas welcome: Settings → Send Feedback…
+- **`collie` command:** check for updates and update from the terminal.
 
 ## License
 
