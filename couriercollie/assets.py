@@ -194,18 +194,32 @@ _VERSION = r"\d[0-9A-Za-z.+~_]*(?:-(?:\d|rc|beta|alpha|pre)[0-9A-Za-z.+~_]*)*"
 def pattern_for(asset_name: str, tag: str) -> str:
     """The pattern that finds this same file in later releases: the name with its version replaced by "*"."""
     version = version_of(tag)
-    if not version or version not in asset_name:
+    # As the file may write it: a package can't always use "-" (WezTerm's RPM: "20240203_110809" for "20240203-110809").
+    written = next((v for v in (version, version.replace("-", "_"), version.replace("-", "~"), version.replace("-", "."))
+                    if v and v in asset_name), "")
+    if not written:
         return asset_name
-    pattern = asset_name.replace(version, "*")
+    pattern = asset_name.replace(written, "*")
     # An RPM's name also carries the packager's release and distro ("app-1.2-1.fc44.x86_64.rpm"), which change
     # between releases (2.fc45): that part is matched as freely as the version.
+    # Its distro is kept by name, so a release that also has others' builds (WezTerm: fedora37, fedora38, fedora39,
+    # centos9) still finds yours; only its number may change (pick, below, takes the newest).
     if pattern.endswith(".rpm"):
-        pattern = re.sub(r"^(.*\*-)\d.*(\.[A-Za-z0-9_]+\.rpm)$", r"\1*\2", pattern)
+        pattern = re.sub(r"^(.*\*-)\d[\d.]*?(?:\.([A-Za-z]+)\d+(?:_\d+)?)?(\.[A-Za-z0-9_]+\.rpm)$",
+                         lambda m: f"{m[1]}*" + (f".{m[2]}*" if m[2] else "") + m[3], pattern)
     # A Debian or Arch package's carries the packager's revision ("tool_1.2-1_amd64.deb", "tool-1.2-1-x86_64.pkg
     # .tar.zst"), which can change too ("-2"): the "*" takes it in, as a version may end in "-<number>".
     elif pattern.endswith(".deb") or ".pkg.tar." in pattern:
         pattern = re.sub(r"\*-\d+(?=[_-])", "*", pattern, count=1)
     return pattern
+
+
+def pick(pattern: str, names: list[str]) -> str | None:
+    """The file a pattern finds among a release's: if several match (an RPM for fedora37 and for fedora39), the one
+    with the highest numbers: the newest build."""
+    found = [n for n in names if matches(pattern, n)]
+    numbers = lambda name: [int(part) for part in re.findall(r"\d+", name)]  # noqa: E731
+    return max(found, key=numbers) if found else None
 
 
 def matches(pattern: str, asset_name: str) -> bool:

@@ -1315,6 +1315,7 @@ class Backend(QObject, Updating, Account):
         releases = []
         for i, rel in enumerate(shown):
             files = []
+            yours = assets.pick(pattern, [a.name for a in rel.assets]) if pattern else None
             for a in rel.assets:
                 info = assets.classify(a.name, a.url)
                 details = [x for x in (_size_text(a.size), info.kind if info.kind != assets.KIND_OTHER else "",
@@ -1323,7 +1324,7 @@ class Backend(QObject, Updating, Account):
                     "name": a.name,
                     "details": " · ".join(details),
                     "suits": info.suits,
-                    "selected": assets.matches(pattern, a.name),
+                    "selected": a.name == yours,
                 })
             releases.append({
                 "tag": rel.tag,

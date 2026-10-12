@@ -373,6 +373,14 @@ class VersionEdgeCasesTest(unittest.TestCase):
         self.assertTrue(assets.same_version("20240203-110809-5046fc22", "20240203_110809_5046fc22"))
         self.assertTrue(assets.same_version("v2.0-rc1", "2.0~rc1"))
         self.assertFalse(assets.same_version("20240203-110809-5046fc22", "20240204_110809_5046fc22"))
+        # …and its file is followed into the next release.
+        pattern = assets.pattern_for("wezterm-20240203_110809_5046fc22-1.fedora39.x86_64.rpm", "20240203-110809-5046fc22")
+        self.assertEqual(pattern, "wezterm-*-*.fedora*.x86_64.rpm")
+        # A release with builds for several Fedoras and CentOS: the newest Fedora build, never CentOS's.
+        names = [f"wezterm-20250101_120000_abcdef12-1.{d}.x86_64.rpm" for d in ("centos9", "fedora37", "fedora40",
+                                                                                 "fedora38")]
+        self.assertEqual(assets.pick(pattern, names), "wezterm-20250101_120000_abcdef12-1.fedora40.x86_64.rpm")
+        self.assertIsNone(assets.pick(pattern, ["wezterm-20250101_120000_abcdef12-1.centos9.x86_64.rpm"]))
 
     def test_trailing_zeros_dont_make_a_new_version(self):
         # A package says "1.2" where the project's tag says "v1.2.0": the same version, not an update forever.

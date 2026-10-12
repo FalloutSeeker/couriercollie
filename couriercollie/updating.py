@@ -276,7 +276,8 @@ class Updating:
             release = next((r for r in rels if not r.prerelease), rels[0] if rels else None)
             if not release:
                 raise updater.UpdateError("This project has no releases to install.")
-            asset = next((a for a in release.assets if assets.matches(pattern, a.name)), None)
+            chosen = assets.pick(pattern, [a.name for a in release.assets])
+            asset = next((a for a in release.assets if a.name == chosen), None)
             if not asset:
                 raise updater.UpdateError(f"The newest release ({release.tag}) doesn\u2019t include your file "
                                           f"({pattern}). Choose it again under Your Build File.")
