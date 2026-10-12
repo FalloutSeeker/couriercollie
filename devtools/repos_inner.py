@@ -38,6 +38,7 @@ def check(label, ok, detail=""):
     print(("PASS " if ok else "FAIL ") + label + (f"  ({detail})" if detail and not ok else ""), flush=True)
     if not ok:
         failures.append(label)
+    return ok
 
 
 def fresh_backend():
@@ -75,7 +76,8 @@ def run(*command):
 
 
 def program(*args):
-    return lambda repo: version_in(run(repo.local_path, *args)) if Path(repo.local_path).exists() else "missing"
+    return lambda repo: (version_in(run(repo.local_path, *args)) if repo.local_path and Path(repo.local_path).exists()
+                         else "missing")
 
 
 def appimage(*args):
@@ -107,6 +109,13 @@ def project(url, choose, version_of):
         b.shutdown()
         return
     repo, d = b._config.find(rid), b._details[rid]
+    if repo.managed_by:  # e.g. Fedora's own bat: shown, never installed or updated here
+        info = b.details(rid)
+        check(f"{rid}: your package manager has it, so it's shown and not offered for install",
+              info["headline"].startswith("Installed with") and not info["canUpdate"], info["headline"])
+        print(f"  {info['headline']}: {info['versionText']}", flush=True)
+        b.shutdown()
+        return
     real = d.releases
     stable = [r for r in real if not r.prerelease]
     if not repo.asset_pattern:
@@ -119,7 +128,9 @@ def project(url, choose, version_of):
         b.pickAsset(rid, stable[0].tag, name)
     repo = b._config.find(rid)
     # The previous release that has the file (some releases skip a platform).
-    previous = next((r for r in stable[1:] if assets.pick(r.assets, repo.asset_pattern)), None)
+    # (Not a moving tag like Neovim's "stable", which is the newest under another name.)
+    previous = next((r for r in stable[1:] if re.search(r"\d", r.tag)
+                     and assets.pick(repo.asset_pattern, [a.name for a in r.assets])), None)
     if not check(f"{rid}: follows {repo.asset_pattern}; a previous release has it", previous is not None):
         b.shutdown()
         return
@@ -209,7 +220,7 @@ info = b.details(rid) if rid else {}
 check("Obtainium (Android) is noted as for other systems, with no update or install offered",
       rid and b._config.find(rid).other_systems and not info.get("canUpdate"), (failed, info.get("headline")))
 
-rid, failed = add(b, "https://github.com/junegunn/vim-plug")
+rid, failed = add(b, "https://github.com/tmux-plugins/tpm")
 check("a project with no releases follows its branch", rid and b._config.find(rid).follow == config.FOLLOW_BRANCH,
       failed)
 if rid:

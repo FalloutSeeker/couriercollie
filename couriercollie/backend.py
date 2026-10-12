@@ -1014,7 +1014,9 @@ class Backend(QObject, Updating, Account):
             info = sources.project_info(ref)
             rels = sources.newest_releases(info.ref, info.host, PAGE_RELEASES, False)
             default, branches, branch_error = _fetch_branches(info.ref)
-            return info, rels, default, branches, branch_error
+            # As the page would: something your package manager (or Flatpak) installed isn't offered for install.
+            managed = _managed_elsewhere([info.ref.id, ref.id], info.homepage or "")
+            return info, rels, default, branches, branch_error, managed
 
         def done(result, error):
             self._adding = False
@@ -1022,7 +1024,7 @@ class Backend(QObject, Updating, Account):
             if error:
                 self.addFailed.emit(self._error_text(error))
                 return
-            info, rels, default, branches, branch_error = result
+            info, rels, default, branches, branch_error, (managed_note, managed_by, managed_version) = result
             # The address may have redirected to a project we already track (renamed or moved).
             if existing := self._config.find_any(info.ref.id):
                 self.addFailed.emit(f"Already tracking this as “{existing.name}”.")
@@ -1038,6 +1040,7 @@ class Backend(QObject, Updating, Account):
                 # The typed address, if the site redirected (renamed or moved project).
                 aliases=[ref.id] if ref.id.lower() != info.ref.id.lower() else [],
                 homepage=info.homepage or "-",
+                managed_by=managed_by,
             )
             if rels:
                 self._auto_pick(repo, rels)
@@ -1046,6 +1049,7 @@ class Backend(QObject, Updating, Account):
             details = Details(
                 state="ready", releases=rels, more_releases=len(rels) == PAGE_RELEASES,
                 default_branch=default or info.default_branch, branches=branches, branch_error=branch_error,
+                managed_elsewhere=managed_note, managed_version=managed_version,
             )
             self._details[repo.id] = details
             _set_baseline(repo, details)

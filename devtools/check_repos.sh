@@ -55,5 +55,6 @@ wait $pids  # (not the relay)
 for distro in $distros; do
     echo "=== $distro"
     grep -vE "^PASS" "$work/$distro.log"
+    echo "($(grep -c "^PASS" "$work/$distro.log") passed)"
 done
 grep -h "refused" "$work/relay.log" || true

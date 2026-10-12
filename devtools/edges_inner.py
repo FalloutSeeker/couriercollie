@@ -43,12 +43,14 @@ def sh(command):
 
 
 IFACE = sh("ip -o link | awk -F': ' '$2 != \"lo\" {print $2; exit}'").stdout.strip().split("@")[0]
+ROUTES = sh("ip route show").stdout.splitlines()  # they go with the link: put back when it's up again
 
 
 def network(up: bool):
     sh(f"ip link set dev {IFACE} {'up' if up else 'down'}")
-    if up:  # the route goes with the link: put it back
-        sh(f"ip route replace default dev {IFACE}")
+    if up:
+        for route in sorted(ROUTES, key=lambda r: r.startswith("default")):  # the gateway's own route first
+            sh(f"ip route replace {route}")
 
 
 def slow_network(on: bool):

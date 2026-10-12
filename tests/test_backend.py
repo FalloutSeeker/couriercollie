@@ -1032,6 +1032,23 @@ class AddRepoTest(unittest.TestCase):
         self.assertEqual((repo.asset_pattern, repo.kind, repo.installed, repo.homepage),
                          ("tool-*-x86_64.AppImage", "AppImage", "-", "https://tool.example"))
 
+    def test_something_your_package_manager_installed_isnt_offered_for_install(self):
+        # Fedora's bat is sharkdp/bat: added, its page says so straight away, rather than offering Install.
+        import couriercollie.backend as backend_module
+
+        asked = []
+        saved = backend_module._managed_elsewhere
+        backend_module._managed_elsewhere = lambda ids, website="": (
+            asked.append((ids, website)) or ("Your package manager keeps this up to date.", "dnf", "0.26.1"))
+        self.addCleanup(setattr, backend_module, "_managed_elsewhere", saved)
+        self.project("github.com/sharkdp/bat", homepage="https://bat.example")
+        self.release("github.com/sharkdp/bat", "bat-v2.0-x86_64-unknown-linux-gnu.tar.gz")
+        self.backend.addRepo("", "https://github.com/sharkdp/bat")
+        self.assertEqual(asked, [(["github.com/sharkdp/bat", "github.com/sharkdp/bat"], "https://bat.example")])
+        d = self.backend.details("github.com/sharkdp/bat")
+        self.assertEqual((d["managedBy"], d["headline"], d["canUpdate"]),
+                         ("dnf", "Installed with Package Manager", False))
+
     def test_several_files_for_this_computer_are_left_to_you(self):
         self.project("github.com/a/tool")
         self.release("github.com/a/tool", "tool-2.0-x86_64.AppImage", "tool_2.0_x86_64.tar.gz")
