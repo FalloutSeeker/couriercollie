@@ -147,7 +147,7 @@ class FindOnDiskTest(unittest.TestCase):
         make_clone(self.home / "local-copy", "/srv/git/thing.git")  # a folder, not a project page
         make_clone(self.home / ".hidden/proj", "https://github.com/a/hidden")
         make_clone(self.home / "app/node_modules/dep", "https://github.com/a/dep")
-        found = {f.id: f for f in scan.find_git_clones(self.home)}
+        found = {f.id: f for f in scan.walk(scan.scan_roots([str(self.home)]))[0]}
         self.assertEqual(set(found), {"gitgud.io/wackyideas/aerothemeplasma", "gitgud.io/aeroshell/smod"})
         aero = found["gitgud.io/wackyideas/aerothemeplasma"]
         self.assertEqual((aero.kind, aero.branch, aero.version, aero.path),
@@ -155,8 +155,8 @@ class FindOnDiskTest(unittest.TestCase):
 
     def test_depth_limit(self):
         make_clone(self.home / "a/b/c/d/e/f/g/deep", "https://github.com/a/deep")
-        self.assertEqual(scan.find_git_clones(self.home, max_depth=6), [])
-        self.assertEqual(len(scan.find_git_clones(self.home, max_depth=8)), 1)
+        self.assertEqual(scan.walk(scan.scan_roots([str(self.home)]), max_depth=6)[0], [])
+        self.assertEqual(len(scan.walk(scan.scan_roots([str(self.home)]), max_depth=8)[0]), 1)
 
     def test_rpms_a_repository_offers_are_left_to_dnf(self):
         installed = ("tool|1.0|@commandline|https://github.com/a/tool\n"

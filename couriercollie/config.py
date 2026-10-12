@@ -169,6 +169,8 @@ def _nearest_interval(hours) -> int:
 
 
 def load(path: Path | None = None) -> Config:
+    """Read the settings file; a missing one is a fresh start. A broken one raises ConfigError rather than being
+    replaced: the app then saves nothing until it's fixed, so your list is never lost."""
     path = path or default_path()
     if not path.exists():
         return Config()

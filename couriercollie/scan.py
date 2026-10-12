@@ -116,9 +116,6 @@ def walk(roots: Iterable[Path], max_depth: int = MAX_DEPTH) -> tuple[list[Found]
     return clones, appimages
 
 
-def find_git_clones(root: Path, max_depth: int = MAX_DEPTH) -> list[Found]:
-    return walk(scan_roots([str(root)]), max_depth)[0]
-
 
 def parse_rpm_list(text: str) -> list[Found]:
     """Parse `dnf repoquery --installed --qf '%{name}|%{version}|%{from_repo}|%{url}\\n'`: keep RPMs installed from

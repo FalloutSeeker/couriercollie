@@ -886,6 +886,7 @@ class Backend(QObject, Updating, Account):
 
     @Property("QVariantMap", notify=settingsChanged)
     def settings(self):
+        """The settings, as the welcome screen and Settings page show them (names as in QML)."""
         s = self._config.settings
         return {
             "firstLaunchDone": s.first_launch_done,
@@ -1004,6 +1005,9 @@ class Backend(QObject, Updating, Account):
 
     @Slot(str, str)
     def addRepo(self, name, url):
+        """Add a project by its address (Add): asked of its site once, which gives everything its page needs, so the
+        page opens straight away. If the newest release has just one file for this computer, it's picked. Adding
+        isn't installing: your version starts as "Not installed" (_set_baseline)."""
         if self._adding:
             return
         try:
@@ -1227,6 +1231,9 @@ class Backend(QObject, Updating, Account):
 
     @Slot(str, bool)
     def loadDetails(self, repo_id, force):
+        """Ask the site for what a repo's page shows (`force`: Refresh). Also reads your version from disk for a
+        scanned repo, and whether the package manager or Flatpak installed it, since either may have changed since
+        the page last loaded."""
         repo = self._config.find(repo_id)
         if not repo:
             return
@@ -1337,6 +1344,10 @@ class Backend(QObject, Updating, Account):
 
     @Slot(str, result="QVariantMap")
     def details(self, repo_id):
+        """Everything a repo's page shows, worked out from what's known (nothing is asked of the site here): its
+        releases and files, which file is yours, how your version compares, and what the page may offer. The page
+        asks again after every change (detailsChanged), up to a hundred times during a download, so it stays cheap:
+        under a millisecond for a project with 30 releases."""
         repo = self._config.find(repo_id)
         d = self._details.get(repo_id) or Details(state="loading")
         shown = [r for r in d.releases if repo and (repo.prereleases or not r.prerelease)]
@@ -1590,6 +1601,8 @@ class Backend(QObject, Updating, Account):
 
     @Slot(str, str)
     def setFollow(self, repo_id, follow):
+        """Follow releases or a branch instead. Your version means something else in each (a release tag, or a
+        commit), so it's set again: from disk for a scanned repo, else "Not installed" until you say."""
         repo = self._config.find(repo_id)
         if not repo or follow not in (FOLLOW_RELEASES, FOLLOW_BRANCH) or follow == repo.follow:
             return
@@ -1631,6 +1644,8 @@ class Backend(QObject, Updating, Account):
         self._refresh_whats_new(repo_id)
 
     def _refresh_whats_new(self, repo_id):
+        """Compare your commit with the followed branch's newest again (the branch was changed, or the clone moved),
+        for the page's "N new commits" and its list of them."""
         repo, d = self._config.find(repo_id), self._details.get(repo_id)
         if not repo or not d or d.state != "ready":
             return
@@ -1679,6 +1694,8 @@ class Backend(QObject, Updating, Account):
 
     @Slot(str, str, str)
     def pickAsset(self, repo_id, tag, asset_name):
+        """Follow this file (Your Build File). Kept as a pattern with the version as "*", so the same file is found in
+        every later release. Only a file that runs on this computer can be picked."""
         repo = self._config.find(repo_id)
         d = self._details.get(repo_id)
         rel = next((r for r in d.releases if r.tag == tag), None) if d else None

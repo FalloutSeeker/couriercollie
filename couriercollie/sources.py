@@ -449,6 +449,7 @@ _GITHUB_HEADERS = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Versio
 
 @_readable
 def parse_github_project(data: dict) -> ProjectInfo:
+    """GitHub's answer about a project. Its address may differ from the one asked for: renamed projects redirect."""
     owner = data.get("owner") or {}
     # GitHub has no project icons; an organization's picture is usually the project's logo.
     icon = owner.get("avatar_url") or "" if owner.get("type") == "Organization" else ""
@@ -465,6 +466,7 @@ def parse_github_project(data: dict) -> ProjectInfo:
 
 @_readable
 def parse_github_releases(data: list) -> list[Release]:
+    """GitHub's release list, newest first, without drafts (unpublished: only the project's maintainers see them)."""
     releases = []
     for r in data:
         if r.get("draft"):
@@ -496,6 +498,7 @@ def _gitlab_api(domain: str, path: str) -> str:
 
 @_readable
 def parse_gitlab_project(domain: str, data: dict) -> ProjectInfo:
+    """A GitLab site's answer about a project (gitlab.com, or one hosted elsewhere, like gitgud.io)."""
     namespace = data.get("namespace") or {}
     icon = data.get("avatar_url") or (namespace.get("avatar_url") if namespace.get("kind") == "group" else "") or ""
     if icon.startswith("/"):
@@ -512,6 +515,8 @@ def parse_gitlab_project(domain: str, data: dict) -> ProjectInfo:
 
 @_readable
 def parse_gitlab_releases(domain: str, path: str, data: list) -> list[Release]:
+    """A GitLab site's release list. Its files are links the project added to each release, so they can point
+    anywhere: the site's own uploads, its package registry, or another site."""
     releases = []
     for r in data:
         links = (r.get("assets") or {}).get("links") or []
@@ -661,6 +666,8 @@ def parse_ls_remote(output: str) -> tuple[str, list[Branch]]:
 
 
 def branches(ref: RepoRef) -> tuple[str, list[Branch]]:
+    """The project's default branch and every branch's newest commit, from git itself (`git ls-remote`): it works
+    for any site, and doesn't count against GitHub's hourly limit."""
     # GIT_TERMINAL_PROMPT=0: a private or missing repo fails instead of waiting for a password nobody will type.
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "", "SSH_ASKPASS": ""}
     try:

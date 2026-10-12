@@ -87,6 +87,8 @@ def fill_in_icons() -> None:
 
 
 def main() -> int:
+    """Start the window, or do what was asked on the command line (see the top of this file). Only one copy runs:
+    a second start brings the open window to the front instead."""
     args = sys.argv[1:]
     if "--reset" in args:
         from . import config, integration
