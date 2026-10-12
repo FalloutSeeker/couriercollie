@@ -77,7 +77,7 @@ sign-in.
   system (one in `/opt`, say), uses your desktop's own password window.
 - For a git clone, you can approve one step to run after each update (rebuild its containers, run its install
   script, etc.). It's shown to you first, and if an update changes it, it waits for you to look again.
-- A step that needs `sudo` is never run inside couriercollie. You get its command to run in your own terminal,
+- A step that needs elevation is never run inside couriercollie. You get its command to run in your own terminal,
   where you type the password.
 - Anything your package manager installed (from your distro's repositories, or from Flathub) is never updated here.
   couriercollie only shows its version; your package manager keeps it up to date.
