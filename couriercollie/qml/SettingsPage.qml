@@ -164,6 +164,7 @@ Kirigami.ScrollablePage {
                             objectName: "folderProblem:" + folderRow.modelData.path
                             Layout.fillWidth: true
                             visible: text !== ""
+                            textFormat: Text.PlainText
                             text: folderRow.modelData.problem
                             font: Kirigami.Theme.smallFont
                             color: Kirigami.Theme.neutralTextColor

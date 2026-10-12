@@ -547,3 +547,22 @@ class DownloadProblemTest(unittest.TestCase):
                          "the connection stopped answering. Check your internet connection, then try again.")
         self.assertEqual(words(http.client.IncompleteRead(b"")), "the connection dropped. Try again.")
         self.assertEqual(words(OSError(errno.ENOSPC, "No space left on device")), "the disk is full.")
+
+
+class SecureAddressesTest(unittest.TestCase):
+    """Files and checksums only over https (or from this computer itself)."""
+
+    def test_plain_http_isnt_downloaded(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaisesRegex(updater.UpdateError, "isn’t secure"):
+                updater.download("http://example.com/tool.AppImage", Path(d) / "x", 10)
+            self.assertFalse((Path(d) / "x").exists())
+
+    def test_a_checksum_over_plain_http_isnt_used(self):
+        asked = []
+        asset = Asset("tool.AppImage", "https://example.com/tool.AppImage")
+        sums = Asset("SHA256SUMS", "http://example.com/SHA256SUMS", 100)
+        found = updater.expected_sha256(asset, [asset, sums], lambda url: asked.append(url) or updater.fetch_text(url))
+        self.assertEqual((found, asked), ("", ["http://example.com/SHA256SUMS"]))

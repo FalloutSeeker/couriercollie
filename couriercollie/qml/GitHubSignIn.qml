@@ -49,6 +49,7 @@ ColumnLayout {
     QQC2.Label {
         Layout.fillWidth: true
         visible: root.account.signIn !== ""
+        textFormat: Text.PlainText
         text: root.account.signIn === "starting" ? "Asking GitHub for a code…"
             : `Enter this code at ${root.account.verifyUrl}, then approve couriercollie there:`
         wrapMode: Text.Wrap
@@ -149,6 +150,6 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: root.account.error !== ""
         type: Kirigami.MessageType.Error
-        text: root.account.error
+        text: Labels.plain(root.account.error)
     }
 }

@@ -94,6 +94,7 @@ Kirigami.Dialog {
             QQC2.Label {
                 objectName: "scanStatus"
                 Layout.fillWidth: true
+                textFormat: Text.PlainText
                 text: backend.scanState === "scanning" ? `Looking in ${backend.settings.scanFoldersText} for git clones and downloaded apps, and for packages installed from downloaded files, then checking each with its site…`
                     : backend.scanError !== "" ? "The scan didn’t finish."
                     : dialog.newCount === 0 ? "Nothing new found. Everything found is already tracked."
@@ -114,7 +115,7 @@ Kirigami.Dialog {
             Layout.fillWidth: true
             visible: backend.scanError !== ""
             type: Kirigami.MessageType.Error
-            text: backend.scanError
+            text: Labels.plain(backend.scanError)
         }
 
         // Folders the scan couldn't look in: it runs as you, without asking for a password.
@@ -125,14 +126,14 @@ Kirigami.Dialog {
             Layout.fillWidth: true
             visible: backend.scanState === "done" && skipped.length > 0
             type: Kirigami.MessageType.Warning
-            text: `Not looked in: ${skipped.join(", ")}. A folder you can\u2019t open is skipped (scans never ask for a password); Settings says why for each.`
+            text: Labels.plain(`Not looked in: ${skipped.join(", ")}. A folder you can\u2019t open is skipped (scans never ask for a password); Settings says why for each.`)
         }
 
         Kirigami.InlineMessage {
             Layout.fillWidth: true
             visible: backend.scanState === "done" && backend.scanUpdated.length > 0
             type: Kirigami.MessageType.Positive
-            text: `Updated ${backend.scanUpdated.length === 1 ? "1 tracked repo" : backend.scanUpdated.length + " tracked repos"} with what’s on this computer: ${backend.scanUpdated.join(", ")}.`
+            text: Labels.plain(`Updated ${backend.scanUpdated.length === 1 ? "1 tracked repo" : backend.scanUpdated.length + " tracked repos"} with what’s on this computer: ${backend.scanUpdated.join(", ")}.`)
         }
 
         RowLayout {

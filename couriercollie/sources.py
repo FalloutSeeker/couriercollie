@@ -22,6 +22,8 @@ from pathlib import Path
 
 USER_AGENT = "couriercollie (https://github.com/FalloutSeeker/couriercollie)"
 TIMEOUT = 20
+# The biggest answer read from a site. A page of 30 releases of a busy project is about half a megabyte.
+ANSWER_MAX_BYTES = 20 * 1024 * 1024
 RELEASES_PER_PAGE = 30
 
 
@@ -377,7 +379,10 @@ def http_get_json(url: str, headers: dict | None = None, _without_login: bool = 
         req.add_unredirected_header("If-None-Match", cached["etag"])
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-            data = json.load(resp)
+            body = resp.read(ANSWER_MAX_BYTES + 1)
+            if len(body) > ANSWER_MAX_BYTES:  # a site (self-hosted, say) mustn't be able to fill the memory
+                raise BadAnswer(f"{domain} sent an answer far bigger than any project's.")
+            data = json.loads(body)
             etag = getattr(resp, "headers", None) and resp.headers.get("ETag")
             if etag and domain == GITHUB_API and parsed.path.endswith("/releases"):
                 _keep(url, etag, data)

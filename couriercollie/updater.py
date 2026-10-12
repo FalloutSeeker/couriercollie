@@ -31,6 +31,7 @@ import subprocess
 import tarfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -345,7 +346,16 @@ def expected_sha256(asset, others: list, get_text) -> str:
     return ""
 
 
+def _secure(url: str) -> bool:
+    """Over https: over plain http, anyone between here and the site could swap what's sent (a GitLab release's
+    files are links, which can point anywhere). Except from this computer itself, where nothing is in between."""
+    parsed = urllib.parse.urlparse(url)
+    return parsed.scheme == "https" or (parsed.scheme == "http" and parsed.hostname in ("127.0.0.1", "localhost"))
+
+
 def fetch_text(url: str, limit: int = 1024 * 1024) -> str:
+    if not _secure(url):
+        raise ValueError("not over https")  # a checksum anyone could swap would check nothing: not used
     req = urllib.request.Request(url, headers={"User-Agent": sources.USER_AGENT})
     with urllib.request.urlopen(req, timeout=sources.TIMEOUT) as resp:
         return resp.read(limit).decode("utf-8", "replace")
@@ -353,6 +363,9 @@ def fetch_text(url: str, limit: int = 1024 * 1024) -> str:
 
 def download(url: str, dest: Path, size: int | None, progress=None) -> str:
     """Downloads `url` to `dest`, returning its SHA-256. `progress(done, total)` is called now and then."""
+    if not _secure(url):
+        raise UpdateError("The file\u2019s address isn\u2019t secure (http, not https), so it wasn\u2019t "
+                          "downloaded.")
     if size and size > DOWNLOAD_MAX_BYTES:
         raise UpdateError("The file is too big to be an app; it wasn’t downloaded.")
     if size and shutil.disk_usage(dest.parent).free < size + 64 * 1024 ** 2:

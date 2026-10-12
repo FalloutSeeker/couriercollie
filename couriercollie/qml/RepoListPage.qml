@@ -101,7 +101,7 @@ Kirigami.ScrollablePage {
             visible: backend.configError !== ""
             type: Kirigami.MessageType.Error
             position: Kirigami.InlineMessage.Position.Header
-            text: backend.configError + "\nChanges won’t be saved until that file is fixed or moved away."
+            text: Labels.plain(backend.configError + "\nChanges won’t be saved until that file is fixed or moved away.")
         }
 
         Kirigami.InlineMessage {
@@ -109,7 +109,7 @@ Kirigami.ScrollablePage {
             visible: backend.saveError !== ""
             type: Kirigami.MessageType.Warning
             position: Kirigami.InlineMessage.Position.Header
-            text: backend.saveError
+            text: Labels.plain(backend.saveError)
         }
 
         QQC2.ToolBar {
@@ -212,7 +212,7 @@ Kirigami.ScrollablePage {
             Layout.fillWidth: true
             visible: backend.checks.error !== ""
             type: Kirigami.MessageType.Error
-            text: `Couldn\u2019t check for updates: ${backend.checks.error}`
+            text: Labels.plain(`Couldn\u2019t check for updates: ${backend.checks.error}`)
         }
 
         Kirigami.InlineMessage {
@@ -537,6 +537,7 @@ Kirigami.ScrollablePage {
                             Layout.minimumWidth: implicitWidth
                             visible: !heading.editing
                             level: 4
+                            textFormat: Text.PlainText
                             text: row.modelData.count
                             color: Kirigami.Theme.disabledTextColor
                         }
@@ -657,6 +658,7 @@ Kirigami.ScrollablePage {
 
                             QQC2.Label {
                                 Layout.fillWidth: true
+                                textFormat: Text.PlainText
                                 text: row.modelData.followText
                                 font: Kirigami.Theme.smallFont
                                 opacity: 0.7

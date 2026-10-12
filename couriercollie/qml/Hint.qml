@@ -7,6 +7,8 @@ import org.kde.kirigami as Kirigami
 // read by its headings and values alone.
 QQC2.Label {
     Layout.fillWidth: true
+    // As written: some hints hold paths and names from outside, which Qt could otherwise read as HTML.
+    textFormat: Text.PlainText
     font: Kirigami.Theme.smallFont
     wrapMode: Text.Wrap
     opacity: 0.7

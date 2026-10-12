@@ -158,6 +158,7 @@ Kirigami.ScrollablePage {
 
             QQC2.Label {
                 Layout.fillWidth: true
+                textFormat: Text.PlainText
                 text: `Only how it\u2019s shown here. It\u2019s still ${page.repo.domain}/${page.repo.path}.`
                 wrapMode: Text.Wrap
                 opacity: 0.7
@@ -206,6 +207,7 @@ Kirigami.ScrollablePage {
 
             QQC2.Label {
                 Layout.fillWidth: true
+                textFormat: Text.PlainText
                 text: `Runs now and after every update, in ${page.repo.shownPath}. Read it first: it can change anything you can. You\u2019ll be asked again if it changes.`
                 wrapMode: Text.Wrap
             }
@@ -260,7 +262,7 @@ Kirigami.ScrollablePage {
             Layout.fillWidth: true
             visible: page.details.state === "error"
             type: Kirigami.MessageType.Error
-            text: page.details.error
+            text: Labels.plain(page.details.error)
             actions: [
                 Kirigami.Action {
                     text: "Try Again"
@@ -332,7 +334,7 @@ Kirigami.ScrollablePage {
                     text: `<a href="${Labels.escaped(page.repo.url)}">${Labels.escaped(page.repo.domain + "/" + page.repo.path)}</a>`
                     textFormat: Text.StyledText
                     elide: Text.ElideMiddle
-                    onLinkActivated: link => Qt.openUrlExternally(link)
+                    onLinkActivated: link => Labels.openLink(link)
                 }
             }
         }
@@ -344,7 +346,7 @@ Kirigami.ScrollablePage {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 34
             visible: page.ready && (page.details.managedElsewhere || "") !== ""
             type: Kirigami.MessageType.Warning
-            text: page.details.managedElsewhere || ""
+            text: Labels.plain(page.details.managedElsewhere)
         }
 
         // Built only for other systems (Android, Windows, etc.): nothing here can install it.
@@ -354,7 +356,7 @@ Kirigami.ScrollablePage {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 34
             visible: page.ready && page.otherSystems
             type: Kirigami.MessageType.Information
-            text: page.details.otherSystems || ""
+            text: Labels.plain(page.details.otherSystems)
         }
 
         Kirigami.InlineMessage {
@@ -362,7 +364,7 @@ Kirigami.ScrollablePage {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 34
             visible: page.ready && page.details.localMissing === true
             type: Kirigami.MessageType.Warning
-            text: `It\u2019s no longer at ${page.repo.shownPath}. If it moved, scan again; if it was removed, stop tracking it.`
+            text: Labels.plain(`It\u2019s no longer at ${page.repo.shownPath}. If it moved, scan again; if it was removed, stop tracking it.`)
         }
 
         // ---- Status: your version next to the newest, coloured by how they compare ------------------------------
@@ -413,6 +415,7 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         level: 3
                         type: Kirigami.Heading.Type.Primary
+                        textFormat: Text.PlainText
                         text: page.details.headline || ""
                         wrapMode: Text.Wrap
                     }
@@ -437,6 +440,7 @@ Kirigami.ScrollablePage {
                             level: 2
                             font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.5
                             font.weight: Font.DemiBold
+                            textFormat: Text.PlainText
                             text: page.details.versionText || ""
                         }
                     }
@@ -455,6 +459,7 @@ Kirigami.ScrollablePage {
                         spacing: 0
 
                         QQC2.Label {
+                            textFormat: Text.PlainText
                             text: page.followsReleases || !page.currentBranch ? "Newest" : `Newest on ${page.currentBranch}`
                             font: Kirigami.Theme.smallFont
                             opacity: 0.7
@@ -465,6 +470,7 @@ Kirigami.ScrollablePage {
                             level: 2
                             font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.5
                             font.weight: Font.DemiBold
+                            textFormat: Text.PlainText
                             text: page.details.newestText || ""
                         }
                     }
@@ -474,6 +480,7 @@ Kirigami.ScrollablePage {
                 QQC2.Label {
                     Layout.fillWidth: true
                     visible: statusBox.kind === "problem" || statusBox.kind === "ahead" || page.canFollowDisk
+                    textFormat: Text.PlainText
                     text: page.details.status || ""
                     wrapMode: Text.Wrap
                 }
@@ -511,6 +518,7 @@ Kirigami.ScrollablePage {
                     }
 
                     QQC2.Label {
+                        textFormat: Text.PlainText
                         text: page.details.updatePhase === "installing" ? `Installing with ${page.details.packageTool}\u2026`
                             : page.details.isDownload ? (page.details.progress >= 0
                                   ? `Downloading\u2026 ${Math.round(page.details.progress * 100)}%` : "Downloading\u2026")
@@ -552,7 +560,7 @@ Kirigami.ScrollablePage {
                     type: page.details.updateNoteKind === "error" ? Kirigami.MessageType.Error
                         : page.details.updateNoteKind === "warning" ? Kirigami.MessageType.Warning
                         : Kirigami.MessageType.Positive
-                    text: page.details.updateNote || ""
+                    text: Labels.plain(page.details.updateNote)
                 }
 
                 // The archive has several programs: which one to run.
@@ -638,6 +646,7 @@ Kirigami.ScrollablePage {
                 QQC2.Label {
                     Layout.fillWidth: true
                     visible: page.canUpdate && page.details.updateNeedsPassword === true
+                    textFormat: Text.PlainText
                     text: page.details.isPackage
                           ? `${page.details.packageTool} installs it for the whole system, so it asks for your password.`
                           : "This clone belongs to the system, so Update asks for your password."
@@ -680,7 +689,7 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 visible: (page.details.applyReminder || "") !== "" && page.details.stepChanged !== true
                 type: Kirigami.MessageType.Information
-                text: page.details.applyReminder || ""
+                text: Labels.plain(page.details.applyReminder)
                 actions: [
                     Kirigami.Action {
                         text: "Run Now"
@@ -882,11 +891,11 @@ Kirigami.ScrollablePage {
                 Layout.topMargin: Kirigami.Units.smallSpacing
                 visible: (page.details.applySteps || "") !== "" && (!afterUpdating.hasStep || afterUpdating.editing)
                 text: (page.details.readmeUrl || "") !== ""
-                      ? `The project\u2019s README says (<a href="${page.details.readmeUrl}">open it</a>):`
+                      ? `The project\u2019s README says (<a href="${Labels.escaped(page.details.readmeUrl)}">open it</a>):`
                       : "The project\u2019s README says:"
                 textFormat: Text.StyledText
                 opacity: 0.7
-                onLinkActivated: link => Qt.openUrlExternally(link)
+                onLinkActivated: link => Labels.openLink(link)
             }
 
             Rectangle {
@@ -907,7 +916,7 @@ Kirigami.ScrollablePage {
                     text: page.details.applySteps || ""
                     textFormat: Text.MarkdownText
                     wrapMode: Text.Wrap
-                    onLinkActivated: link => Qt.openUrlExternally(link)
+                    onLinkActivated: link => Labels.openLink(link)
                 }
             }
         }
@@ -960,6 +969,7 @@ Kirigami.ScrollablePage {
             }
 
             QQC2.Label {
+                textFormat: Text.PlainText
                 text: !page.followsReleases ? "Branch" : page.details.isClone ? "Releases" : "Build file"
                 opacity: 0.7
             }
@@ -968,6 +978,7 @@ Kirigami.ScrollablePage {
                 objectName: "followedValue"
                 Layout.fillWidth: true
                 // The saved branch while branches load, or if they couldn't be listed.
+                textFormat: Text.PlainText
                 text: !page.followsReleases ? (page.currentBranch || page.repo.branch
                                                || (page.ready ? "The default branch" : "Loading\u2026"))
                     : page.details.isClone ? "Each release\u2019s source code: Update moves the clone to its tag"
@@ -1034,11 +1045,13 @@ Kirigami.ScrollablePage {
 
                 QQC2.Label {
                     Layout.fillWidth: true
+                    textFormat: Text.PlainText
                     text: page.repo.scanned ? "Found on this computer" : "Added by hand"
                 }
 
                 QQC2.Label {
                     Layout.fillWidth: true
+                    textFormat: Text.PlainText
                     text: page.repo.scanned ? page.repo.shownPath
                         : page.managed ? "Your version is the one your package manager installed."
                         : page.followsReleases ? "You set your version: with the buttons above, or Set as My Version on a release."
@@ -1071,6 +1084,7 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 Layout.bottomMargin: Kirigami.Units.smallSpacing
                 Layout.maximumWidth: Kirigami.Units.gridUnit * 30
+                textFormat: Text.PlainText
                 text: `Choose the file you use; the same file is then followed in every new release. Listed from ${page.details.latestTag}, the newest release.`
                 wrapMode: Text.Wrap
                 opacity: 0.7
@@ -1080,7 +1094,7 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 visible: page.details.yourFileMissing === true
                 type: Kirigami.MessageType.Warning
-                text: `The newest release doesn’t include your file (${page.repo.assetPattern}). The project may have renamed it. Choose it again below.`
+                text: Labels.plain(`The newest release doesn’t include your file (${page.repo.assetPattern}). The project may have renamed it. Choose it again below.`)
             }
 
             Repeater {
@@ -1124,6 +1138,7 @@ Kirigami.ScrollablePage {
                             QQC2.Label {
                                 Layout.fillWidth: true
                                 visible: text !== ""
+                                textFormat: Text.PlainText
                                 text: choice.modelData.details
                                 font: Kirigami.Theme.smallFont
                                 opacity: 0.8
@@ -1198,6 +1213,7 @@ Kirigami.ScrollablePage {
                         }
 
                         QQC2.Label {
+                            textFormat: Text.PlainText
                             text: release.modelData.tag
                             font.bold: true
                         }
@@ -1227,6 +1243,7 @@ Kirigami.ScrollablePage {
                         }
 
                         QQC2.Label {
+                            textFormat: Text.PlainText
                             text: release.modelData.date
                             opacity: 0.7
                         }
@@ -1244,6 +1261,7 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         Layout.topMargin: Kirigami.Units.smallSpacing
                         visible: !page.details.isClone
+                        textFormat: Text.PlainText
                         text: release.modelData.assets.length === 0 ? "No download files in this release (only the source code)."
                             : page.details.versionOnly === true ? `${release.modelData.assets.length} files, none for this computer.`
                             : page.repo.assetPattern === "" ? `${release.modelData.assets.length} files. Choose yours under \u201cYour Build File\u201d.`
@@ -1302,7 +1320,7 @@ Kirigami.ScrollablePage {
                         text: release.notesShown ? release.modelData.notes : ""
                         textFormat: Text.MarkdownText
                         wrapMode: Text.Wrap
-                        onLinkActivated: link => Qt.openUrlExternally(link)
+                        onLinkActivated: link => Labels.openLink(link)
                     }
                 }
             }
@@ -1321,6 +1339,7 @@ Kirigami.ScrollablePage {
         QQC2.Label {
             Layout.fillWidth: true
             visible: page.followsReleases && (page.details.moreError || "") !== ""
+            textFormat: Text.PlainText
             text: page.details.moreError || ""
             wrapMode: Text.Wrap
             color: Kirigami.Theme.negativeTextColor
@@ -1344,6 +1363,7 @@ Kirigami.ScrollablePage {
         QQC2.Label {
             Layout.fillWidth: true
             visible: !page.followsReleases && page.ready
+            textFormat: Text.PlainText
             text: page.details.branchError !== "" ? page.details.branchError
                 : "Choose the branch to follow for new commits." + (page.details.isClone && page.details.branchOnDisk
                   ? ` Your clone is on ${page.details.branchOnDisk}; Update only pulls the branch it\u2019s on.` : "")
@@ -1396,6 +1416,7 @@ Kirigami.ScrollablePage {
                     }
 
                     QQC2.Label {
+                        textFormat: Text.PlainText
                         text: branch.modelData.sha
                         font.family: "monospace"
                         opacity: 0.7

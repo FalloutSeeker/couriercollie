@@ -66,6 +66,13 @@ class ParseUrlTest(unittest.TestCase):
 class HttpErrorsTest(unittest.TestCase):
     """What the user is told when a site answers badly. Uses a fake urlopen, no network."""
 
+    def test_an_answer_too_big_to_be_a_projects_isnt_read(self):
+        saved = sources.ANSWER_MAX_BYTES
+        sources.ANSWER_MAX_BYTES = 100
+        self.addCleanup(setattr, sources, "ANSWER_MAX_BYTES", saved)
+        with self.assertRaisesRegex(sources.BadAnswer, "far bigger"):
+            self.answer(body=b"[" + b"1," * 100 + b"1]")
+
     def answer(self, code=200, body=b"{}", headers=None):
         import io
         import urllib.error
