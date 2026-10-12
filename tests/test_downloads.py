@@ -528,3 +528,22 @@ class NewCopyTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DownloadProblemTest(unittest.TestCase):
+    """Why a download stopped, in words a person can act on."""
+
+    def test_in_words(self):
+        import errno
+        import http.client
+        import urllib.error
+
+        words = updater._download_problem
+        self.assertEqual(words(TimeoutError("The read operation timed out")),
+                         "the connection stopped answering. Check your internet connection, then try again.")
+        self.assertEqual(words(urllib.error.URLError(OSError(-3, "Temporary failure in name resolution"))),
+                         "couldn’t connect. Check your internet connection, then try again.")
+        self.assertEqual(words(urllib.error.URLError(TimeoutError("timed out"))),
+                         "the connection stopped answering. Check your internet connection, then try again.")
+        self.assertEqual(words(http.client.IncompleteRead(b"")), "the connection dropped. Try again.")
+        self.assertEqual(words(OSError(errno.ENOSPC, "No space left on device")), "the disk is full.")

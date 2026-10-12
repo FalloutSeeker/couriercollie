@@ -19,6 +19,7 @@ Whatever is downloaded is checked against the checksum the project published, wh
 """
 
 import contextlib
+import errno
 import hashlib
 import http.client
 import os
@@ -375,11 +376,27 @@ def download(url: str, dest: Path, size: int | None, progress=None) -> str:
                 raise UpdateError(f"The download didn\u2019t finish: {done:,} of {total:,} bytes arrived. Try again.")
     except (OSError, urllib.error.URLError, http.client.HTTPException) as e:
         dest.unlink(missing_ok=True)
-        raise UpdateError(f"The download didn’t finish: {getattr(e, 'reason', None) or e}") from e
+        raise UpdateError(f"The download didn’t finish: {_download_problem(e)}") from e
     except UpdateError:
         dest.unlink(missing_ok=True)
         raise
     return digest.hexdigest()
+
+
+def _download_problem(e: Exception) -> str:
+    """Why a download stopped, in words (not "[Errno -3] Temporary failure in name resolution")."""
+    reason = getattr(e, "reason", None)
+    if isinstance(e, urllib.error.HTTPError):
+        return f"the site answered with an error ({e.code}). Try again later."
+    if isinstance(e, TimeoutError) or isinstance(reason, TimeoutError) or "timed out" in str(reason or e):
+        return "the connection stopped answering. Check your internet connection, then try again."
+    if isinstance(e, urllib.error.URLError):
+        return "couldn\u2019t connect. Check your internet connection, then try again."
+    if isinstance(e, (http.client.HTTPException, ConnectionError)):
+        return "the connection dropped. Try again."
+    if getattr(e, "errno", None) == errno.ENOSPC:
+        return "the disk is full."
+    return str(e)
 
 
 def is_appimage(path: Path) -> bool:

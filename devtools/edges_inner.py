@@ -132,9 +132,10 @@ b.shutdown()
 
 # ---- 2. A full disk -------------------------------------------------------------------------------------------------
 print("=== a full disk", flush=True)
-# ~/Applications is a 40 MB disk here (check_edges.sh): fill it so the next download can't fit.
+# ~/Applications is a 120 MB disk here (check_edges.sh): fill it so the next download can't fit (couriercollie wants
+# room for the file and 64 MB to spare).
 filler = APPS / "filler"
-sh(f"head -c 20M /dev/zero > {filler}")
+sh(f"head -c 60M /dev/zero > {filler}")
 b = backend()
 rid = add_nvim(b)
 b._config.find(rid).installed = "v0.1.0"  # an old version, so Update is offered
@@ -152,7 +153,8 @@ b.shutdown()
 
 # ---- 3. The app killed partway through an update ---------------------------------------------------------------------
 print("=== the app killed partway through an update", flush=True)
-Path(installed).unlink(missing_ok=True)
+if installed:
+    Path(installed).unlink(missing_ok=True)
 slow_network(True)
 child = subprocess.Popen([sys.executable, __file__, "download-only"], stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL)
