@@ -33,8 +33,8 @@ _FOREIGN_EXT = {
 # yq's "yq_man_page_only.tar.gz").
 _NOT_A_PROGRAM = re.compile(r"(?:shell-)?(?:completions?|man|manpages?|docs?|vendor)(?![a-z])|"
                             r".*(?<![a-z])(?:source|src|sources|man[_-]?pages?|completions?)(?![a-z])", re.I)
-_NOT_SOFTWARE = (".zsync", ".sha256", ".sha512", ".sha256sum", ".sha512sum", ".sig", ".asc", ".minisig", ".pem", ".sbom",
-                 ".json", ".txt", ".md5", ".spdx", ".intoto.jsonl", ".idsig", ".cert", ".crt", ".pub")
+_NOT_SOFTWARE = (".zsync", ".sha256", ".sha512", ".sha256sum", ".sha512sum", ".sig", ".asc", ".minisig", ".pem",
+                 ".sbom", ".json", ".txt", ".md5", ".spdx", ".intoto.jsonl", ".idsig", ".cert", ".crt", ".pub")
 # Whole words only, so "studios" isn't read as "iOS".
 _FOREIGN_OS = re.compile(
     r"(?<![a-z])(windows|win32|win64|darwin|macos|osx|mac|android|ios|freebsd|openbsd|netbsd)(?![a-z])", re.I
@@ -210,8 +210,8 @@ def pattern_for(asset_name: str, tag: str) -> str:
     """The pattern that finds this same file in later releases: the name with its version replaced by "*"."""
     version = version_of(tag)
     # As the file may write it: a package can't always use "-" (WezTerm's RPM: "20240203_110809" for "20240203-110809").
-    written = next((v for v in (version, version.replace("-", "_"), version.replace("-", "~"), version.replace("-", "."))
-                    if v and v in asset_name), "")
+    forms = (version, version.replace("-", "_"), version.replace("-", "~"), version.replace("-", "."))
+    written = next((v for v in forms if v and v in asset_name), "")
     if not written:
         return asset_name
     pattern = asset_name.replace(written, "*")

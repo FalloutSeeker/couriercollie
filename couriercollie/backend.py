@@ -1479,7 +1479,8 @@ class Backend(QObject, Updating, Account):
             "stepCode": run.code if run else 0,
             "stepOutput": "\n".join(run.output) if run else "",
             # For a step that asks for a password: to paste into a terminal, where it can be typed.
-            "stepTerminalLine": applying.terminal_line(repo.local_path, repo.apply_command) if repo.apply_command else "",
+            "stepTerminalLine": (applying.terminal_line(repo.local_path, repo.apply_command)
+                                 if repo.apply_command else ""),
             "applyReminder": reminder,
             "applySteps": d.readme_steps,
             "readmeUrl": readme.as_uri() if readme else "",
@@ -1515,8 +1516,9 @@ class Backend(QObject, Updating, Account):
             newer_text, update_headline = f"Newer version available: {newest}", "Update available"
         if repo.managed_by:
             text, status, kind, headline = d.managed_version or "Installed", \
-                f"{'Flatpak' if repo.managed_by == 'Flatpak' else 'Your package manager'} installed it, and keeps it " \
-                f"up to date. The newest here is {newest_text}.", STATUS_MANAGED, checker.installed_with(repo.managed_by)
+                f"{'Flatpak' if repo.managed_by == 'Flatpak' else 'Your package manager'} installed it, and keeps " \
+                f"it up to date. The newest here is {newest_text}.", STATUS_MANAGED, \
+                checker.installed_with(repo.managed_by)
         elif installed == NOT_INSTALLED and repo.other_systems:
             # Built for other systems: never installed here, so there's only your version to note, not "installed".
             text, status, kind, headline = "Not set", f"The newest is {newest_text}. Mark it as up to date once " \

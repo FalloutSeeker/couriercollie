@@ -164,7 +164,8 @@ def offered_by_a_repository(name: str, run=_out) -> bool:
         return bool(re.search(r'repository="(?!\(System Packages\))[^"]+"', found))
     if assets.has("apt"):
         listed = run("apt", "list", "--installed", name)
-        return any(line.startswith(f"{name}/") and not line.rstrip().endswith(",local]") for line in listed.splitlines())
+        return any(line.startswith(f"{name}/") and not line.rstrip().endswith(",local]")
+                   for line in listed.splitlines())
     if assets.has("pacman"):
         return bool(run("pacman", "-Si", name))
     return False
