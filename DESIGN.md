@@ -183,6 +183,9 @@ All global; nothing per repo.
     extension). Neither is needed for automatic checks.
 - **GitHub Account (optional):** sign in or out.
 - **Finding Installed Repos:** scanning on/off and the scan folders.
+- **Feedback:** **Send Feedback…** opens a new GitHub issue in the browser, with the app's version, the distro, the
+  desktop and the Python and Qt versions filled in, and the tracked repos' addresses only if ticked. Nothing is sent
+  by the app itself.
 - **Restore to Defaults…** (asks first): settings as the welcome screen leaves them. Tracked repos, categories and
   the GitHub sign-in are kept.
 

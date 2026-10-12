@@ -105,7 +105,7 @@ The scan folders are your home folder, `/opt`, `/usr/local` and `/srv`, where so
 rest of the system belongs to your package manager. Change them in Settings.
 
 **Which distros?** It's built and tested mainly on Fedora KDE. openSUSE, Ubuntu, Debian, Arch and GNOME are
-supported, but need feedback.
+supported, but need feedback (Settings → Send Feedback…).
 
 **Start over:** `./run.sh --reset` brings the welcome screen back. Your old settings are kept as a dated backup.
 

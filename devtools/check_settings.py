@@ -1,5 +1,5 @@
 """Check the welcome screen's scanning text and the Settings window's folder list: defaults marked, removing a
-folder, folders a scan would skip, Reset Scan Folders; then Start at login, the tray, and Restore to Defaults.
+folder, folders a scan would skip, Reset Scan Folders; then Start at login, the tray, Restore to Defaults and Send Feedback.
 No network, and nothing written outside a temporary folder.
 
     python3 -I devtools/check_settings.py
@@ -60,4 +60,10 @@ h.run([
     (0, lambda: h.shot("settings-4-restore-main")),
     (0, lambda: h.call("restoreDefaultsDialog", "accept")),
     (300, lambda: h.check("restored to defaults", b.settings["areDefault"] and not b.settings["keepInTray"])),
+    # Send Feedback asks first (cancelled here: accepting opens the browser).
+    (0, lambda: h.click("sendFeedback", h.window("Settings"))),
+    (500, lambda: h.check("Send Feedback asks first, repos not included unless ticked",
+                          (h.find("includeRepos", h.window("Settings")) or [0, 0, True])[2] is False)),
+    (0, lambda: h.shot("settings-5-feedback", h.window("Settings"))),
+    (0, lambda: h.call("feedbackDialog", "reject")),
 ])

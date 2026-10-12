@@ -14,12 +14,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from PySide6.QtCore import Property, QFileSystemWatcher, QObject, QProcess, QTimer, Signal, Slot
+from PySide6.QtCore import Property, QFileSystemWatcher, QObject, QProcess, QTimer, Signal, Slot, qVersion
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
-from . import (applying, assets, checker, config, flatpaks, github_login, icons, integration, packages, scan, sources,
-               updater)
+from . import (applying, assets, checker, config, feedback, flatpaks, github_login, icons, integration, packages, scan,
+               sources, updater)
 from .account import Account
 from .updating import (Updating, _can_clone, _can_update, _head, _is_appimage, _is_clone, _is_flatpak,
                        _is_package, _is_program, _needs_password, _new_copy, _newest_version)
@@ -957,6 +957,12 @@ class Backend(QObject, Updating, Account):
         self._save()
         self.settingsChanged.emit()
         self.checksChanged.emit()
+
+    @Slot(bool, result=str)
+    def feedbackUrl(self, include_repos):
+        """Send Feedback's new GitHub issue (opened in the browser), with the tracked repos' addresses if asked."""
+        repos = [r.url for r in self._config.repos] if include_repos else None
+        return feedback.issue_url(repos, qVersion())
 
     @Slot(str)
     def addScanFolder(self, folder):

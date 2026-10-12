@@ -16,6 +16,13 @@ Kirigami.ScrollablePage {
     Component.onCompleted: backend.refreshGitHub()
 
     Kirigami.FormLayout {
+        // More room between rows, and between labels and what they label, than the form's own (its grid is
+        // children[0], as Kirigami itself uses it). The folder list keeps its own spacing.
+        Component.onCompleted: {
+            children[0].rowSpacing = Kirigami.Units.largeSpacing;
+            children[0].columnSpacing = Kirigami.Units.gridUnit;
+        }
+
         // ---- Updates ----
 
         Kirigami.Separator {
@@ -214,6 +221,21 @@ Kirigami.ScrollablePage {
             opacity: 0.7
         }
 
+        // ---- Feedback ----
+
+        Kirigami.Separator {
+            Kirigami.FormData.isSection: true
+            Kirigami.FormData.label: "Feedback"
+        }
+
+        QQC2.Button {
+            objectName: "sendFeedback"
+            Kirigami.FormData.label: "Problems or ideas:"
+            text: "Send Feedback…"
+            icon.name: "tools-report-bug"
+            onClicked: feedbackDialog.open()
+        }
+
         // ---- Back to a fresh start ----
 
         Kirigami.Separator {
@@ -252,6 +274,37 @@ Kirigami.ScrollablePage {
             }
         ]
         onAccepted: backend.restoreDefaults()
+    }
+
+    Kirigami.PromptDialog {
+        id: feedbackDialog
+
+        objectName: "feedbackDialog"
+        parent: page.QQC2.Overlay.overlay
+        preferredWidth: Kirigami.Units.gridUnit * 22
+        title: "Send feedback"
+        subtitle: "Opens a new GitHub issue in your browser, with your couriercollie version, distro and desktop filled in. Nothing is sent until you submit it there."
+        standardButtons: Kirigami.Dialog.NoButton
+        customFooterActions: [
+            Kirigami.Action {
+                text: "Open GitHub"
+                icon.name: "internet-services"
+                onTriggered: feedbackDialog.accept()
+            },
+            Kirigami.Action {
+                text: "Cancel"
+                icon.name: "dialog-cancel"
+                onTriggered: feedbackDialog.reject()
+            }
+        ]
+        onAccepted: Qt.openUrlExternally(backend.feedbackUrl(includeRepos.checked))
+
+        QQC2.CheckBox {
+            id: includeRepos
+
+            objectName: "includeRepos"
+            text: "Include the list of repos I track"
+        }
     }
 
     FolderDialog {

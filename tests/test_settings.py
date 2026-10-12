@@ -143,3 +143,58 @@ class SettingsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FeedbackTest(unittest.TestCase):
+    """Send Feedback opens a new GitHub issue with what helps filled in; the tracked repos only if asked."""
+
+    def body(self, url):
+        from urllib.parse import parse_qs, urlsplit
+
+        self.assertTrue(url.startswith("https://github.com/FalloutSeeker/couriercollie/issues/new?"))
+        return parse_qs(urlsplit(url).query)["body"][0]
+
+    def test_versions_distro_and_desktop_without_repos(self):
+        from couriercollie import __version__, feedback
+
+        from unittest import mock
+
+        with mock.patch.dict(os.environ, XDG_CURRENT_DESKTOP="KDE"):
+            body = self.body(feedback.issue_url(None, "6.10.0"))
+        self.assertIn(f"couriercollie {__version__}", body)
+        self.assertIn(f"{feedback.distro()}, KDE desktop", body)
+        self.assertIn("Qt 6.10.0", body)
+        self.assertNotIn("Tracked repos", body)
+
+    def test_repos_only_when_asked(self):
+        with tempfile.TemporaryDirectory() as d:
+            b = Backend(Path(d) / "repos.toml")
+            try:
+                from couriercollie.config import TrackedRepo
+
+                b._config.repos.append(TrackedRepo(id="github.com/a/b", name="B", url="https://github.com/a/b",
+                                                   host="github"))
+                self.assertNotIn("github.com/a/b", self.body(b.feedbackUrl(False)))
+                self.assertIn("- https://github.com/a/b", self.body(b.feedbackUrl(True)))
+            finally:
+                b.shutdown()
+
+    def test_a_long_list_is_cut_to_fit(self):
+        from couriercollie import feedback
+
+        repos = [f"https://github.com/someone/project-number-{n}" for n in range(500)]
+        url = feedback.issue_url(repos)
+        self.assertLessEqual(len(url), feedback._MAX_URL)
+        body = self.body(url)
+        self.assertIn(repos[0], body)
+        listed = body.count("- https://")
+        self.assertIn(f"- …and {500 - listed} more", body)
+
+    def test_distro_from_os_release(self):
+        from couriercollie import feedback
+
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "os-release"
+            path.write_text('NAME="Fedora Linux"\nPRETTY_NAME="Fedora Linux 44 (KDE Plasma Desktop Edition)"\n')
+            self.assertEqual(feedback.distro(path), "Fedora Linux 44 (KDE Plasma Desktop Edition)")
+            self.assertEqual(feedback.distro(Path(d) / "missing"), "Linux")
