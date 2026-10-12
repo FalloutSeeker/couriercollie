@@ -78,8 +78,8 @@ Details:
   - **Approved once:** the command and the clone's files it names are shown first. If an update changes them, the
     step doesn't run until approved again.
   - **Run inside the app,** its output shown live, ending in Applied or Failed (with the exit code). Nothing can be
-    typed in: a step that needs elevation (it asks for a password) stops, and gives its command to run in your own terminal
-    (Copy Command). A password is never typed into couriercollie.
+    typed in: a step that needs elevation stops, and gives its command to run in your own terminal (Copy Command).
+    A password is never typed into couriercollie.
   - **A reminder** while an update made here isn't applied (no step, or it failed); Mark as Applied clears it.
 - **A clone on another branch than the one followed:** the page explains it, and offers to follow the clone's branch
   instead of an Update that would refuse.
