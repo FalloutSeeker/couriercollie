@@ -21,7 +21,8 @@ The choices behind couriercollie, and why. Numbered so the code can point to the
 ## D4. Nothing installs on its own
 
 - Updates only happen when you click Update. So the app never shows a password prompt you didn't ask for.
-- A clone is only pulled. Running a project's install script is a separate button, and the script is shown first.
+- A clone is only pulled. Running a project's install script, or rebuilding its containers, is a separate button,
+  and what runs is shown first. A README's update steps are quoted, never followed.
 
 ## D5. One check schedule, quiet notifications
 

@@ -99,17 +99,19 @@ Kirigami.ScrollablePage {
         id: scriptDialog
 
         property string name
+        property string heading
         property string error
 
-        function show(name) {
+        function show(name, heading) {
             scriptDialog.name = name;
+            scriptDialog.heading = heading || `Run ${name}?`;
             error = "";
             scriptText.text = backend.scriptText(page.repoId, name);
             open();
         }
 
         objectName: "scriptDialog"
-        title: `Run ${name}?`
+        title: heading
         padding: Kirigami.Units.largeSpacing
         preferredWidth: Kirigami.Units.gridUnit * 40
         standardButtons: Kirigami.Dialog.NoButton
@@ -579,6 +581,101 @@ Kirigami.ScrollablePage {
             }
         }
 
+        // ---- Applying the update (a clone): pulling only changes the files (applying.py) --------------------------
+
+        ColumnLayout {
+            objectName: "applying"
+            Layout.fillWidth: true
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 34
+            Layout.topMargin: Kirigami.Units.gridUnit
+            visible: page.ready && ((page.details.applyReminder || "") !== "" || (page.details.applySteps || "") !== ""
+                                    || (page.details.applyActions || []).length > 0)
+            spacing: Kirigami.Units.smallSpacing
+
+            Kirigami.Heading {
+                level: 3
+                text: "Applying the Update"
+            }
+
+            // An update made here that a running program doesn't use yet.
+            Kirigami.InlineMessage {
+                objectName: "applyReminder"
+                Layout.fillWidth: true
+                visible: (page.details.applyReminder || "") !== ""
+                type: Kirigami.MessageType.Information
+                text: page.details.applyReminder || ""
+                actions: [
+                    Kirigami.Action {
+                        text: "Mark as Applied"
+                        icon.name: "dialog-ok-apply"
+                        onTriggered: backend.markApplied(page.repoId)
+                    }
+                ]
+            }
+
+            // The project's own steps, quoted: read, never followed by the app.
+            QQC2.Label {
+                Layout.fillWidth: true
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                visible: (page.details.applySteps || "") !== ""
+                text: (page.details.readmeUrl || "") !== ""
+                      ? `The project\u2019s README says (<a href="${page.details.readmeUrl}">open it</a>):`
+                      : "The project\u2019s README says:"
+                textFormat: Text.StyledText
+                opacity: 0.7
+                onLinkActivated: link => Qt.openUrlExternally(link)
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                visible: (page.details.applySteps || "") !== ""
+                implicitHeight: steps.implicitHeight + Kirigami.Units.largeSpacing * 2
+                radius: Kirigami.Units.cornerRadius
+                color: Kirigami.ColorUtils.tintWithAlpha(Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.05)
+                border.width: 1
+                border.color: Kirigami.ColorUtils.tintWithAlpha(Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.15)
+
+                QQC2.Label {
+                    id: steps
+
+                    objectName: "applySteps"
+                    anchors.fill: parent
+                    anchors.margins: Kirigami.Units.largeSpacing
+                    text: page.details.applySteps || ""
+                    textFormat: Text.MarkdownText
+                    wrapMode: Text.Wrap
+                    onLinkActivated: link => Qt.openUrlExternally(link)
+                }
+            }
+
+            // What the app can run for you: shown first, then run in a terminal you can watch (D6). Never on its own.
+            Flow {
+                Layout.fillWidth: true
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                visible: (page.details.applyActions || []).length > 0
+                spacing: Kirigami.Units.smallSpacing
+
+                Repeater {
+                    model: page.details.applyActions || []
+
+                    delegate: QQC2.Button {
+                        required property var modelData
+
+                        objectName: "showScript:" + modelData.name
+                        text: modelData.label
+                        highlighted: (page.details.applyReminder || "") !== ""
+                        icon.name: modelData.name === ":compose" ? "view-refresh" : "run-build"
+                        onClicked: scriptDialog.show(modelData.name, modelData.title)
+                    }
+                }
+            }
+
+            Hint {
+                visible: (page.details.applyActions || []).length > 0
+                text: "Update only changes the clone\u2019s files. These aren\u2019t run by it: each is shown first, then runs in a terminal window."
+            }
+        }
+
         // ---- Tracking: what's followed, and where the repo came from ------------------------------------------------
 
         // Only once the page has loaded: what it says depends on the project's releases and branches.
@@ -698,57 +795,6 @@ Kirigami.ScrollablePage {
                     font: Kirigami.Theme.smallFont
                     wrapMode: page.repo.scanned ? Text.WrapAnywhere : Text.Wrap
                     opacity: 0.7
-                }
-            }
-
-            QQC2.Label {
-                Layout.alignment: Qt.AlignTop
-                Layout.topMargin: Kirigami.Units.smallSpacing
-                visible: !page.managed && (page.details.installScripts || []).length > 0
-                text: "Install script"
-                opacity: 0.7
-            }
-
-            // Never run on its own, or after an update: shown first, then run in a terminal you can watch (D6).
-            ColumnLayout {
-                Layout.fillWidth: true
-                visible: !page.managed && (page.details.installScripts || []).length > 0
-                spacing: Kirigami.Units.smallSpacing
-
-                Flow {
-                    Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
-
-                    Repeater {
-                        model: page.details.installScripts || []
-
-                        delegate: QQC2.Button {
-                            required property string modelData
-
-                            objectName: "showScript:" + modelData
-                            // What it's for now: first install, an update to install, or running it again.
-                            text: page.details.scriptRun === "older" ? `Install the Update: Run ${modelData}\u2026`
-                                : page.details.scriptRun === "current" ? `Run ${modelData} Again\u2026`
-                                : `Show and Run ${modelData}\u2026`
-                            highlighted: page.details.scriptRun === "older"
-                            icon.name: "run-build"
-                            onClicked: scriptDialog.show(modelData)
-                        }
-                    }
-                }
-
-                QQC2.Label {
-                    objectName: "scriptRunAt"
-                    Layout.fillWidth: true
-                    visible: (page.details.scriptRun || "") !== ""
-                    text: page.details.scriptRun === "older"
-                          ? `Last run from here at ${page.details.scriptRunAt}; the clone has changed since, so the update may need installing.`
-                          : `Last run from here at ${page.details.scriptRunAt}, the version you have.`
-                    wrapMode: Text.Wrap
-                }
-
-                Hint {
-                    text: "The project\u2019s own installer. It isn\u2019t run by Update; you read it first, then it runs in a terminal window."
                 }
             }
         }

@@ -9,14 +9,19 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import shlex
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QProcess, Slot
 
-from . import assets, checker, config, flatpaks, icons, packages, sources, updater
+from . import applying, assets, checker, config, flatpaks, icons, packages, sources, updater
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, TrackedRepo
 from .sources import RepoRef
+
+# Not a script: rebuilding and restarting a clone's running containers (applying.compose_command), offered beside its
+# install scripts and run the same way.
+COMPOSE = ":compose"
 
 if TYPE_CHECKING:
     from .backend import Details
@@ -146,22 +151,23 @@ class Updating:
         def done(result, error):
             self._updating.discard(repo_id)
             repo = self._config.find(repo_id)
-            scripts = " If the project needs installing again, run its install script (under Tracking)." \
-                if (d := self._details.get(repo_id)) and d.install_scripts else ""
             if repo and error:
                 self._update_notes[repo_id] = ("error", self._error_text(error))
             elif repo and by_branch:
                 _before, after, count = result
                 self._pulled(repo, branch, after)
-                self._update_notes[repo_id] = ("done", ("Already up to date." if not count else "Pulled 1 new commit."
-                                                        if count == 1 else f"Pulled {count} new commits.") + scripts)
+                self._update_notes[repo_id] = ("done", "Already up to date." if not count else "Pulled 1 new commit."
+                                               if count == 1 else f"Pulled {count} new commits.")
+                if count:
+                    self._updated_here(repo)
             elif repo:
                 _before, left = result
                 repo.installed = tag
                 self._version_changed(repo)
                 self._changed(repo_id)
                 back = f" Your branch {left} is unchanged; git switch {left} goes back to it." if left else ""
-                self._update_notes[repo_id] = ("done", f"Now at {tag}.{back}{scripts}")
+                self._update_notes[repo_id] = ("done", f"Now at {tag}.{back}")
+                self._updated_here(repo)
             self.reposChanged.emit()
             self.detailsChanged.emit(repo_id)
             if repo and error:
@@ -212,8 +218,8 @@ class Updating:
                 self._changed(repo_id)
                 where = updater.shown(folder)
                 what = f"Cloned {ref} into {where}." if by_branch else f"Cloned {project.name} at {ref} into {where}."
-                self._update_notes[repo_id] = ("done", what + (" To install it, run its install script (under "
-                                                               "Tracking)." if scripts else ""))
+                self._update_notes[repo_id] = ("done", what + (" To install it, see Applying the Update, below."
+                                                               if scripts else ""))
             self.reposChanged.emit()
             self.detailsChanged.emit(repo_id)
             if repo and error:
@@ -320,6 +326,30 @@ class Updating:
 
         self._run(work, done)
 
+    def _updated_here(self, repo: TrackedRepo):
+        """The clone was just updated here: until that's applied, its page says a running program doesn't use it yet,
+        and its containers (if any) are looked for again."""
+        repo.updated_to = repo.installed
+        self._changed(repo.id)
+        if (d := self._details.get(repo.id)) and repo.local_path:
+            path = repo.local_path
+            self._run(lambda: (applying.running_compose(path), applying.readme_steps(path)),
+                      lambda found, error: self._found_how_to_apply(repo.id, found) if not error else None)
+
+    def _found_how_to_apply(self, repo_id: str, found):
+        from .backend import _without_images
+
+        if d := self._details.get(repo_id):
+            d.compose, d.readme_steps = found[0], _without_images(found[1])
+            self.detailsChanged.emit(repo_id)
+
+    @Slot(str)
+    def markApplied(self, repo_id):
+        """The update is applied (by hand, or by the project's own updater): the reminder goes."""
+        if (repo := self._config.find(repo_id)) and repo.script_run_at != repo.installed:
+            repo.script_run_at = repo.installed
+            self._changed(repo_id)
+
     def _pulled(self, repo: TrackedRepo, branch: str, head: str):
         """After a pull, the clone is at the branch's newest commit (as just fetched): your version, the page and the
         list's result all say so, without asking the site."""
@@ -347,8 +377,17 @@ class Updating:
 
     @Slot(str, str, result=str)
     def scriptText(self, repo_id, name):
-        """An install script's text, to read before running it; or why it can't be shown."""
+        """An install script's text, or the command that rebuilds the clone's containers (COMPOSE), to read before
+        running it; or why it can't be shown."""
         repo = self._config.find(repo_id)
+        if name == COMPOSE:
+            d = self._details.get(repo_id)
+            if not repo or not d or not d.compose:
+                return "# No containers from this folder are running."
+            c = d.compose
+            return (f"# Rebuilds {', '.join(c.services)} ({c.project}) from the updated files and restarts them, with "
+                    f"the compose\n# files they were started with. Their data in volumes is kept.\n\n"
+                    + shlex.join(applying.compose_command(c)) + "\n")
         try:
             return updater.script_text(repo.local_path if repo else "", name)
         except (updater.UpdateError, OSError) as e:
@@ -362,7 +401,13 @@ class Updating:
         if not repo or not _can_update(repo):
             return "This repo has no clone on this computer to run a script in."
         try:
-            program, args = updater.terminal_command(repo.local_path, name)
+            if name == COMPOSE:
+                # Looked for again: the containers may have changed since the page loaded.
+                if not (compose := applying.running_compose(repo.local_path)):
+                    return "No containers from this folder are running any more."
+                program, args = updater.terminal_for(repo.local_path, applying.compose_command(compose))
+            else:
+                program, args = updater.terminal_command(repo.local_path, name)
         except updater.UpdateError as e:
             return str(e)
         started, _pid = QProcess.startDetached(program, args, repo.local_path)

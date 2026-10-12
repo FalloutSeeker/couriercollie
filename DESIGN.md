@@ -70,9 +70,16 @@ Details:
   - **Found on every check**, and on opening the page, so a repo never opened is covered too.
   - **Matched by homepage, never by name.** KDE's and GNOME's GitHub mirrors count as the same project as their own
     sites (github.com/KDE/dolphin is invent.kde.org/system/dolphin).
-- **Install script:** a clone's `install.sh` / `install` / `setup.sh` gets a button. The button reads "Show and Run"
-  (never run from here), "Run Again" (run at this version) or "Install the Update" (run before the clone changed).
-  The script is always shown first, then runs in a terminal.
+- **Applying the Update** (a clone): Update only changes the clone's files; a running program uses them once it's
+  restarted, rebuilt or installed again, and how is up to each project. So the page shows:
+  - **A reminder** after an update made here, until it's applied (an action below run, or Mark as Applied).
+  - **The README's update steps,** quoted: the section under a heading about updating, or a paragraph starting "To
+    update". Never followed by the app: a README is written for people, and a command guessed from it could do
+    anything.
+  - **What can be run:** install, setup and update scripts (top folder or `scripts/`), and **Rebuild and Restart
+    Containers** when containers from the clone's compose files are running (the same project, files and services,
+    from Compose's labels: `podman-compose` or `docker compose … up -d --build`). Each is shown first, then runs in
+    a terminal.
 - **A clone on another branch than the one followed:** the page explains it, and offers to follow the clone's branch
   instead of an Update that would refuse.
 

@@ -100,8 +100,9 @@ h.run([
     h.until(lambda: not details()["updating"], 30000),
     (500, lambda: h.check("pulled to the newest commit", git("rev-parse", "HEAD", cwd=clone) == newest)),
     (0, lambda: h.check("your version follows", b._config.find(ID).installed == newest)),
-    (0, lambda: h.check("says what it did", details()["updateNote"].startswith("Pulled 2 new commits. If the project"),
-                        details()["updateNote"])),
+    (0, lambda: h.check("says what it did", details()["updateNote"] == "Pulled 2 new commits.", details()["updateNote"])),
+    (0, lambda: h.check("…and that a running program needs it applied", h.find("applyReminder") is not None)),
+    (0, lambda: h.check("…with the install script offered there", h.find("showScript:install.sh") is not None)),
     (0, lambda: h.check("now up to date", details()["statusKind"] == "current")),
     (0, lambda: h.check("Update gone from page and list", h.find("updateNow") is None
                         and h.find("updateButton:" + ID) is None)),
@@ -121,8 +122,8 @@ h.run([
     (0, lambda: h.click("text:Run in Terminal")),
     h.until(lambda: (clone / "installed.txt").exists(), 10000),
     (300, lambda: h.check("Run in Terminal runs it, in the clone's folder", (clone / "installed.txt").exists())),
-    (300, lambda: h.check("…and the button then offers to run it again",
-                          h.find("text:Run install.sh Again\u2026") is not None)),
+    (300, lambda: h.check("…and then the update counts as applied", h.find("applyReminder") is None
+                          and details()["applyReminder"] == "")),
     (0, lambda: h.shot("update-clone-2b-script-ran")),
     # From the list, an update that's refused (the clone was switched to another branch) opens the page to say why.
     (0, lambda: (git("switch", "-q", "-c", "mine", cwd=clone), git("reset", "-q", "--hard", start, cwd=clone))),

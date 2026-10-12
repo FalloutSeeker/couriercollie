@@ -287,19 +287,28 @@ class UpdateClickedTest(UpstreamCase):
         self.assertEqual(self.backend._checks.results[self.id].status, self.checker.UP_TO_DATE)
         self.assertFalse(self.backend.repo(self.id)["updateAvailable"])
 
-    def test_the_install_script_remembers_the_version_it_was_last_run_at(self):
+    def test_an_update_made_here_is_a_reminder_until_applied(self):
+        # Pulling only changes the files: a running program uses them once restarted, rebuilt or installed again.
         (self.clone / "install.sh").write_text("echo hi\n")
         self.backend._details[self.id].install_scripts = ["install.sh"]
         saved = updater.terminal_command
         updater.terminal_command = lambda path, name: ("/bin/true", [])  # instead of a terminal window
         self.addCleanup(setattr, updater, "terminal_command", saved)
-        self.assertEqual(self.backend.details(self.id)["scriptRun"], "")  # never: "Show and Run"
-        self.assertEqual(self.backend.runInstallScript(self.id, "install.sh"), "")
         d = self.backend.details(self.id)
-        self.assertEqual((d["scriptRun"], d["scriptRunAt"]), ("current", f"commit {self.start[:7]}"))  # "Run Again"
-        self.assertEqual(self.config.load(self.path).repos[0].script_run_at, self.start)  # kept
+        self.assertEqual((d["applyReminder"], [a["name"] for a in d["applyActions"]]), ("", ["install.sh"]))
         self.backend.updateRepo(self.id)
-        self.assertEqual(self.backend.details(self.id)["scriptRun"], "older")  # "Install the Update"
+        self.assertTrue(self.backend.details(self.id)["applyReminder"].startswith(
+            f"Updated here to commit {self.newest[:7]}. If it\u2019s running, it uses the update only once"))
+        self.assertEqual(self.config.load(self.path).repos[0].updated_to, self.newest)  # kept
+        self.assertEqual(self.backend.runInstallScript(self.id, "install.sh"), "")  # applied: the reminder goes
+        self.assertEqual(self.backend.details(self.id)["applyReminder"], "")
+        self.assertEqual(self.config.load(self.path).repos[0].script_run_at, self.newest)
+
+    def test_mark_as_applied(self):
+        self.backend.updateRepo(self.id)
+        self.assertNotEqual(self.backend.details(self.id)["applyReminder"], "")
+        self.backend.markApplied(self.id)  # done by hand, or by the project's own updater
+        self.assertEqual(self.backend.details(self.id)["applyReminder"], "")
 
     def test_refresh_or_a_check_clears_the_note(self):
         from couriercollie import sources
@@ -405,8 +414,7 @@ class CloneTest(UpstreamCase):
         backend.updateRepo(self.id)
         d = backend.details(self.id)
         folder = Path(os.environ["COURIERCOLLIE_CLONES"]) / "project"
-        self.assertEqual(d["updateNote"], f"Cloned main into {folder}. To install it, run its install script (under "
-                                          "Tracking).")
+        self.assertEqual(d["updateNote"], f"Cloned main into {folder}. To install it, see Applying the Update, below.")
         self.assertEqual(d["statusKind"], "current")
         self.assertEqual(d["installScripts"], ["install.sh"])
         self.assertFalse(d["installClones"])

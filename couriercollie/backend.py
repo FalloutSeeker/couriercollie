@@ -18,10 +18,11 @@ from PySide6.QtCore import Property, QFileSystemWatcher, QObject, QProcess, Qt, 
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
-from . import assets, checker, config, flatpaks, github_login, icons, integration, packages, scan, sources, updater
+from . import (applying, assets, checker, config, flatpaks, github_login, icons, integration, packages, scan, sources,
+               updater)
 from .account import Account
-from .updating import (Updating, _can_clone, _can_update, _head, _is_appimage, _is_clone, _is_flatpak, _is_package,
-                       _is_program, _needs_password, _new_copy, _newest_version)
+from .updating import (COMPOSE, Updating, _can_clone, _can_update, _head, _is_appimage, _is_clone, _is_flatpak,
+                       _is_package, _is_program, _needs_password, _new_copy, _newest_version)
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, Config, ConfigError, TrackedRepo
 from .sources import RepoRef, SourceError
 
@@ -68,6 +69,9 @@ class Details:
     branch_on_disk: str = ""
     # A scanned clone's install scripts (updater.install_scripts), offered to run by hand.
     install_scripts: list[str] = field(default_factory=list)
+    # Applying a clone's update (applying.py): its README's update steps, and its running containers.
+    readme_steps: str = ""
+    compose: applying.Compose | None = None
     # The project is also installed from a repository the package manager or Flatpak updates (_managed_elsewhere):
     # the page's note, and that installed version.
     managed_elsewhere: str = ""
@@ -1149,13 +1153,16 @@ class Backend(QObject, Updating, Account):
             yours = on_disk[0] if on_disk and on_disk[0] else installed
             head = next((b.sha for b in branches if b.name == (branch or default)), "")
             comparison = _compare(ref, host, yours, head) if follow == FOLLOW_BRANCH else None
-            scripts = updater.install_scripts(local_path) if scanned and (Path(local_path) / ".git").exists() else []
+            clone = scanned and (Path(local_path) / ".git").exists()
+            scripts = updater.install_scripts(local_path) if clone else []
+            steps = _without_images(applying.readme_steps(local_path)) if clone else ""
+            compose = applying.running_compose(local_path) if clone else None
             note, managed_by, managed_version = _managed_elsewhere(addresses)
             return on_disk, managed_by, Details(managed_elsewhere=note, managed_version=managed_version,
                 state="ready", releases=rels, more_releases=len(rels) == PAGE_RELEASES, default_branch=default,
                 branches=branches, branch_error=branch_error, comparison=comparison, commits_base=yours,
                 commits_head=head, local_missing=bool(on_disk) and not on_disk[1], branch_on_disk=branch_on_disk,
-                install_scripts=scripts)
+                install_scripts=scripts, readme_steps=steps, compose=compose)
 
         def done(result, error):
             if not self._config.find(repo_id):
@@ -1328,18 +1335,33 @@ class Backend(QObject, Updating, Account):
             "updateNoteKind": self._update_notes.get(repo_id, ("", ""))[0],
             "updateNote": self._update_notes.get(repo_id, ("", ""))[1],
             "installScripts": d.install_scripts,
+            **self._applying(repo, d),
             "managedElsewhere": d.managed_elsewhere,
-            # Whether you've started an install script from here: "" never, "current" at the version you have now,
-            # "older" before the clone last changed (its update may need installing).
-            "scriptRun": "" if not repo or not repo.script_run_at
-                         else "current" if repo.script_run_at == repo.installed else "older",
-            "scriptRunAt": _version_text(repo.script_run_at) if repo else "",
             "branches": [
                 {"name": b.name, "sha": b.sha[:7], "isDefault": b.name == d.default_branch,
                  "selected": b.name == current_branch}
                 for b in d.branches
             ],
         }
+
+    @staticmethod
+    def _applying(repo: TrackedRepo | None, d: Details) -> dict:
+        """The page's "Applying the Update" box, for a clone (applying.py): a reminder while an update made here
+        isn't applied, the README's update steps, and what can be run: install scripts, rebuilding its containers."""
+        if not repo or repo.managed_by or not _is_clone(repo):
+            return {"applyReminder": "", "applySteps": "", "applyActions": [], "readmeUrl": ""}
+        actions = [{"name": n, "label": f"Show and Run {n}\u2026", "title": f"Run {n}?"} for n in d.install_scripts]
+        if d.compose:
+            actions.append({"name": COMPOSE, "label": "Rebuild and Restart Containers\u2026",
+                            "title": "Rebuild and restart its containers?"})
+        reminder = ""
+        if repo.updated_to and repo.updated_to == repo.installed and repo.script_run_at != repo.installed:
+            reminder = (f"Updated here to {_version_text(repo.installed)}. If it\u2019s running, it uses the update "
+                        "only once it\u2019s restarted, rebuilt or installed again"
+                        + (": see below." if actions or d.readme_steps else "."))
+        readme = applying.readme_path(repo.local_path) if d.readme_steps else None
+        return {"applyReminder": reminder, "applySteps": d.readme_steps, "applyActions": actions,
+                "readmeUrl": readme.as_uri() if readme else ""}
 
     @staticmethod
     def _current_comparison(repo: TrackedRepo, d: Details) -> sources.Comparison | None:

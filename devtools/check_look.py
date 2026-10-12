@@ -45,6 +45,8 @@ clone = work / "aerothemeplasma"
 clone.mkdir()
 git("init", "-q", "-b", "main", cwd=clone)
 (clone / "install.sh").write_text("#!/bin/sh\n# Copies the theme's files into place.\ncp -r plasma ~/.local/share/\n")
+(clone / "README.md").write_text("# AeroThemePlasma\n\nA theme.\n\n## Updating\n\nPull the newest commits, then run "
+                                 "`install.sh` again and log out and back in.\n\n## License\n\nGPL\n")
 git("add", ".", cwd=clone)
 git("commit", "-q", "-m", "first", cwd=clone)
 git("remote", "add", "origin", "https://gitgud.io/aeroshell/atp/aerothemeplasma.git", cwd=clone)
@@ -142,6 +144,12 @@ sources.compare = lambda ref, host, yours, head: sources.Comparison(sources.BEHI
     sources.Commit("7" * 40, "Update translations"),
     sources.Commit("6" * 40, "Make the start menu open faster")])
 account.password_store = lambda: "KDE Wallet"
+# Its containers, as if running (applying.py asks podman or docker on a real computer).
+from couriercollie import applying  # noqa: E402
+
+applying.running_compose = lambda path: applying.Compose(["podman-compose"], "aerothemeplasma",
+                                                         [f"{path}/docker-compose.yml"], ["app"]) \
+    if Path(path).name == "aerothemeplasma" else None
 # Not this computer's package manager: only Dolphin is "installed with dnf".
 backend_module._managed_elsewhere = lambda ids: (("Your package manager keeps this up to date.", "dnf", "26.08.1")
                                                  if "github.com/KDE/dolphin" in ids else ("", "", ""))
@@ -218,6 +226,9 @@ h.run([
     *page("gitgud.io/aeroshell/atp/aerothemeplasma", "5-clone-behind"),
     (0, lambda: h.click("showScript:install.sh")),
     (600, shot("5b-script")),
+    (0, lambda: h.call("scriptDialog", "close")),
+    (300, lambda: h.click("showScript::compose")),
+    (600, shot("5c-rebuild")),
     (0, lambda: h.call("scriptDialog", "close")),
     *page("github.com/ImranR98/Obtainium", "6-versions-only"),
     *page("github.com/KDE/dolphin", "6b-package-manager"),

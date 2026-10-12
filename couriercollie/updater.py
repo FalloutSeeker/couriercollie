@@ -43,8 +43,10 @@ ROOT = ["/usr/bin/pkexec"]
 # same name in a folder you can write to (~/.local/bin, say) must never be the one run.
 SYSTEM_PATH = "/usr/sbin:/usr/bin:/sbin:/bin"
 GIT_AS_ROOT = "/usr/bin/git"
-# Names an install script goes by, in the clone's top folder. "uninstall.sh" and the like are left out on purpose.
-INSTALL_SCRIPTS = ("install.sh", "install", "setup.sh")
+# Names an install, setup or update script goes by, in the clone's top folder or scripts/. "uninstall.sh" and the like
+# are left out on purpose.
+INSTALL_SCRIPTS = ("install.sh", "install", "setup.sh", "update.sh",
+                   "scripts/install.sh", "scripts/install", "scripts/setup.sh", "scripts/update.sh")
 # Scripts bigger than this aren't shown (or offered): something that large isn't a script to read before running.
 SCRIPT_MAX_BYTES = 256 * 1024
 
@@ -243,7 +245,8 @@ def checkout_release(path: str, tag: str, repo_ids: list[str]) -> tuple[str, str
 
 
 def install_scripts(path: str) -> list[str]:
-    """Install scripts in the clone's top folder, by name."""
+    """Install, setup and update scripts in the clone's top folder or its scripts/ folder, by name ("setup.sh",
+    "scripts/setup.sh")."""
     folder = Path(path)
     return [n for n in INSTALL_SCRIPTS
             if (folder / n).is_file() and (folder / n).stat().st_size <= SCRIPT_MAX_BYTES]
@@ -256,15 +259,17 @@ def script_text(path: str, name: str) -> str:
     return (Path(path) / name).read_text(encoding="utf-8", errors="replace")
 
 
-def _interpreter(script: Path) -> list[str]:
-    """How to run the script: itself if it may be run, else what its first line names, else sh."""
+def _interpreter(script: Path, name: str = "") -> list[str]:
+    """How to run the script (`name`: its path from the clone's folder, where it's run from): itself if it may be
+    run, else what its first line names, else sh."""
+    relative = f"./{name or script.name}"
     if os.access(script, os.X_OK):
-        return [f"./{script.name}"]
+        return [relative]
     with script.open("rb") as f:
         first = f.readline().decode("utf-8", "replace").strip()
     if first.startswith("#!") and (words := shlex.split(first[2:])):
-        return [*words, f"./{script.name}"]
-    return ["sh", f"./{script.name}"]
+        return [*words, relative]
+    return ["sh", relative]
 
 
 def terminal_command(path: str, name: str) -> tuple[str, list[str]]:
@@ -272,7 +277,11 @@ def terminal_command(path: str, name: str) -> tuple[str, list[str]]:
     finishes so its output can be read."""
     if name not in install_scripts(path):
         raise UpdateError(f"There’s no {name} in {path}.")
-    run = _interpreter(Path(path) / name)
+    return terminal_for(path, _interpreter(Path(path) / name, name))
+
+
+def terminal_for(path: str, run: list[str]) -> tuple[str, list[str]]:
+    """(program, arguments) that run a command in a terminal window, from `path`, kept open after it finishes."""
     if konsole := shutil.which("konsole"):
         return konsole, ["--workdir", path, "--hold", "-e", *run]
     if xdg := shutil.which("xdg-terminal-exec"):

@@ -80,9 +80,13 @@ class TrackedRepo:
     category: str = ""
     # For a release archive with several programs in it: the one to run (its file name). Empty: worked out.
     program: str = ""
-    # For a clone: your version (as `installed`) when you last started its install script from the app. Empty if
-    # never. The app can't see whether the script worked, only that it was started.
+    # For a clone: your version (as `installed`) when an update was last applied: a script or a rebuild started from
+    # "Applying the Update", or Mark as Applied. Empty if never. The app can't see whether it worked, only that it
+    # was started. (Named for when only install scripts were offered.)
     script_run_at: str = ""
+    # For a clone: the version couriercollie last updated it to (pulled, or moved to a release's tag). Until it's
+    # applied (script_run_at), the page reminds you that a running program doesn't use it yet (applying.py).
+    updated_to: str = ""
     # What installed it, when that's something that keeps it up to date ("dnf", "Flatpak"): found when its page
     # loads and on every check, so nothing here updates it (checker.installed_with).
     managed_by: str = ""
