@@ -712,7 +712,7 @@ Kirigami.ScrollablePage {
             QQC2.Label {
                 Layout.fillWidth: true
                 visible: !afterUpdating.hasStep || afterUpdating.editing
-                text: "What should run after each update? For example, rebuild it or run its install script."
+                text: "What should run after each update is downloaded?"
                 wrapMode: Text.Wrap
                 opacity: 0.8
             }
@@ -873,11 +873,11 @@ Kirigami.ScrollablePage {
                 }
             }
 
-            // The project's own steps, quoted to help choose: read, never followed by the app.
+            // The project's own steps, quoted to help choose (so only while choosing): read, never followed by the app.
             QQC2.Label {
                 Layout.fillWidth: true
                 Layout.topMargin: Kirigami.Units.smallSpacing
-                visible: (page.details.applySteps || "") !== ""
+                visible: (page.details.applySteps || "") !== "" && (!afterUpdating.hasStep || afterUpdating.editing)
                 text: (page.details.readmeUrl || "") !== ""
                       ? `The project\u2019s README says (<a href="${page.details.readmeUrl}">open it</a>):`
                       : "The project\u2019s README says:"
@@ -888,7 +888,7 @@ Kirigami.ScrollablePage {
 
             Rectangle {
                 Layout.fillWidth: true
-                visible: (page.details.applySteps || "") !== ""
+                visible: (page.details.applySteps || "") !== "" && (!afterUpdating.hasStep || afterUpdating.editing)
                 implicitHeight: steps.implicitHeight + Kirigami.Units.largeSpacing * 2
                 radius: Kirigami.Units.cornerRadius
                 color: Kirigami.ColorUtils.tintWithAlpha(Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.05)
