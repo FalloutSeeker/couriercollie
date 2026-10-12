@@ -398,6 +398,39 @@ Kirigami.ScrollablePage {
                 Qt.callLater(backend.moveCategory, what.category, where.before);
         }
 
+        // From the keyboard: Tab comes into the list, Up and Down go from repo to repo (past the headings), Enter
+        // opens one.
+        function step(by) {
+            let i = currentIndex;
+            do
+                i += by;
+            while (i >= 0 && i < model.length && model[i].kind !== "repo");
+            if (i >= 0 && i < model.length) {
+                currentIndex = i;
+                positionViewAtIndex(i, ListView.Contain);
+            }
+        }
+
+        function openCurrent() {
+            const r = model[currentIndex];
+            if (r && r.kind === "repo")
+                applicationWindow().openRepo(r.id);
+        }
+
+        activeFocusOnTab: true
+        keyNavigationEnabled: false  // step(), so headings are passed over
+        currentIndex: -1
+        // Tabbed into (the list itself, not a field in it, like a category's name being changed): on a repo.
+        onActiveFocusChanged: {
+            if (activeFocus && Window.activeFocusItem === list
+                    && (currentIndex < 0 || (model[currentIndex] || {}).kind !== "repo"))
+                step(1);
+        }
+        Keys.onUpPressed: step(-1)
+        Keys.onDownPressed: step(1)
+        Keys.onReturnPressed: openCurrent()
+        Keys.onEnterPressed: openCurrent()
+
         model: backend.rows
         // The rows are rebuilt when the list changes (e.g. a check finishes), which drops a drag in progress.
         onModelChanged: dragged = drop = picture = null
@@ -532,6 +565,7 @@ Kirigami.ScrollablePage {
 
                         QQC2.ToolButton {
                             objectName: "categoryMenu:" + row.modelData.category
+                            focusPolicy: Qt.NoFocus  // the list takes the keyboard (Up, Down, Enter), not its buttons
                             visible: row.modelData.category !== "" && !heading.editing
                             icon.name: "overflow-menu"
                             text: "Rename or Delete"
@@ -573,7 +607,10 @@ Kirigami.ScrollablePage {
 
                 QQC2.ItemDelegate {
                     objectName: "repo:" + row.modelData.id
+                    focusPolicy: Qt.NoFocus
+                    // The open repo; and, from the keyboard, the one Enter would open.
                     highlighted: applicationWindow().currentRepoId === row.modelData.id
+                                 || (list.activeFocus && row.ListView.isCurrentItem)
                     topPadding: Kirigami.Units.largeSpacing
                     bottomPadding: Kirigami.Units.largeSpacing
                     onClicked: applicationWindow().openRepo(row.modelData.id)
@@ -644,6 +681,7 @@ Kirigami.ScrollablePage {
                             // Repos Update can handle: the icon is the Update button (DECISIONS.md, D4).
                             QQC2.ToolButton {
                                 objectName: "updateButton:" + row.modelData.id
+                                focusPolicy: Qt.NoFocus
                                 visible: row.modelData.updateAvailable && row.modelData.canUpdate
                                          && !row.modelData.updating
                                 icon.name: "update-low"
