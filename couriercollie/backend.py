@@ -325,6 +325,8 @@ class Backend(QObject, Updating, Account):
         self._init_updates()
         self._unsupported_hosts: set[str] = set()  # sites a scan found the app can't talk to, while it's open
         self._desktop = desktop
+        # Whether the desktop shows tray icons (set by the app, tray.py): "keep running in the tray" needs one.
+        self.tray_available = False
         self._icons_pending: set[str] = set()
         self._path = config_path
         self._config_error = ""
@@ -364,6 +366,7 @@ class Backend(QObject, Updating, Account):
         self._watcher.directoryChanged.connect(self._reload_checks)
         if self._desktop and not self._config_error:
             integration.set_background_checks(self._config.settings.auto_check)
+            integration.set_start_at_login(self._config.settings.start_at_login)  # rewritten if couriercollie moved
             self._update_badge()
 
     def shutdown(self):
@@ -833,6 +836,10 @@ class Backend(QObject, Updating, Account):
             ],
             "scanFoldersAreDefault": s.scan_folders == config.DEFAULT_SCAN_FOLDERS,
             "scanFoldersText": _join_folders(s.scan_folders),
+            "startAtLogin": s.start_at_login,
+            "keepInTray": s.keep_in_tray,
+            "trayAvailable": self.tray_available,
+            "areDefault": self._defaults() == s,
         }
 
     @Property("QVariantMap", notify=githubChanged)
@@ -857,18 +864,41 @@ class Backend(QObject, Updating, Account):
         outside the offered choices are ignored."""
         s = self._config.settings
         bools = {"firstLaunchDone": "first_launch_done", "autoCheck": "auto_check", "toasts": "toasts",
-                 "scanning": "scanning"}
-        auto_before = s.auto_check
+                 "scanning": "scanning", "startAtLogin": "start_at_login", "keepInTray": "keep_in_tray"}
+        auto_before, login_before = s.auto_check, s.start_at_login
         for key, attr in bools.items():
             if isinstance(changes.get(key), bool):
                 setattr(s, attr, changes[key])
         if self._desktop and s.auto_check != auto_before:
             integration.set_background_checks(s.auto_check)
+        if self._desktop and s.start_at_login != login_before:
+            integration.set_start_at_login(s.start_at_login)
         if (hours := _whole_number(changes.get("checkIntervalHours"))) in config.CHECK_INTERVALS_HOURS:
             s.check_interval_hours = hours
         self._save()
         self.settingsChanged.emit()
         self.checksChanged.emit()  # "next check" depends on these
+
+    def _defaults(self) -> config.Settings:
+        """The settings as on a fresh start, with the welcome screen's answers (automatic checks on, daily), and what
+        isn't a setting kept: the GitHub sign-in, and how icons were looked up."""
+        s = self._config.settings
+        return config.Settings(first_launch_done=True, auto_check=True, github_login=s.github_login,
+                               github_user=s.github_user, icon_lookup=s.icon_lookup)
+
+    @Slot()
+    def restoreDefaults(self):
+        """Settings back to a fresh start (asked first, in Settings). Tracked repos and categories are kept."""
+        before, self._config.settings = self._config.settings, self._defaults()
+        s = self._config.settings
+        if self._desktop:
+            if s.auto_check != before.auto_check:
+                integration.set_background_checks(s.auto_check)
+            if s.start_at_login != before.start_at_login:
+                integration.set_start_at_login(s.start_at_login)
+        self._save()
+        self.settingsChanged.emit()
+        self.checksChanged.emit()
 
     @Slot(str)
     def addScanFolder(self, folder):

@@ -55,6 +55,42 @@ Kirigami.ScrollablePage {
             opacity: 0.7
         }
 
+        // ---- Startup and tray ----
+
+        Kirigami.Separator {
+            Kirigami.FormData.isSection: true
+            Kirigami.FormData.label: "Startup and Tray"
+        }
+
+        QQC2.Switch {
+            objectName: "startAtLogin"
+            Kirigami.FormData.label: "Start at login:"
+            text: "Open couriercollie when you log in"
+            checked: page.s.startAtLogin
+            onToggled: backend.updateSettings({ startAtLogin: checked })
+        }
+
+        QQC2.Switch {
+            objectName: "keepInTray"
+            Kirigami.FormData.label: "Tray:"
+            // Can always be turned off; on only where the desktop shows tray icons.
+            enabled: page.s.trayAvailable || page.s.keepInTray
+            text: "Keep running in the tray when the window is closed"
+            checked: page.s.keepInTray
+            onToggled: backend.updateSettings({ keepInTray: checked })
+        }
+
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 24
+            text: !page.s.trayAvailable
+                ? "Your desktop doesn’t show tray icons. On GNOME, the AppIndicator extension adds them."
+                : page.s.keepInTray
+                ? "The tray icon shows the number of updates. Quit from its menu." + (page.s.startAtLogin ? " At login, couriercollie starts in the tray." : "")
+                : "Neither is needed for automatic checks, which run with couriercollie closed."
+            wrapMode: Text.Wrap
+            opacity: 0.7
+        }
+
         // ---- GitHub account (DESIGN.md §8) ----
 
         Kirigami.Separator {
@@ -177,6 +213,45 @@ Kirigami.ScrollablePage {
             wrapMode: Text.Wrap
             opacity: 0.7
         }
+
+        // ---- Back to a fresh start ----
+
+        Kirigami.Separator {
+            Kirigami.FormData.isSection: true
+        }
+
+        QQC2.Button {
+            objectName: "restoreDefaults"
+            enabled: !page.s.areDefault
+            text: "Restore to Defaults…"
+            icon.name: "edit-reset"
+            onClicked: restoreDialog.open()
+        }
+    }
+
+    Kirigami.PromptDialog {
+        id: restoreDialog
+
+        objectName: "restoreDefaultsDialog"
+        // Over the Settings window, where it was asked for (a page is first made in the main window, then moved).
+        parent: page.QQC2.Overlay.overlay
+        preferredWidth: Kirigami.Units.gridUnit * 22
+        title: "Restore to defaults?"
+        subtitle: "Settings go back to how they start: automatic checks daily, scanning off and the default folders, no start at login or tray. Your tracked repos, categories and GitHub sign-in are kept."
+        standardButtons: Kirigami.Dialog.NoButton
+        customFooterActions: [
+            Kirigami.Action {
+                text: "Restore Defaults"
+                icon.name: "edit-reset"
+                onTriggered: restoreDialog.accept()
+            },
+            Kirigami.Action {
+                text: "Cancel"
+                icon.name: "dialog-cancel"
+                onTriggered: restoreDialog.reject()
+            }
+        ]
+        onAccepted: backend.restoreDefaults()
     }
 
     FolderDialog {

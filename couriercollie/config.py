@@ -41,6 +41,10 @@ class Settings:
     github_user: str = ""
     # Which way repo icons were looked up (icons.py). Raised when that changes, so saved icons are looked up again.
     icon_lookup: int = 0
+    # Open when you log in (an autostart entry, integration.set_start_at_login); in the tray if keep_in_tray is on.
+    start_at_login: bool = False
+    # Closing the window leaves couriercollie running in the tray (tray.py), rather than quitting.
+    keep_in_tray: bool = False
 
 
 @dataclass

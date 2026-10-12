@@ -100,11 +100,15 @@ def main() -> int:
         args.remove("--reset")
     if "--check" in args:
         return check(if_due="--if-due" in args)
+    # Started by the autostart entry (Start at login): into the tray if it's kept there, else with its window.
+    at_login = "--at-login" in args
+    if at_login:
+        args.remove("--at-login")
 
     from . import integration
 
-    # Already open: bring that window to the front instead of opening a second one.
-    if integration.tell_running_app("show"):
+    # Already open: bring that window to the front instead of opening a second one. (At login, leave it be.)
+    if integration.tell_running_app("ping" if at_login else "show"):
         return 0
     integration.install_menu_entry()
 
@@ -114,9 +118,10 @@ def main() -> int:
     from PySide6.QtGui import QIcon
     from PySide6.QtNetwork import QLocalServer
     from PySide6.QtQml import QQmlApplicationEngine
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
     from .backend import Backend
+    from .tray import Tray
 
     app = QApplication([sys.argv[0], *args])
     app.setApplicationName("couriercollie")
@@ -129,11 +134,16 @@ def main() -> int:
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     backend = Backend(find_icons=True, desktop=True)
+    backend.tray_available = QSystemTrayIcon.isSystemTrayAvailable()
+    in_tray = backend.tray_available and backend.settings["keepInTray"]
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("backend", backend)
+    # At login with the tray on: the window stays closed until opened from the tray.
+    engine.rootContext().setContextProperty("startHidden", at_login and in_tray)
     engine.load(QUrl.fromLocalFile(str(QML_DIR / "Main.qml")))
     if not engine.rootObjects():
         return 1
+    tray = Tray(app, backend, engine.rootObjects()[0])  # noqa: F841 - lives as long as the app
 
     # Listen for a second launch ("show") and the background checker ("check").
     server = QLocalServer()

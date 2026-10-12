@@ -86,6 +86,25 @@ class TimerTest(TempHome):
         self.assertIn(("disable", "--now", "couriercollie-check.timer"), calls)
 
 
+class StartAtLoginTest(TempHome):
+    def test_on_and_off(self):
+        self.assertTrue(integration.set_start_at_login(True))
+        entry = integration.autostart_path()
+        self.assertEqual(entry, self.root / "config/autostart/couriercollie.desktop")
+        text = entry.read_text()
+        self.assertIn(f"Exec={integration.LAUNCHER} --at-login\n", text)
+        # If couriercollie is uninstalled, the desktop skips the entry rather than failing at every login.
+        self.assertIn(f"TryExec={integration.LAUNCHER}\n", text)
+        self.assertTrue(integration.set_start_at_login(False))
+        self.assertFalse(entry.exists())
+
+    def test_a_folder_name_with_a_space(self):
+        self.assertEqual(integration._exec_arg("/usr/bin/couriercollie"), "/usr/bin/couriercollie")
+        self.assertEqual(integration._exec_arg("/home/u/my apps/run.sh"), '"/home/u/my apps/run.sh"')
+        # Inside quotes " ` $ \ get a backslash, % doubles, and the line doubles every backslash once more.
+        self.assertEqual(integration._exec_arg('/a"b$c%d/run.sh'), '"/a\\\\"b\\\\$c%%d/run.sh"')
+
+
 class CleanupAfterUninstallTest(TempHome):
     """Before each check, the timer looks for couriercollie. Gone (the package removed, or its project folder
     deleted): the timer turns itself off and removes its files and a project folder's menu entry. Runs the unit's own
@@ -103,6 +122,7 @@ class CleanupAfterUninstallTest(TempHome):
         stamp = self.root / "data/systemd/timers/stamp-couriercollie-check.timer"  # systemd's, after a first run
         stamp.parent.mkdir(parents=True, exist_ok=True)
         stamp.touch()
+        integration.set_start_at_login(True)
         service = (self.root / "config/systemd/user/couriercollie-check.service").read_text()
         line = next(l for l in service.splitlines() if l.startswith("ExecCondition="))
         # systemd's quoting, as far as this line uses it: "$$" is "$", "%%" is "%".
@@ -128,7 +148,8 @@ class CleanupAfterUninstallTest(TempHome):
     def test_gone_the_timer_removes_itself(self):
         folder = self.root / "my project $HOME 100%"
         self.assertEqual(self.run_condition(folder / "run.sh"), 1)  # skipped quietly, not failed
-        self.assertEqual([l for l in self.leftovers() if "systemd" in l or "applications" in l or "icons" in l], [])
+        self.assertEqual([l for l in self.leftovers()
+                          if "systemd" in l or "applications" in l or "icons" in l or "autostart" in l], [])
         log = (self.root / "systemctl.log").read_text()
         self.assertIn("--user disable --now couriercollie-check.timer", log)
         self.assertIn("--user daemon-reload", log)

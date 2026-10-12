@@ -38,15 +38,27 @@ def menu_entry_path() -> Path:
     return _data_home() / "applications" / f"{APP_ID}.desktop"
 
 
+def _exec_arg(value: str | Path) -> str:
+    """A path as the program on a menu entry's Exec line: quoted if it needs to be (a folder name with a space, say),
+    as the Desktop Entry spec says."""
+    text = str(value)
+    if not any(c in text for c in ' \t"\'\\><~|&;$*?#()`%'):
+        return text
+    quoted = "".join("\\" + c if c in '"`$\\' else c for c in text).replace("%", "%%")
+    return '"' + quoted.replace("\\", "\\\\") + '"'  # and the line's own escaping of backslashes
+
+
 def menu_entry_text(launcher: str | Path = LAUNCHER) -> str:
-    """The menu entry. The RPM installs the same one (data/couriercollie.desktop), started as `couriercollie`."""
+    """The menu entry. The RPM installs the same one (data/couriercollie.desktop), started as `couriercollie`.
+    TryExec: a desktop hides the entry if couriercollie is gone (its project folder deleted, say)."""
     return (
         "[Desktop Entry]\n"
         "Type=Application\n"
         "Name=couriercollie\n"
         "GenericName=Update Tracker\n"
         "Comment=Keep track of software from GitHub and GitLab, and hear about updates\n"
-        f"Exec={launcher}\n"
+        f"Exec={_exec_arg(launcher)}\n"
+        f"TryExec={launcher}\n"
         f"Icon={ICON}\n"
         "Terminal=false\n"
         "Categories=System;Utility;\n"
@@ -78,6 +90,46 @@ def install_menu_entry() -> bool:
             return False
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
+    except OSError:
+        return False
+    return True
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Start at login: an autostart entry (the XDG way, which KDE, GNOME and others all follow)
+
+
+def autostart_path() -> Path:
+    return _config_home() / "autostart" / f"{APP_ID}.desktop"
+
+
+def autostart_text(launcher: str | Path = LAUNCHER) -> str:
+    """Started with --at-login: in the tray if "keep running in the tray" is on, else with its window (app.main).
+    TryExec: if couriercollie is uninstalled, the desktop skips the entry instead of failing at every login."""
+    return (
+        "[Desktop Entry]\n"
+        "Type=Application\n"
+        "Name=couriercollie\n"
+        "Comment=Keep track of software from GitHub and GitLab, and hear about updates\n"
+        f"Exec={_exec_arg(launcher)} --at-login\n"
+        f"TryExec={launcher}\n"
+        f"Icon={ICON}\n"
+        "Terminal=false\n"
+        "NoDisplay=true\n"
+        "X-GNOME-Autostart-enabled=true\n"
+    )
+
+
+def set_start_at_login(on: bool) -> bool:
+    """Write the autostart entry (or rewrite it, if couriercollie moved), or remove it. Returns False if the file
+    couldn't be written."""
+    path = autostart_path()
+    try:
+        if not on:
+            path.unlink(missing_ok=True)
+        elif not path.is_file() or path.read_text(encoding="utf-8") != autostart_text():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(autostart_text(), encoding="utf-8")
     except OSError:
         return False
     return True
@@ -176,7 +228,7 @@ def unit_texts() -> dict[str, str]:
     checker then only checks if the chosen interval has passed since the last check (checker.due), so the interval
     is counted from the last check, and a missed check happens soon after the next login."""
     # The menu entry and icon only if couriercollie wrote them (run from a project folder): a package removes its own.
-    leftovers = (_stamp_path(),) if INSTALLED else (_stamp_path(), menu_entry_path(), icon_path())
+    leftovers = (_stamp_path(), autostart_path()) + (() if INSTALLED else (menu_entry_path(), icon_path()))
     cleanup = " ".join(_unit_arg(a) for a in (LAUNCHER, _unit_dir(), *leftovers))
     return {
         f"{TIMER}.service": (

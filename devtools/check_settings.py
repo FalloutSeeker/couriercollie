@@ -1,5 +1,6 @@
 """Check the welcome screen's scanning text and the Settings window's folder list: defaults marked, removing a
-folder, folders a scan would skip, Reset Scan Folders. No network.
+folder, folders a scan would skip, Reset Scan Folders; then Start at login, the tray, and Restore to Defaults.
+No network, and nothing written outside a temporary folder.
 
     python3 -I devtools/check_settings.py
 """
@@ -48,4 +49,15 @@ h.run([
         (200, lambda: h.click("restoreFolders", h.window("Settings"))),
         (300, lambda: h.check("restored again", folders() == ["~", "/opt", "/usr/local", "/srv"])),
     )],
+    # Start at login and the tray (as on a desktop with a tray); then Restore to Defaults, which asks first.
+    (0, lambda: setattr(b, "tray_available", True) or b.settingsChanged.emit()),
+    (200, lambda: h.click("startAtLogin", h.window("Settings"))),
+    (200, lambda: h.click("keepInTray", h.window("Settings"))),
+    (300, lambda: h.check("start at login and tray on", b.settings["startAtLogin"] and b.settings["keepInTray"])),
+    (0, lambda: h.shot("settings-3-tray", h.window("Settings"))),
+    (0, lambda: h.click("restoreDefaults", h.window("Settings"))),
+    (500, lambda: h.shot("settings-4-restore", h.window("Settings"))),
+    (0, lambda: h.shot("settings-4-restore-main")),
+    (0, lambda: h.call("restoreDefaultsDialog", "accept")),
+    (300, lambda: h.check("restored to defaults", b.settings["areDefault"] and not b.settings["keepInTray"])),
 ])

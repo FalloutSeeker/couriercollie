@@ -48,6 +48,8 @@ Kirigami.ApplicationWindow {
     }
 
     title: "couriercollie"
+    // Started at login with the tray on (app.py): the tray icon opens it.
+    visible: typeof startHidden === "undefined" || !startHidden
     width: Kirigami.Units.gridUnit * 56
     height: Kirigami.Units.gridUnit * 38
     minimumWidth: Kirigami.Units.gridUnit * 22

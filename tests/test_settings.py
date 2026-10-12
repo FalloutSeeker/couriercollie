@@ -30,6 +30,28 @@ class SettingsTest(unittest.TestCase):
         # A fresh start reads them back, so the first-launch screen doesn't come back.
         self.assertTrue(Backend(self.path).settings["firstLaunchDone"])
 
+    def test_restore_to_defaults_keeps_repos_categories_and_sign_in(self):
+        from couriercollie.config import TrackedRepo
+
+        b = self.backend
+        b._config.repos.append(TrackedRepo(id="github.com/a/b", name="B", url="", host="github", category="Tools"))
+        b._config.categories.append("Tools")
+        b._config.settings.github_login, b._config.settings.github_user = "app", "someone"
+        b.updateSettings({"firstLaunchDone": True, "autoCheck": False, "checkIntervalHours": 672, "toasts": False,
+                          "scanning": True, "startAtLogin": True, "keepInTray": True})
+        b.removeScanFolder("/srv")
+        self.assertFalse(b.settings["areDefault"])
+        b.restoreDefaults()
+        s = config.load(self.path)
+        # As the welcome screen leaves them: checks on, daily; no welcome screen again.
+        self.assertEqual((s.settings.first_launch_done, s.settings.auto_check, s.settings.check_interval_hours,
+                          s.settings.toasts, s.settings.scanning, s.settings.start_at_login, s.settings.keep_in_tray),
+                         (True, True, 24, True, False, False, False))
+        self.assertEqual(s.settings.scan_folders, config.DEFAULT_SCAN_FOLDERS)
+        self.assertEqual((s.settings.github_login, s.settings.github_user), ("app", "someone"))
+        self.assertEqual(([r.id for r in s.repos], s.categories), (["github.com/a/b"], ["Tools"]))
+        self.assertTrue(b.settings["areDefault"])
+
     def test_numbers_from_the_window_may_be_floats(self):
         self.backend.updateSettings({"checkIntervalHours": 168.0})
         self.assertEqual(self.backend.settings["checkIntervalHours"], 168)

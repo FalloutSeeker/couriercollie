@@ -4,6 +4,7 @@ Name=couriercollie
 GenericName=Update Tracker
 Comment=Keep track of software from GitHub and GitLab, and hear about updates
 Exec=couriercollie
+TryExec=couriercollie
 Icon=couriercollie
 Terminal=false
 Categories=System;Utility;

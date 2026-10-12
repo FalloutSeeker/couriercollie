@@ -64,7 +64,8 @@ Kirigami is KDE's toolkit for app windows: one library, not the rest of KDE.
 2. **Open it** and pick your file (the AppImage, archive or package you use), or a branch to follow.
 3. **Update** when the list says there's a new version.
 
-Settings has how often to check (or never), notifications, scan folders and GitHub sign-in.
+Settings has how often to check (or never), notifications, start at login, the tray, scan folders and GitHub
+sign-in.
 
 ## Good to know
 

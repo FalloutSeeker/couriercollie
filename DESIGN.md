@@ -165,8 +165,15 @@ One screen, everything changeable later in Settings:
 All global; nothing per repo.
 
 - **Checking for Updates:** automatic checks and how often; notifications.
+- **Startup and Tray:**
+  - **Start at login** (off): an autostart entry. With the tray on, it starts in the tray.
+  - **Keep running in the tray** (off): closing the window leaves couriercollie in the tray, which shows the number of
+    updates, with Open, Check Now and Quit. Only where the desktop shows tray icons (GNOME needs the AppIndicator
+    extension). Neither is needed for automatic checks.
 - **GitHub Account (optional):** sign in or out.
 - **Finding Installed Repos:** scanning on/off and the scan folders.
+- **Restore to Defaults…** (asks first): settings as the welcome screen leaves them. Tracked repos, categories and
+  the GitHub sign-in are kept.
 
 ## 8. Signing in to GitHub
 
