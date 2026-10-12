@@ -322,6 +322,30 @@ class ManagedElsewhereTest(unittest.TestCase):
         self.assertIsNone(flatpaks.managed_by_flatpak(["github.com/e/bundle"]))  # Flatpak never updates a bundle
 
 
+class ThirtyTwoBitTest(unittest.TestCase):
+    def test_32_bit_builds_arent_this_64_bit_pcs(self):
+        # lazygit ships "linux_x86_64" and "linux_32-bit": only the first is for a 64-bit PC.
+        for name in ("lazygit_0.66.1_linux_32-bit.tar.gz", "app-linux32.tar.gz", "app-linux-x86.tar.gz",
+                     "app_linux_32bit.AppImage"):
+            info = assets.classify(name, machine="x86_64")
+            self.assertEqual((info.suits, info.note), (False, "for 32-bit processors"), name)
+        for name in ("lazygit_0.66.1_linux_x86_64.tar.gz", "app-x86-64.AppImage", "app-linux-64bit.tar.gz"):
+            self.assertTrue(assets.classify(name, machine="x86_64").suits, name)
+        self.assertFalse(assets.classify("app-linux-64bit.tar.gz", machine="aarch64").suits)
+
+    def test_arm_and_files_that_arent_programs(self):
+        # delta and eza: "arm-unknown-linux-gnueabihf" is an ARM build; eza's completions and manual pages aren't programs.
+        self.assertFalse(assets.classify("delta-0.20.1-arm-unknown-linux-gnueabihf.tar.gz", machine="x86_64").suits)
+        self.assertTrue(assets.classify("delta-0.20.1-x86_64-unknown-linux-musl.tar.gz", machine="x86_64").suits)
+        self.assertTrue(assets.classify("pharmacy-tool-1.0-x86_64.tar.gz", machine="x86_64").suits)  # "arm" in a word
+        for name in ("completions-0.23.5.tar.gz", "man-0.23.5.tar.gz", "manpages.tar.gz", "docs.zip", "source.tar.gz",
+                     "shell-completions.tar.gz", "glab_1.122.0_source.tar.gz", "wezterm-20240203-110809-src.tar.gz",
+                     "nvim-linux-x86_64.appimage.zsync"):
+            info = assets.classify(name, machine="x86_64")
+            self.assertEqual((info.suits, info.build), (False, False), name)
+        self.assertTrue(assets.classify("mandoc-1.0-linux-x86_64.tar.gz", machine="x86_64").suits)  # not "man-…"
+
+
 class VersionEdgeCasesTest(unittest.TestCase):
     def test_tags_without_numbers_are_only_themselves(self):
         self.assertTrue(assets.same_version("v1.2.3", "1.2.3"))
@@ -343,6 +367,12 @@ class VersionEdgeCasesTest(unittest.TestCase):
         arch = assets.pattern_for("bottom-0.10.2-1-x86_64.pkg.tar.zst", "0.10.2")
         self.assertTrue(assets.matches(arch, "bottom-0.11.0-2-x86_64.pkg.tar.zst"))
         self.assertFalse(assets.matches(arch, "bottom-0.11.0-2-aarch64.pkg.tar.zst"))
+
+    def test_a_package_writes_a_dash_another_way(self):
+        # WezTerm's RPM is version "20240203_110809_5046fc22" of the tag "20240203-110809-5046fc22".
+        self.assertTrue(assets.same_version("20240203-110809-5046fc22", "20240203_110809_5046fc22"))
+        self.assertTrue(assets.same_version("v2.0-rc1", "2.0~rc1"))
+        self.assertFalse(assets.same_version("20240203-110809-5046fc22", "20240204_110809_5046fc22"))
 
     def test_trailing_zeros_dont_make_a_new_version(self):
         # A package says "1.2" where the project's tag says "v1.2.0": the same version, not an update forever.

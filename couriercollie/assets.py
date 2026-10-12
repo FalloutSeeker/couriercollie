@@ -28,7 +28,11 @@ _FOREIGN_EXT = {
     ".deb": "Debian/Ubuntu", ".exe": "Windows", ".msi": "Windows", ".msix": "Windows", ".dmg": "macOS",
     ".pkg": "macOS", ".apk": "Android", ".aab": "Android", ".ipa": "iOS",
 }
-_NOT_SOFTWARE = (".sha256", ".sha512", ".sha256sum", ".sha512sum", ".sig", ".asc", ".minisig", ".pem", ".sbom",
+# Archives beside a release's programs that hold none: eza's "completions-0.23.5.tar.gz" and "man-0.23.5.tar.gz", and
+# source code anywhere in the name (glab's "glab_1.122.0_source.tar.gz", WezTerm's "…-src.tar.gz").
+_NOT_A_PROGRAM = re.compile(r"(?:shell-)?(?:completions?|man|manpages?|docs?|vendor)(?![a-z])|"
+                            r".*(?<![a-z])(?:source|src|sources)(?![a-z])", re.I)
+_NOT_SOFTWARE = (".zsync", ".sha256", ".sha512", ".sha256sum", ".sha512sum", ".sig", ".asc", ".minisig", ".pem", ".sbom",
                  ".json", ".txt", ".md5", ".spdx", ".intoto.jsonl", ".idsig", ".cert", ".crt", ".pub")
 # Whole words only, so "studios" isn't read as "iOS".
 _FOREIGN_OS = re.compile(
@@ -38,12 +42,17 @@ _FOREIGN_OS = re.compile(
 _WINDOWS_HINT = re.compile(r"(?<![a-z])setup(?![a-z])|\.scr(?![a-z])", re.I)
 
 _ARCH_WORDS = {
-    "x86_64": ("x86_64", "x86-64", "amd64", "x64", "linux64"),
+    "x86_64": ("x86_64", "x86-64", "amd64", "x64", "linux64", "64bit", "64-bit"),
     "aarch64": ("aarch64", "arm64", "arm-64", "armv8"),
 }
+# A bare "x86", "32-bit" or "linux32" is the 32-bit PC build (lazygit's "linux_32-bit").
 _ANY_ARCH = re.compile(r"(x86_64|x86-64|amd64|x64|aarch64|arm64|arm-64|armv7|armhf|armel|armv6|arm32|i386|i586|i686|"
                        r"386|riscv64|riscv32|powerpc64le|powerpc64|powerpc|ppc64le|ppc64|ppc|s390x|loongarch64|"
-                       r"loong64|mips64el|mips64|mipsel|mips|sparc64)", re.I)
+                       r"loong64|mips64el|mips64|mipsel|mips|sparc64|32-bit|32bit|linux32|x86(?![_-]?64)|64-bit|64bit|"
+                       r"(?<![a-z])arm(?![a-z0-9]))", re.I)
+# How a processor is said in the "for … processors" note.
+_ARCH_SAID = {"32-bit": "32-bit", "32bit": "32-bit", "linux32": "32-bit", "x86": "32-bit", "64bit": "64-bit PC",
+              "64-bit": "64-bit PC"}
 
 
 # Package managers on this computer: which package files can be installed here (packages.py). Looked up once, as
@@ -100,6 +109,8 @@ def _kind_of(lower: str) -> "str | AssetInfo":
         return AssetInfo(KIND_OTHER, False, "for Windows")
     if lower.endswith(_NOT_SOFTWARE):
         return AssetInfo(KIND_OTHER, False, "checksum or signature", build=False)
+    if _NOT_A_PROGRAM.match(lower):
+        return AssetInfo(KIND_OTHER, False, "documentation, completions or source", build=False)
     if lower.endswith(".src.rpm"):
         return AssetInfo(KIND_OTHER, False, "source package", build=False)
     if lower.endswith(".appimage"):
@@ -133,7 +144,7 @@ def _classify_name(lower: str, machine: str) -> AssetInfo:
     if any(w in lower for w in own):
         return AssetInfo(kind, True, "")
     if m := _ANY_ARCH.search(lower):
-        return AssetInfo(kind, False, f"for {m.group(1)} processors")
+        return AssetInfo(kind, False, f"for {_ARCH_SAID.get(m.group(1), m.group(1))} processors")
     # No processor mentioned: usually fine for RPMs ("noarch") and AppImages with a single build. A file of unknown
     # type only counts if it says it's for Linux.
     return AssetInfo(kind, kind != KIND_FILE or "linux" in lower, "")
@@ -168,7 +179,8 @@ def same_version(a: str, b: str) -> bool:
     """Whether two versions are the same: "v1.2.3" and "1.2.3" are, and so are "1.2" and "1.2.0" (a package's
     version and the project's tag often differ like that). Tags without a number ("nightly", "stable") are only the
     same as themselves."""
-    va, vb = version_of(a), version_of(b)
+    # A package may say "-" another way: RPM versions can't have it ("20240203_110809" for the tag "20240203-110809").
+    va, vb = (re.sub(r"[-_~]", ".", version_of(v)) for v in (a, b))
     if a == b or (va and va == vb):
         return True
     return _numbers(va) is not None and _numbers(va) == _numbers(vb)

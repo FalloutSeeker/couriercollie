@@ -217,8 +217,7 @@ def _match_tag(repo: TrackedRepo, d: Details) -> bool:
     tags = [r.tag for r in d.releases]
     if repo.installed in tags:
         return False
-    version = assets.version_of(repo.installed)
-    tag = next((t for t in tags if version and assets.version_of(t) == version), None)
+    tag = next((t for t in tags if assets.version_of(repo.installed) and assets.same_version(t, repo.installed)), None)
     if tag:
         repo.installed = tag
     return bool(tag)
@@ -1550,6 +1549,7 @@ class Backend(QObject, Updating, Account):
         if repo and version and version != repo.installed:
             repo.installed = version
             self._version_changed(repo)
+            self._check_from_page(repo)  # never checked yet: the list says it from the page, as the page does
             self._changed(repo_id)
             if repo.follow == FOLLOW_BRANCH:
                 self._refresh_whats_new(repo_id)  # compare the new version with the branch

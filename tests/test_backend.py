@@ -400,6 +400,13 @@ class BackendTest(unittest.TestCase):
             self.backend.setInstalled(LOCALSEND, "-")
             self.assertTrue(self.backend.details(LOCALSEND)["installClones"], files)
 
+    def test_your_version_set_before_any_check_shows_in_the_list(self):
+        # Added a moment ago, never checked: the page knows the newest, so the list says so too.
+        self.backend._checks.results.pop(LOCALSEND, None)
+        self.backend.setInstalled(LOCALSEND, "v1.0.0")
+        self.assertEqual(self.backend.repo(LOCALSEND)["checkText"],
+                         f"Update available: {self.backend.details(LOCALSEND)['newestText']}")
+
     def test_rename(self):
         b = self.backend
         self.assertEqual(b.renameRepo(LOCALSEND, "  My   File Sharer \n"), "")
