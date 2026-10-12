@@ -582,7 +582,10 @@ Kirigami.ScrollablePage {
                         objectName: "updateNow"
                         visible: page.canUpdate
                         highlighted: true
-                        text: (page.installing ? "Install" : "Update") + (page.details.updateNeedsPassword ? "\u2026" : "")
+                        // What it really does: a project with nothing to install gets its source code (Inkscape's
+                        // releases have no files: a user expecting the app shouldn't get a clone unawares).
+                        text: (page.details.installClones ? "Clone Source Code" : page.installing ? "Install" : "Update")
+                              + (page.details.updateNeedsPassword ? "\u2026" : "")
                         icon.name: page.installing ? "download" : "system-software-update"
                         onClicked: backend.updateRepo(page.repoId)
                     }
@@ -1135,7 +1138,7 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 Layout.maximumWidth: Kirigami.Units.gridUnit * 30
                 text: "None of this project’s files run on this computer, so only its versions are tracked."
-                      + (page.details.installClones ? " Install, above, clones its source code at the newest release instead." : "")
+                      + (page.details.installClones ? " Clone Source Code, above, gets its source code at the newest release instead." : "")
                 wrapMode: Text.Wrap
                 opacity: 0.8
             }

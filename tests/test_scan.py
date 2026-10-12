@@ -45,6 +45,14 @@ class MergeTest(unittest.TestCase):
         self.assertEqual(repo.name, "Aero")  # the name you gave it stays
         self.assertTrue(repo.installed.startswith("e4cca91"))  # the version on disk wins
 
+    def test_a_clone_following_releases_stays_so_when_found_again(self):
+        # Installed at a release's tag (Inkscape: INKSCAPE_1_4): a later scan used to switch it to following master.
+        tracked = self.manual_aero(source="scanned", local_path="/home/me/aero/aerothemeplasma")
+        tracked.follow, tracked.installed = "releases", "v6.7.0"
+        cfg = Config(repos=[tracked])
+        scan.merge(cfg, [aero_clone(AERO_NEW)])
+        self.assertEqual((cfg.repos[0].follow, cfg.repos[0].installed), ("releases", "v6.7.0"))
+
     def test_clone_under_an_old_address_matches_a_remembered_alias(self):
         # Added by hand as the old address; the site redirected, so the old one was kept as an alias.
         cfg = Config(repos=[self.manual_aero(aliases=[AERO_OLD])])

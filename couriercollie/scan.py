@@ -425,10 +425,12 @@ def merge(config: Config, found: list[Found], resolve: Callable[[str], str | Non
 
 
 def _apply(repo: TrackedRepo, item: Found) -> None:
-    """What's on disk wins over what was set by hand: it's the version you actually have."""
+    """What's on disk wins over what was set by hand: it's the version you actually have. A clone already tracked
+    there that follows releases (moved to each release's tag) stays that way: found again by a scan, it's the same."""
+    by_release = repo.kind == assets.KIND_GIT and repo.local_path == item.path and repo.follow != FOLLOW_BRANCH
     repo.source = SOURCE_SCANNED
     repo.local_path = item.path
-    if item.kind == assets.KIND_GIT:
+    if item.kind == assets.KIND_GIT and not by_release:
         # A clone's version is a commit, so it's followed by branch.
         repo.follow, repo.kind = FOLLOW_BRANCH, assets.KIND_GIT
         if item.branch:
@@ -437,5 +439,5 @@ def _apply(repo: TrackedRepo, item: Found) -> None:
         # Follow the same file as the one on disk, e.g. "App-*-x86_64.AppImage".
         repo.asset_pattern = assets.pattern_for(Path(item.path).name, item.version)
         repo.kind = assets.KIND_APPIMAGE
-    if item.version:
+    if item.version and not by_release:  # (its version is the release's tag, read from disk when its page loads)
         repo.installed = item.version

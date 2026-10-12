@@ -56,8 +56,8 @@ def details():
 h.run([
     (0, lambda: h.win.openRepo(ID)),
     h.until(lambda: details()["state"] == "ready"),
-    (500, lambda: h.check("not installed: Install offered", h.find("updateNow") is not None
-                          and h.win.findChild(QObject, "updateNow").property("text") == "Install")),
+    (500, lambda: h.check("not installed: Clone Source Code offered", h.find("updateNow") is not None
+                          and h.win.findChild(QObject, "updateNow").property("text") == "Clone Source Code")),
     (0, lambda: h.check("…saying where it goes", h.find(f"text:Clones the project’s main branch into a folder in "
                                                        f"{clones}.") is not None)),
     (0, lambda: h.shot("install-clone-0")),
