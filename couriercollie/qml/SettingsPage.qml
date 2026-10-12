@@ -240,10 +240,12 @@ Kirigami.ScrollablePage {
 
         Kirigami.Separator {
             Kirigami.FormData.isSection: true
+            Kirigami.FormData.label: "Reset"
         }
 
         QQC2.Button {
             objectName: "restoreDefaults"
+            Kirigami.FormData.label: "All settings:"
             enabled: !page.s.areDefault
             text: "Restore to Defaults…"
             icon.name: "edit-reset"
