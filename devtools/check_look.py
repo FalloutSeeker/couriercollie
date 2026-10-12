@@ -4,7 +4,8 @@ bottom, and signing in. No network: the projects and the sites' answers are made
 
     python3 -I devtools/check_look.py          # in your desktop's theme
     python3 -I devtools/check_look.py dark     # in Breeze Dark
-    python3 -I devtools/check_look.py readme   # the README's screenshot (docs/screenshot.png): real projects only
+
+The README's screenshot is taken from real projects instead: devtools/readme_shot.sh.
 """
 
 import os
@@ -14,12 +15,8 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-README = "readme" in sys.argv[1:]
-DARK = "dark" in sys.argv[1:] or README
+DARK = "dark" in sys.argv[1:]
 work = Path(tempfile.mkdtemp())
-if README:
-    # A home folder of its own, so paths on the screenshot read "~/…", not a temporary folder's.
-    os.environ["HOME"] = str(work / "home")
 if DARK:
     # KDE's style reads its colours from kdeglobals: a copy with Breeze Dark's, in a folder of its own.
     config = work / "config"
@@ -81,8 +78,6 @@ REPOS = [
     ("github.com/example/notes", "Notes", 'follow = "branch"\nbranch = "main"\ninstalled = "-"'),
 ]
 
-if README:  # no made-up projects, nothing broken, and nothing pretending to be installed
-    REPOS = [r for r in REPOS if "/example/" not in r[0] and r[0] != "github.com/KDE/dolphin"]
 settings = work / "repos.toml"
 lines = ['categories = ["Tools"]\n']
 for repo_id, name, extra in REPOS:
@@ -201,19 +196,6 @@ def signing_in():
     github_login.wait = lambda code, cancelled: (cancelled.wait(), (_ for _ in ()).throw(github_login.LoginError("x")))
     b.startSignIn()
 
-
-def readme_shot():
-    h.win.grabWindow().save(str(Path(__file__).resolve().parent.parent / "docs" / "screenshot.png"))
-
-
-if README:
-    sys.exit(h.run([
-        (800, lambda: h.call("firstLaunch", "done")),
-        (300, lambda: h.call("scanDialog", "close")),
-        (0, checked),
-        *page("github.com/localsend/localsend", "readme"),
-        (0, readme_shot),
-    ]))
 
 h.run([
     (800, shot("0-welcome")),

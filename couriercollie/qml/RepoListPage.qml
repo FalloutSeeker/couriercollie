@@ -59,6 +59,7 @@ Kirigami.ScrollablePage {
         icon.name: "list-add"
         text: "Add…"
         shortcut: StandardKey.New
+        displayHint: Kirigami.DisplayHint.KeepVisible  // (as Check Now)
         onTriggered: applicationWindow().showAddDialog()
     }
 
@@ -77,6 +78,8 @@ Kirigami.ScrollablePage {
         icon.name: "system-software-update"
         text: backend.checking ? "Checking\u2026" : "Check Now"
         enabled: !backend.checking
+        // With a repo's page open there's room for few buttons: Add… and this one stay (Scan… goes to the ⋮ menu).
+        displayHint: Kirigami.DisplayHint.KeepVisible
         onTriggered: backend.checkNow()
     }
 
@@ -114,10 +117,6 @@ Kirigami.ScrollablePage {
 
             contentItem: RowLayout {
                 spacing: Kirigami.Units.smallSpacing
-
-                QQC2.Label {
-                    text: "Show:"
-                }
 
                 Repeater {
                     model: [
