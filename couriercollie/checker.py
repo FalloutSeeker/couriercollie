@@ -128,10 +128,12 @@ def installed_with(managed_by: str) -> str:
     return f"Installed with {'Flatpak' if managed_by == 'Flatpak' else 'Package Manager'}"
 
 
-def releases_result(shown: list[sources.Release], yours: str, managed_by: str = "", found: bool = False) -> Result:
+def releases_result(shown: list[sources.Release], yours: str, managed_by: str = "", found: bool = False,
+                    pattern: str = "") -> Result:
     """The result for a repo following releases, from the releases it shows (newest first) and your version.
     `managed_by`: what installed it and keeps it updated ("dnf"), if that's the package manager or Flatpak: then
-    it's never an update here. `found`: a scan found it on this computer, so without a version it's there, unknown."""
+    it's never an update here. `found`: a scan found it on this computer, so without a version it's there, unknown.
+    `pattern`: the file you follow, which the newest release must have for it to be an update you can install."""
     if not shown:
         return Result(NO_RELEASES, "No releases yet")
     newest = shown[0].tag
@@ -143,6 +145,11 @@ def releases_result(shown: list[sources.Release], yours: str, managed_by: str = 
         return Result(NOT_INSTALLED_YET, f"Not installed · newest {newest}", newest)
     if assets.same_version(yours, newest):
         return Result(UP_TO_DATE, "Up to date", newest)
+    if assets.is_newer(yours, newest):  # (the newest release was taken down, or yours came from elsewhere): not older
+        return Result(UP_TO_DATE, f"Up to date (newer than {newest})", newest)
+    if pattern and not assets.pick(pattern, [a.name for a in shown[0].assets]):
+        # The project dropped or renamed your file: nothing to install, so not an update; the page says what to do.
+        return Result(OTHER, f"Your file isn\u2019t in {newest}", newest)
     return Result(UPDATE, f"Update available: {newest}", newest)
 
 
@@ -171,7 +178,7 @@ def branch_result(branch: str, head: str, yours: str, c: sources.Comparison | No
 def _check_releases(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
     rels = sources.newest_releases(ref, repo.host, CHECK_RELEASES, repo.prereleases)
     return releases_result([r for r in rels if repo.prereleases or not r.prerelease], yours, repo.managed_by,
-                           repo.source == SOURCE_SCANNED)
+                           repo.source == SOURCE_SCANNED, repo.asset_pattern)
 
 
 def _check_branch(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:

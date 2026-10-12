@@ -638,7 +638,7 @@ class Backend(QObject, Updating, Account):
             if not shown:
                 return
             new = checker.releases_result(shown, repo.installed, repo.managed_by,
-                                          repo.source == config.SOURCE_SCANNED)
+                                          repo.source == config.SOURCE_SCANNED, repo.asset_pattern)
         old = self._checks.results.get(repo.id)
         if old and (old.status, old.text, old.newest) == (new.status, new.text, new.newest) and not old.not_rechecked:
             return
@@ -1384,6 +1384,12 @@ class Backend(QObject, Updating, Account):
         # Only files that run on this computer can be chosen.
         choices = [f for f in latest["assets"] if f["suits"]] if latest else []
         version = self._version_info(repo, d, shown) if repo and d.state == "ready" else {}
+        # A file was picked, but the newest release doesn't have it (renamed or dropped by the project): nothing to
+        # update to, whatever the versions say. The page says to choose it again.
+        file_missing = bool(pattern) and latest is not None and not latest["hasSelected"]
+        if file_missing and version.get("statusKind") == STATUS_UPDATE:
+            version.update(statusKind=STATUS_PROBLEM, updateAvailable=False, headline="Your file isn\u2019t in the "
+                           "newest release", status=f"{latest['tag']} doesn\u2019t include {pattern}.")
         c = self._current_comparison(repo, d) if repo else None
         behind = c is not None and c.relation == sources.BEHIND
         # A clone on another branch than the one followed: Follow <that branch> is offered instead of Update.
@@ -1410,8 +1416,7 @@ class Backend(QObject, Updating, Account):
             "fileChoices": choices,
             # Nothing in the newest release runs on this computer: tracked by version only.
             "versionOnly": latest is not None and not choices,
-            # A file was picked, but the newest release doesn't have it (renamed or dropped by the project).
-            "yourFileMissing": bool(pattern) and latest is not None and not latest["hasSelected"],
+            "yourFileMissing": file_missing,
             "branchError": d.branch_error,
             "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing and not follow_disk,
             "followDiskBranch": follow_disk,
@@ -1535,6 +1540,10 @@ class Backend(QObject, Updating, Account):
                 f"with the newest, {newest_text}.", STATUS_UPDATE, "Version unknown"
         elif installed == newest or (repo.follow != FOLLOW_BRANCH and assets.same_version(installed, newest)):
             text, status, kind, headline = yours_text, "Up to date", STATUS_CURRENT, "Up to date"
+        elif repo.follow != FOLLOW_BRANCH and assets.is_newer(installed, newest):
+            # Never offered the older one: the newest release may have been taken down, or yours came from elsewhere.
+            text, status, kind, headline = yours_text, f"Yours is newer than the newest release ({newest_text}).", \
+                STATUS_CURRENT, "Up to date"
         elif installed:
             text, status, kind, headline = yours_text, f"{newer_text} (you have {yours_text})", STATUS_UPDATE, \
                 update_headline

@@ -201,6 +201,17 @@ def same_version(a: str, b: str) -> bool:
     return _numbers(va) is not None and _numbers(va) == _numbers(vb)
 
 
+def is_newer(a: str, b: str) -> bool:
+    """Whether version a is newer than b. Only told for versions made of numbers ("1.2.10" is newer than "1.2.9");
+    others (dates with words, commits, "nightly") aren't ordered, so this says no."""
+    def numbers(v):  # "v1.2", "release-1.2", "1.2": yes; "abc1234" (a commit) isn't a version
+        m = re.match(r"(?:[^\d]*[-_. ])?[vV]?(\d[\d.\-_~]*)$", v)
+        return _numbers(re.sub(r"[-_~]", ".", m.group(1))) if m else None
+
+    na, nb = numbers(a), numbers(b)
+    return na is not None and nb is not None and na > nb
+
+
 # What "*" in a pattern matches: a version number. Starts with a digit; may contain dashes only before another
 # number or a pre-release word, so "1.2.0", "2024-01-05" and "2.0-rc1" match, but "CLI-1.2" or "1.2-debuginfo" don't.
 _VERSION = r"\d[0-9A-Za-z.+~_]*(?:-(?:\d|rc|beta|alpha|pre)[0-9A-Za-z.+~_]*)*"

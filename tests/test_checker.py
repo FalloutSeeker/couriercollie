@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import tests
-from couriercollie import checker, sources
+from couriercollie import assets, checker, sources
 from couriercollie.config import Settings, TrackedRepo
 from tests.test_scan import make_clone
 
@@ -285,3 +285,23 @@ class StateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NewerOrMissingTest(unittest.TestCase):
+    """Never an older version offered; never an update with nothing to install."""
+
+    def rel(self, tag, *files):
+        return sources.Release(tag, tag, None, False, "", "", [sources.Asset(f, f"https://x/{f}") for f in files])
+
+    def test_yours_newer_than_every_release_is_up_to_date(self):
+        self.assertTrue(assets.is_newer("0.6.2", "v0.6.1") and assets.is_newer("1.2.10", "1.2.9"))
+        self.assertFalse(assets.is_newer("1.2", "1.2.0") or assets.is_newer("nightly", "1.0") or
+                         assets.is_newer("abc1234", "v1.0"))
+        r = checker.releases_result([self.rel("v0.6.1")], "0.6.2")
+        self.assertEqual((r.status, r.text), (checker.UP_TO_DATE, "Up to date (newer than v0.6.1)"))
+
+    def test_newest_release_without_your_file_isnt_an_update(self):
+        shown = [self.rel("v2.0", "tool-2.0.rpm"), self.rel("v1.0", "tool-1.0.deb", "tool-1.0.rpm")]
+        r = checker.releases_result(shown, "v1.0", pattern="tool-*.deb")
+        self.assertEqual((r.status, r.text), (checker.OTHER, "Your file isn’t in v2.0"))
+        self.assertEqual(checker.releases_result(shown, "v1.0", pattern="tool-*.rpm").status, checker.UPDATE)

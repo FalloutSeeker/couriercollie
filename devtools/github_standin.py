@@ -1,7 +1,13 @@
-"""Stands in for GitHub for couriercollie's own project, for devtools/check_self_update.sh: before a release exists,
-it answers the API's questions about FalloutSeeker/couriercollie from a folder of real built packages, one folder per
-release (RELEASES/v0.6.1/…), newest first by version, each file with its SHA-256 as GitHub gives it. Files are
-served from here too. Anything else is "not found".
+"""Stands in for GitHub's API for devtools/check_self_update.sh, for projects whose releases are folders of real
+files here (a release before it exists, or one set up for a test): RELEASES/<owner>__<name>/<tag>/<files>. Releases
+are listed newest first by version, each file with its SHA-256 as GitHub gives it, and the files are served from
+here too. Anything else is "not found". The folders are read on every request, so a test can change them as it goes.
+
+A release folder can also hold markers, to set up what can go wrong:
+    .prerelease   the release is a pre-release (a test version)
+    .nodigest     GitHub gives no checksum for its files (as for releases from before it did)
+    .baddigest    the checksum GitHub gives doesn't match the file
+    .truncate     a download stops halfway (the connection dropped)
 
     python3 github_standin.py RELEASES PORT
 
@@ -16,24 +22,38 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 RELEASES, PORT = Path(sys.argv[1]), int(sys.argv[2])
-PROJECT = "FalloutSeeker/couriercollie"
 BASE = f"http://127.0.0.1:{PORT}"
 
 
-def releases() -> list[dict]:
+def project_folder(owner: str, name: str) -> Path | None:
+    folder = RELEASES / f"{owner}__{name}"
+    return folder if folder.is_dir() else None
+
+
+def releases(owner: str, name: str) -> list[dict]:
     def key(folder):
         return [int(n) for n in re.findall(r"\d+", folder.name)]
 
     listed = []
-    for folder in sorted((f for f in RELEASES.iterdir() if f.is_dir()), key=key, reverse=True):
-        files = sorted(p for p in folder.iterdir() if p.is_file())
+    project = project_folder(owner, name)
+    for folder in sorted((f for f in project.iterdir() if f.is_dir()), key=key, reverse=True):
+        files = sorted(p for p in folder.iterdir() if p.is_file() and not p.name.startswith("."))
+
+        def digest(p):
+            if (folder / ".nodigest").exists():
+                return None
+            if (folder / ".baddigest").exists():
+                return "sha256:" + "0" * 64
+            return "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest()
+
         listed.append({
-            "tag_name": folder.name, "name": folder.name, "draft": False, "prerelease": False,
-            "published_at": "2026-10-12T12:00:00Z", "body": f"couriercollie {folder.name}",
-            "html_url": f"https://github.com/{PROJECT}/releases/tag/{folder.name}",
-            "assets": [{"name": p.name, "size": p.stat().st_size,
-                        "browser_download_url": f"{BASE}/download/{folder.name}/{p.name}",
-                        "digest": "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest()} for p in files],
+            "tag_name": folder.name, "name": folder.name, "draft": False,
+            "prerelease": (folder / ".prerelease").exists(),
+            "published_at": "2026-10-12T12:00:00Z", "body": f"{name} {folder.name}",
+            "html_url": f"https://github.com/{owner}/{name}/releases/tag/{folder.name}",
+            "assets": [{"name": p.name, "size": p.stat().st_size, "digest": digest(p),
+                        "browser_download_url": f"{BASE}/download/{owner}__{name}/{folder.name}/{p.name}"}
+                       for p in files],
         })
     return listed
 
@@ -41,20 +61,24 @@ def releases() -> list[dict]:
 class StandIn(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
-        if path == f"/repos/{PROJECT}":
-            return self.answer({"full_name": PROJECT, "name": "couriercollie", "description": "couriercollie",
-                                "default_branch": "main", "homepage": "", "html_url": f"https://github.com/{PROJECT}",
-                                "owner": {"login": "FalloutSeeker", "type": "User"}})
-        if path == f"/repos/{PROJECT}/releases":
-            return self.answer(releases())
+        if m := re.fullmatch(r"/repos/([^/]+)/([^/]+)", path):
+            if project_folder(*m.groups()):
+                owner, name = m.groups()
+                return self.answer({"full_name": f"{owner}/{name}", "name": name, "description": name,
+                                    "default_branch": "main", "homepage": "",
+                                    "html_url": f"https://github.com/{owner}/{name}",
+                                    "owner": {"login": owner, "type": "User"}})
+        if (m := re.fullmatch(r"/repos/([^/]+)/([^/]+)/releases", path)) and project_folder(*m.groups()):
+            return self.answer(releases(*m.groups()))
         if path.startswith("/download/"):
             file = RELEASES / path.removeprefix("/download/")
-            if file.is_file() and RELEASES in file.resolve().parents:
+            if file.is_file() and RELEASES.resolve() in file.resolve().parents:
                 body = file.read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
-                self.wfile.write(body)
+                cut = (file.parent / ".truncate").exists()
+                self.wfile.write(body[: len(body) // 2] if cut else body)
                 return
         self.answer({"message": "Not Found"}, 404)
 
