@@ -1,8 +1,8 @@
 """What can happen when couriercollie (or another project's package) updates, on one distro, in a container, after
 devtools/self_update_inner.py (devtools/check_self_update.sh). Each situation starts afresh: the version it needs
 installed with the package manager, the stand-in for GitHub (devtools/github_standin.py) serving the releases it
-needs, new settings. The packages are real: couriercollie's, built three times (OLD, MID, NEW), and soft-serve's from
-its GitHub releases (a project none of the distros offers, so the package manager doesn't update it). Prints
+needs, new settings. The packages are real: couriercollie's, built three times (OLD, MID, NEW), and skate's from its
+GitHub releases (a project none of the distros offers, so the package manager doesn't update it). Prints
 PASS/FAIL lines.
 
     python3 self_update_scenarios.py DISTRO OLD MID NEW
@@ -32,7 +32,7 @@ from couriercollie.config import TrackedRepo  # noqa: E402
 
 ALL = Path("/work/releases")  # every release, as built or downloaded
 SERVED = Path("/tmp/releases")  # what the stand-in serves now: set up for each situation
-ME, OTHER = "FalloutSeeker__couriercollie", "charmbracelet__soft-serve"
+ME, OTHER = "FalloutSeeker__couriercollie", "charmbracelet__skate"
 SETTINGS = Path.home() / ".config/couriercollie/repos.toml"
 KIND = {"fedora": assets.KIND_RPM, "opensuse": assets.KIND_RPM, "ubuntu": assets.KIND_DEB,
         "debian": assets.KIND_DEB, "arch": assets.KIND_ARCH}[DISTRO]
@@ -61,9 +61,7 @@ def file_of(version: str) -> Path:
 
 def install(path: Path):
     """Install exactly this package file, older or not (a downgrade for a fresh start)."""
-    # (Without the package's own scripts: soft-serve's start a service, and containers have no systemd. The app's
-    # installs run them, as on a desktop.)
-    command = {assets.KIND_RPM: ["rpm", "-U", "--oldpackage", "--replacepkgs", "--nodeps", "--noscripts", str(path)],
+    command = {assets.KIND_RPM: ["rpm", "-U", "--oldpackage", "--replacepkgs", "--nodeps", str(path)],
                assets.KIND_DEB: ["dpkg", "-i", str(path)],
                assets.KIND_ARCH: ["pacman", "-U", "--noconfirm", "--nodeps", str(path)]}[KIND]
     result = subprocess.run(command, capture_output=True, text=True)
@@ -206,7 +204,7 @@ if (ALL / OTHER).exists() and KIND != assets.KIND_ARCH:
     b = fresh(OLD)
     d = update(b)
     check("…refused: it's not the couriercollie package", d["updateNoteKind"] == "error"
-          and "soft-serve" in d["updateNote"], d["updateNote"])
+          and "skate" in d["updateNote"], d["updateNote"])
     check(f"…and {OLD} is still installed", installed().startswith(OLD), installed())
     b.shutdown()
 
@@ -255,8 +253,8 @@ if (ALL / OTHER).exists() and KIND != assets.KIND_ARCH:
     install(old_other)
     b = fresh(OLD)
     del b._run  # back to the real worker threads: both at once
-    other_id = "github.com/charmbracelet/soft-serve"
-    b.addRepo("", "https://github.com/charmbracelet/soft-serve")
+    other_id = "github.com/charmbracelet/skate"
+    b.addRepo("", "https://github.com/charmbracelet/skate")
     end = time.monotonic() + 60
     while time.monotonic() < end and (b.adding or not b._config.find(other_id)):
         QCoreApplication.processEvents()
@@ -274,11 +272,11 @@ if (ALL / OTHER).exists() and KIND != assets.KIND_ARCH:
         time.sleep(0.05)
     for rid in (Backend.MYSELF, other_id):
         print(f"  {rid}: {b.details(rid)['updateNote']}", flush=True)
-    other_have = packages.installed_version(KIND, "soft-serve")[0]
-    check(f"…couriercollie {MID} and soft-serve {other_new} both installed, one after the other",
+    other_have = packages.installed_version(KIND, "skate")[0]
+    check(f"…couriercollie {MID} and skate {other_new} both installed, one after the other",
           installed().startswith(MID) and other_have.startswith(other_new.lstrip("v")), (installed(), other_have))
-    ran = subprocess.run(["soft", "--version"], capture_output=True, text=True).stdout.strip()
-    check("…and the new soft-serve runs", other_new.lstrip("v") in ran, ran)
+    ran = subprocess.run(["skate", "--version"], capture_output=True, text=True).stdout.strip()
+    check("…and the new skate runs", other_new.lstrip("v") in ran, ran)
     b.shutdown()
 
 print(f"=== {DISTRO}: {len(failures)} failures", flush=True)

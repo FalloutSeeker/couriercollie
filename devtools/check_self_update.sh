@@ -3,7 +3,7 @@
 # are built three times (as they are, OLD, and as the next two versions, MID and NEW, from copies of the project with
 # the version raised), OLD is installed with the distro's package manager, and it updates itself from a stand-in for
 # GitHub (devtools/github_standin.py) serving the real packages (devtools/self_update_inner.py), then restarts. Then
-# what can go wrong, and another project's real packages (soft-serve's) updated alongside
+# what can go wrong, and another project's real packages (skate's) updated alongside
 # (devtools/self_update_scenarios.py). Nothing is installed on this computer; the containers are removed.
 #
 #     devtools/check_self_update.sh [fedora|opensuse|ubuntu|debian|arch …]
@@ -31,10 +31,10 @@ for version in "$mid" "$new"; do  # a copy of the project as committed here, its
     mkdir -p "$me/v$version"
     cp "$work/$version/dist/"*"$version"* "$work/$version/dist/SHA256SUMS" "$me/v$version/"
 done
-# Another project's real packages, from GitHub: soft-serve, which none of the distros offers.
-for tag in v0.12.2 v0.12.3; do
-    mkdir -p "$work/releases/charmbracelet__soft-serve/$tag"
-    gh release download -R charmbracelet/soft-serve "$tag" -D "$work/releases/charmbracelet__soft-serve/$tag" \
+# Another project's real packages, from GitHub: skate, which none of the distros offers.
+for tag in v1.0.1 v1.1.0; do
+    mkdir -p "$work/releases/charmbracelet__skate/$tag"
+    gh release download -R charmbracelet/skate "$tag" -D "$work/releases/charmbracelet__skate/$tag" \
         -p '*x86_64.rpm' -p '*amd64.deb'
 done
 git ls-files -z | xargs -0 tar -cf "$work/app.tar"  # for devtools/ inside (the app itself is the installed package)
