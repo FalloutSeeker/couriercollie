@@ -194,14 +194,28 @@ def suggestions(path: str, scripts: list[str], compose: Compose | None) -> list[
 FILE_MAX_BYTES = 1024 * 1024
 
 
+# Files a tool reads without being told their names: "make install" runs what the Makefile says, so a change to the
+# Makefile is a change to the step. (A compose file given with -f is named, so it's covered anyway.)
+_IMPLIED = {
+    "make": ("GNUmakefile", "makefile", "Makefile"), "gmake": ("GNUmakefile", "makefile", "Makefile"),
+    "compose": ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml", "Dockerfile",
+                "Containerfile"),
+    "npm": ("package.json",), "pnpm": ("package.json",), "yarn": ("package.json",), "cargo": ("Cargo.toml",),
+    "just": ("justfile", "Justfile"),
+}
+_IMPLIED["podman-compose"] = _IMPLIED["docker-compose"] = _IMPLIED["compose"]
+
+
 def named_files(path: str, command: str) -> list[Path]:
-    """The clone's files the command names (a script, a compose file): what approving it covers."""
+    """The clone's files the command names (a script, a compose file), and those the tools it runs read without
+    being told (make's Makefile): what approving it covers."""
     try:
         words = shlex.split(command)
     except ValueError:
         return []
     root, files = Path(path).resolve(), []
-    for word in words:
+    implied = [name for word in words for name in _IMPLIED.get(Path(word).name, ())]
+    for word in [*words, *implied]:
         if word.startswith("-"):
             continue
         file = (root / word).resolve()
