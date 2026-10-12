@@ -112,9 +112,14 @@ def update(b: Backend, repo_id: str = Backend.MYSELF) -> dict:
     return b.details(repo_id)
 
 
+def update_button(d: dict) -> bool:
+    """Whether the page shows Update (as RepoDetailPage.qml decides: it can be updated here, and there's one)."""
+    return d["canUpdate"] and d["updateAvailable"] and not d["updating"]
+
+
 def offered(b: Backend) -> str:
     d = b.details(Backend.MYSELF)
-    return d["headline"] + (" (Update offered)" if d["canUpdate"] else "")
+    return d["headline"] + (" (Update offered)" if update_button(d) else "")
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -132,11 +137,10 @@ print("- the newest release has no file for this distro", flush=True)
 serve(ME, f"v{OLD}", f"v{MID}", drop=(file_of(MID).name,))
 b = fresh(OLD)
 d = b.details(Backend.MYSELF)
-print(f"  page: {d['headline']} / your file missing: {d['yourFileMissing']} / Update offered: {d['canUpdate']}",
-      flush=True)
-check("…it says your file isn't in it", d["yourFileMissing"])
-if d["canUpdate"]:
-    d = update(b)
+print(f"  page: {d['headline']} / list: {b.repo(Backend.MYSELF)['checkText']}", flush=True)
+check("…it says your file isn't in it, and offers no Update", d["yourFileMissing"] and not update_button(d)
+      and not b.repo(Backend.MYSELF)["updateAvailable"], offered(b))
+d = update(b)  # (as the list's button would, were it shown)
 check("…and nothing else is installed instead", installed().startswith(OLD), (installed(), d["updateNote"]))
 b.shutdown()
 
@@ -189,7 +193,7 @@ b.shutdown()
 print("- yours is newer than every release (installed by hand from a newer build)", flush=True)
 serve(ME, f"v{OLD}", f"v{MID}")
 b = fresh(NEW)
-check("…no older version offered", not b.details(Backend.MYSELF)["canUpdate"]
+check("…no older version offered", not update_button(b.details(Backend.MYSELF))
       and not b.repo(Backend.MYSELF)["updateAvailable"], offered(b))
 print(f"  list: {b.repo(Backend.MYSELF)['checkText']}", flush=True)
 check(f"…and {NEW} stays", installed().startswith(NEW), installed())
