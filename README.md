@@ -135,6 +135,7 @@ everything.
 ## Coming Soon
 
 - **`collie` command:** check for updates and update from the terminal.
+- Ability to track private repositories.
 
 ## License
 
