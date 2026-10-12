@@ -28,6 +28,7 @@ import shlex
 import shutil
 import subprocess
 import tarfile
+import time
 import urllib.error
 import urllib.request
 import zipfile
@@ -642,6 +643,57 @@ def program_version(link: Path) -> str:
 
 # Installing can take a while (the package manager may download what the package needs), plus typing the password.
 INSTALL_TIMEOUT = 1800
+
+
+# Leftovers of an update that was cut short (the app killed, the computer turned off) are only removed once they're
+# this old, so nothing still being made is touched.
+LEFTOVER_AGE = 3600
+
+
+def clean_leftovers(now: float | None = None) -> list[Path]:
+    """Removes what an update cut short left behind, in the app's own folders: a half-downloaded ".x.part", a
+    half-unpacked ".v2.0.unpacking", a half-made clone, a link not yet put in place. A program's version set aside
+    (".v2.0.old") is put back if the version it stood for is missing (cut short just after setting it aside), else
+    removed. Nothing that isn't hidden is touched. Returns what was removed or put back."""
+    now = time.time() if now is None else now
+    done: list[Path] = []
+
+    def stale(path: Path) -> bool:
+        try:
+            return now - path.lstat().st_mtime > LEFTOVER_AGE
+        except OSError:
+            return False
+
+    def remove(path: Path):
+        try:
+            shutil.rmtree(path) if path.is_dir() and not path.is_symlink() else path.unlink()
+            done.append(path)
+        except OSError:
+            pass
+
+    for folder in (apps_dir(), downloads_dir(), clones_dir()):
+        for path in folder.glob(".*.part") if folder.is_dir() else []:
+            if stale(path):
+                remove(path)
+    for path in downloads_dir().iterdir() if downloads_dir().is_dir() else []:
+        if stale(path):
+            remove(path)  # nothing stays here: each download is deleted once installed
+    for path in bin_dir().glob(".*.couriercollie") if bin_dir().is_dir() else []:
+        if stale(path):
+            remove(path)
+    for home in programs_dir().iterdir() if programs_dir().is_dir() else []:
+        for path in list(home.glob(".*")):
+            if not stale(path):
+                continue
+            if path.name.endswith(".old") and not (home / path.name[1:-len(".old")]).exists():
+                try:
+                    os.replace(path, home / path.name[1:-len(".old")])
+                    done.append(path)
+                except OSError:
+                    pass
+            elif path.name.endswith((".part", ".unpacking", ".old")):
+                remove(path)
+    return done
 
 
 def downloads_dir() -> Path:

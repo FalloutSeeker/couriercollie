@@ -1,6 +1,7 @@
 import hashlib
 import http.server
 import os
+import shutil
 import tempfile
 import threading
 import unittest
@@ -301,6 +302,41 @@ class ProgramTest(AppImageCase):
         _Files.files["docs.tar.gz"] = _archive("tar", {"docs/README": (b"text", 0o644)})
         with self.assertRaisesRegex(updater.UpdateError, "no program for Linux"):
             self.install("v1", "docs.tar.gz")
+
+
+class LeftoversTest(unittest.TestCase):
+    """What an update cut short leaves behind is cleaned up when the app next starts; nothing else is touched."""
+
+    def test_only_old_hidden_leftovers_go_and_a_set_aside_version_is_put_back(self):
+        import time
+
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, True)
+        env = {"COURIERCOLLIE_APPS": root / "apps", "COURIERCOLLIE_CLONES": root / "src", "COURIERCOLLIE_BIN": root / "bin",
+               "XDG_CACHE_HOME": root / "cache", "XDG_DATA_HOME": root / "data"}
+        for key, value in env.items():
+            self.addCleanup(os.environ.pop if key not in os.environ else os.environ.__setitem__, key,
+                            *([] if key not in os.environ else [os.environ[key]]))
+            os.environ[key] = str(value)
+        apps, programs = root / "apps", updater.programs_dir() / "github.com_a_tool"
+        made = {apps / ".App-2.AppImage.part": "file", apps / "App-1.AppImage": "file",
+                updater.downloads_dir() / ".gh.rpm.part": "file", root / "src" / ".project.part": "dir",
+                root / "bin" / ".tool.couriercollie": "file", programs / ".v3.0.unpacking": "dir",
+                programs / ".v2.0.old": "dir", programs / "v1.0": "dir", programs / ".v1.0.old": "dir"}
+        for path, kind in made.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.mkdir() if kind == "dir" else path.write_text("x")
+        fresh = apps / ".App-3.AppImage.part"  # still being downloaded
+        fresh.write_text("x")
+        old = time.time() - 2 * updater.LEFTOVER_AGE
+        for path in made:
+            os.utime(path, (old, old))
+        updater.clean_leftovers()
+        left = sorted(str(p.relative_to(root)) for p in root.rglob("*") if p.is_file() or not any(p.iterdir()))
+        self.assertEqual(left, ["apps/.App-3.AppImage.part", "apps/App-1.AppImage", "bin", "cache/couriercollie/downloads",
+                                "data/couriercollie/programs/github.com_a_tool/v1.0",
+                                "data/couriercollie/programs/github.com_a_tool/v2.0", "src"])
+        # v2.0 was set aside and never replaced: put back. v1.0's aside copy is a leftover: removed.
 
 
 class ProgramClickedTest(InstallClickedTest):
