@@ -1159,6 +1159,12 @@ class Backend(QObject, Updating, Account):
         for key, c in enumerate(checked):
             f = c.found
             tracked = next((r for a in (f.id, *f.aliases) if (r := self._config.find_any(a))), None)
+            if tracked and tracked.id.lower() == self.MYSELF.lower():
+                # couriercollie itself, on the list since the first start (_track_myself): shown, greyed out, as such.
+                self._scan_items.append({"key": key, "name": f.name, "address": f.id, "path": f.path, "kind": f.kind,
+                                         **_monogram(f.name, f.id), "status": "default", "similarTo": "",
+                                         "note": "Added by default"})
+                continue
             if tracked and not c.problem:
                 on_list.append(f)
                 continue
@@ -1189,7 +1195,7 @@ class Backend(QObject, Updating, Account):
         keys = {int(k) for k in keys if str(k).isdigit()}
         chosen = []
         for item in self._scan_items:
-            if item["key"] not in keys or item["status"] == "problem":
+            if item["key"] not in keys or item["status"] in ("problem", "default"):
                 continue
             found = self._scan_finds[item["key"]]
             if item["similarTo"] and (repo := self._config.find(item["similarTo"])):
@@ -1200,7 +1206,8 @@ class Backend(QObject, Updating, Account):
         result = scan.merge(self._config, chosen)
         for r in result.added:
             self._find_icon(r.id)
-        self._scan_items = [i for i in self._scan_items if i["key"] not in keys or i["status"] == "problem"]
+        self._scan_items = [i for i in self._scan_items
+                            if i["key"] not in keys or i["status"] in ("problem", "default")]
         self._changed()
         self.scanChanged.emit()
         # So the list says straight away what's out of date. Cheap: unchanged release lists don't count against the

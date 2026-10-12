@@ -955,6 +955,22 @@ class ScanFlowTest(unittest.TestCase):
         # And they're checked straight away, so the list says what's out of date.
         self.assertEqual(self.checks, ["checked"])
 
+    def test_couriercollie_itself_is_shown_as_added_by_default(self):
+        b = self.backend
+        b._track_myself()
+        me = self.found(Backend.MYSELF, kind="RPM", version="0.6.0")
+        for problem in ("", "Not found on its site. It may be private."):  # private before the first release
+            b._scan_done([scan.Checked(me, problem)], None)
+            item = next(i for i in b.scanItems if i["address"] == Backend.MYSELF)
+            self.assertEqual((item["status"], item["note"]), ("default", "Added by default"))
+            self.assertEqual(b.scanUpdated, [])
+            b.trackFound([item["key"]])  # it can't be ticked; and nothing happens if it is
+            self.assertEqual([r.id for r in b._config.repos].count(Backend.MYSELF), 1)
+        # Once you stop tracking it, a scan offers it like anything else.
+        b.removeRepo(Backend.MYSELF)
+        b._scan_done([scan.Checked(me)], None)
+        self.assertEqual(b.scanItems[0]["status"], "new")
+
     def test_scan_needs_scanning_turned_on(self):
         self.backend.updateSettings({"scanning": False})
         self.backend.startScan()

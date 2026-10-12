@@ -36,7 +36,8 @@ Paste a project's address (any GitHub or GitLab page of it). The app follows ren
 picks the file for this computer if there's exactly one. A project without releases follows its default branch.
 
 **couriercollie itself** is added on the first start, once (if you stop tracking it, it stays gone): its own
-package file for your distro, or, run from a git clone, the clone's branch.
+package file for your distro, or, run from a git clone, the clone's branch. A scan that finds it shows it greyed out,
+"Added by default".
 
 ## 3. The repo page
 

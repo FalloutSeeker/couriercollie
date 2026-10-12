@@ -26,6 +26,8 @@ b, app, win = h.backend, h.app, h.win
 from couriercollie import updater  # noqa: E402
 
 updater.ROOT = []  # root in the container: no password prompt
+b._track_myself()  # as the app's first start does (the harness skips the desktop's start-up)
+b.reposChanged.emit()
 win.resize(1000, 720)
 OUT = Path("/out")
 n = [0]

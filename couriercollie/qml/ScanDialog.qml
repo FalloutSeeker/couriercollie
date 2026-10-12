@@ -12,7 +12,9 @@ Kirigami.Dialog {
     // Once a scan finishes, its new finds are ticked: you untick what you don't want. Finds that look like a repo
     // you track (a mirror, say) are left for you to decide.
     property bool tickWhenDone: false
-    readonly property var choosable: backend.scanItems.filter(i => i.status !== "problem")
+    readonly property var choosable: backend.scanItems.filter(i => i.status !== "problem" && i.status !== "default")
+    // couriercollie itself is shown, greyed out, as "Added by default": it's on the list from the first start.
+    readonly property int newCount: backend.scanItems.filter(i => i.status !== "default").length
     readonly property int pickedCount: choosable.filter(i => picked[i.key]).length
 
     function openAndScan() {
@@ -94,8 +96,8 @@ Kirigami.Dialog {
                 Layout.fillWidth: true
                 text: backend.scanState === "scanning" ? `Looking in ${backend.settings.scanFoldersText} for git clones and downloaded apps, and for packages installed from downloaded files, then checking each with its site…`
                     : backend.scanError !== "" ? "The scan didn’t finish."
-                    : backend.scanItems.length === 0 ? "Nothing new found. Everything found is already tracked."
-                    : `Found ${backend.scanItems.length} new. Only ticked ones are tracked.`
+                    : dialog.newCount === 0 ? "Nothing new found. Everything found is already tracked."
+                    : `Found ${dialog.newCount} new. Only ticked ones are tracked.`
                 font.bold: backend.scanState === "done"
                 wrapMode: Text.Wrap
             }
@@ -166,7 +168,7 @@ Kirigami.Dialog {
 
                 objectName: "found:" + modelData.address
                 Layout.fillWidth: true
-                enabled: modelData.status !== "problem"
+                enabled: modelData.status !== "problem" && modelData.status !== "default"
                 // Shows the ticked state only; a click toggles it in `picked`, so Select all / none stay in charge.
                 checkable: false
                 checked: !!dialog.picked[modelData.key]
