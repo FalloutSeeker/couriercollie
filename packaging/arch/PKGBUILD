@@ -1,12 +1,12 @@
 # couriercollie for Arch Linux (the AUR). Built and tested by devtools/build_package.sh arch, in a container.
-# Before publishing to the AUR: a public release tag to download, its real sha256sum, and a license.
+# Before publishing to the AUR: a public release tag to download, and its real sha256sum.
 pkgname=couriercollie
 pkgver=0.6.0
 pkgrel=1
 pkgdesc="Keep track of software from GitHub and GitLab, and update it"
 arch=('any')
 url="https://github.com/FalloutSeeker/couriercollie"
-license=('LicenseRef-not-yet-chosen')
+license=('GPL-3.0-or-later' 'LGPL-3.0-or-later')  # the app; the Breeze icons it brings along
 depends=('python' 'pyside6' 'kirigami' 'libnotify' 'git' 'polkit' 'libsecret')
 optdepends=('qqc2-desktop-style: KDE look for the window (without it, Qt Fusion)')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
@@ -24,4 +24,5 @@ package() {
     install -Dm644 data/couriercollie.desktop "$pkgdir/usr/share/applications/couriercollie.desktop"
     install -Dm644 data/couriercollie.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/couriercollie.svg"
     install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

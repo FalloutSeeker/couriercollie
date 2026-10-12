@@ -4,7 +4,8 @@ Name:           couriercollie
 Version:        %{app_version}
 Release:        1%{?dist}
 Summary:        Keep track of software from GitHub and GitLab, and update it
-License:        LicenseRef-Not-Yet-Chosen
+# The app, and the Breeze icons it brings along (couriercollie/icons/COPYING-ICONS).
+License:        GPL-3.0-or-later AND LGPL-3.0-or-later
 URL:            https://github.com/FalloutSeeker/couriercollie
 Source0:        %{name}-%{version}.tar.gz
 BuildArch:      noarch
@@ -56,6 +57,7 @@ install -Dm644 data/couriercollie.svg %{buildroot}%{_datadir}/icons/hicolor/scal
 desktop-file-validate %{buildroot}%{_datadir}/applications/couriercollie.desktop
 
 %files
+%license LICENSE
 %doc README.md
 %{_bindir}/couriercollie
 %{python3_sitelib}/couriercollie/

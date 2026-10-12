@@ -36,6 +36,9 @@ install -Dm755 data/couriercollie $root/usr/bin/couriercollie
 install -Dm644 data/couriercollie.desktop $root/usr/share/applications/couriercollie.desktop
 install -Dm644 data/couriercollie.svg $root/usr/share/icons/hicolor/scalable/apps/couriercollie.svg
 install -Dm644 README.md $root/usr/share/doc/couriercollie/README.md
+# Debian keeps a package'\''s license in its doc folder, as "copyright".
+{ printf "couriercollie: GPL-3.0-or-later. Its Breeze icons (couriercollie/icons): LGPL-3.0-or-later.\n\n"; cat LICENSE; } \
+    > $root/usr/share/doc/couriercollie/copyright
 sed "s/@VERSION@/'"$version"'/" /work/control > $root/DEBIAN/control
 dpkg-deb --build --root-owner-group $root /dist/couriercollie_'"$version"'_all.deb >/dev/null'
 

@@ -129,3 +129,8 @@ everything.
 | GitHub sign-in (only if you sign in) | Your desktop's password store |
 
 </details>
+
+## License
+
+couriercollie is free software under the [GNU General Public License](LICENSE), version 3 or later. The Breeze
+icons it brings along are KDE's, under the LGPL 3.0 or later.

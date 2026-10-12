@@ -108,3 +108,10 @@ Every repo shows either its own picture or a monogram: its first letter on a col
 
 - Your own headings for the list (e.g. "Themes", "Tools"). Drag repos and categories by their handles.
 - Rename or delete from a heading's ⋮ menu. Deleting a category never removes its repos; they move to Uncategorized.
+
+## D15. License: GPL-3.0-or-later
+
+- couriercollie is free software: anyone may use, study, change and share it, and changed versions they share stay
+  open, under the same license. The norm for KDE apps.
+- Its parts allow it: PySide6, Qt and Kirigami are LGPL; the Breeze icons it brings along are LGPL-3.0-or-later
+  (`couriercollie/icons/COPYING-ICONS`).

@@ -3,8 +3,7 @@
 ## Before the first release
 
 - **Publish:** a public repository, with a release carrying the four packages (`devtools/build_package.sh` builds
-  and tries them), and the Arch package on the AUR. Needs a release tag, the AUR's checksum for it, and a license.
-- **Choose a license.**
+  and tries them), and the Arch package on the AUR. Needs a release tag, and the AUR's checksum for it.
 - **Send Feedback…** at the bottom of Settings: opens a pre-filled GitHub issue in the browser. It includes app
   version, distro, desktop and Qt/Kirigami versions, and your tracked list only if you tick it. Nothing is sent by
   the app itself.
