@@ -2,8 +2,8 @@
 
 ## Before the first release
 
-- **Publish:** a public repository, with a release carrying the four packages (`devtools/build_package.sh` builds
-  and tries them), and the Arch package on the AUR. Needs a release tag, and the AUR's checksum for it.
+- **Publish:** a public repository, with a release carrying the four packages and their `SHA256SUMS`
+  (`devtools/build_package.sh` builds and tries them), and the Arch package on the AUR. Needs a release tag, and the AUR's checksum for it.
 
 ## Still to check by hand
 

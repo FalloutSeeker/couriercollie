@@ -75,4 +75,7 @@ for distro in ${*:-fedora opensuse debian arch}; do
             "pacman -U --noconfirm /dist/couriercollie-$version-1-any.pkg.tar.zst" ;;
     esac
 done
+# For the release page, for anyone who downloads a package by hand. (couriercollie itself checks its own updates
+# against the checksum GitHub publishes for every release file.)
+(cd dist && sha256sum couriercollie[-_]"$version"[-_]* > SHA256SUMS)
 ls dist/
