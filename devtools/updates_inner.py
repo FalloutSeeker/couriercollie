@@ -173,7 +173,7 @@ else:
     check("bat's v0.24.0 and v0.25.0 are in its release list", False, str([r.tag for r in real_versions[BAT]]))
 
 # An AppImage a scan found: your own file name, and a menu entry of yours that must keep working.
-print(f"- an AppImage found on this computer, with its own menu entry", flush=True)
+print("- an AppImage found on this computer, with its own menu entry", flush=True)
 import urllib.request  # noqa: E402
 
 NVIM = "github.com/neovim/neovim"
