@@ -600,6 +600,12 @@ def install_program(repo_id: str, tag: str, asset, others: list, wanted: str = "
         _unpack(part, unpacking, _folder_name(next((h for h in hints if h), "")) or _folder_name(asset.name))
         program = choose_program(unpacking, wanted, list(hints))
         link = bin_dir() / program.name
+        # ~/.local/bin comes before the system's commands: a program called "sudo" or "ls" would run instead of the
+        # real one, every time (and one called "sudo" could read your password).
+        if system := next((Path(d) / program.name for d in SYSTEM_PATH.split(":")
+                           if (Path(d) / program.name).exists()), None):
+            raise UpdateError(f"The program is called \u201c{program.name}\u201d, like a command your system already "
+                              f"has ({system}), so it wasn\u2019t installed: it would run instead of that one.")
         before = link.resolve() if link.is_symlink() else None
         if (link.exists() or link.is_symlink()) and not (before and before.is_relative_to(home.resolve())):
             raise UpdateError(f"{link} already exists and wasn’t put there by couriercollie, so it wasn’t "

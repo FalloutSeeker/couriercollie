@@ -283,6 +283,19 @@ class ProgramTest(AppImageCase):
                 self.install("v1", name)
         self.assertFalse(any(Path(self.dir.name).rglob("escaped")))
 
+    def test_never_a_program_named_like_a_system_command(self):
+        # An archive whose program is "sudo" (or "ls"): linked in ~/.local/bin, it would run instead of the real one.
+        saved = updater.SYSTEM_PATH
+        system = Path(self.dir.name) / "usr-bin"
+        system.mkdir()
+        (system / "sudo").write_text("#!/bin/sh\n")
+        updater.SYSTEM_PATH = str(system)
+        self.addCleanup(setattr, updater, "SYSTEM_PATH", saved)
+        _Files.files["sudo-1.0.tar.gz"] = _archive("tar", {"sudo-1.0/sudo": (ELF + b"1.0", 0o755)})
+        with self.assertRaisesRegex(updater.UpdateError, "like a command your system already has"):
+            self.install("v1.0", "sudo-1.0.tar.gz", hints=("sudo",))
+        self.assertFalse((updater.bin_dir() / "sudo").exists())
+
     def test_a_program_on_its_own_not_in_an_archive(self):
         # yq publishes "yq_linux_amd64", the program itself: installed as "yq", updated like any other.
         _Files.files["tool_linux_amd64"] = ELF + b"1.0"
