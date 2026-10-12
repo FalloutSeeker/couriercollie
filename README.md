@@ -107,7 +107,8 @@ rest of the system belongs to your package manager. Change them in Settings.
 **Which distros?** It's built and tested mainly on Fedora KDE. openSUSE, Ubuntu, Debian, Arch and GNOME are
 supported, but need feedback (Settings → Send Feedback…).
 
-**Start over:** `./run.sh --reset` brings the welcome screen back. Your old settings are kept as a dated backup.
+**Start over:** `./run.sh --reset` brings the welcome screen back. Your old settings are kept as a dated backup in
+`~/.config/couriercollie`.
 
 **Uninstall:** remove the package (e.g. `sudo dnf remove couriercollie`), or delete the folder if you ran it from
 source. Background checks turn themselves off the next time they'd run. Your settings, results and cache stay
@@ -120,6 +121,7 @@ everything.
 | What | Where |
 | --- | --- |
 | Settings and your list | `~/.config/couriercollie/repos.toml` |
+| Backups from `--reset` | `~/.config/couriercollie/repos.toml.backup-<date>` |
 | Last check's results | `~/.local/state/couriercollie/checks.json` |
 | Icons, release lists | `~/.cache/couriercollie/` |
 | Background checks (only while on) | `~/.config/systemd/user/couriercollie-check.timer` |
