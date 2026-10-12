@@ -130,6 +130,12 @@ everything.
 
 </details>
 
+## Coming Soon
+
+- **A `collie` command:** check for updates and update from the terminal.
+
+Ideas welcome: Settings → Send Feedback…
+
 ## License
 
 couriercollie is free software under the [GNU General Public License](LICENSE), version 3 or later. The Breeze

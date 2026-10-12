@@ -12,6 +12,8 @@
 
 ## Later
 
+- A `collie` command (named in the README as coming soon): check and update from the terminal, with the same list.
+
 - Any git host by git alone (sourcehut, Bitbucket, self-hosted): new commits and tags, without a site's API.
 - Codeberg and other Gitea sites.
 - Private repositories.
