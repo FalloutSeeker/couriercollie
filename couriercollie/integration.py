@@ -18,7 +18,13 @@ PROJECT = Path(__file__).resolve().parent.parent
 INSTALLED = not (PROJECT / "run.sh").is_file()
 LAUNCHER = Path(shutil.which(APP_ID) or f"/usr/bin/{APP_ID}") if INSTALLED else PROJECT / "run.sh"
 ICON = APP_ID
-ICON_FILE = PROJECT / "data" / f"{APP_ID}.svg"
+# The app's icon as a file: in the project folder, run from there; else where the package put it (for when the
+# desktop's icon theme can't find it by name).
+ICON_FILE = next((p for p in (PROJECT / "data" / f"{APP_ID}.svg",
+                              *(Path(d) / "icons/hicolor/scalable/apps" / f"{APP_ID}.svg"
+                                for d in (os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share").split(":")
+                                if d))
+                  if p.is_file()), PROJECT / "data" / f"{APP_ID}.svg")
 TIMER = "couriercollie-check"
 
 

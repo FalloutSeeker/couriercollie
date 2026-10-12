@@ -121,7 +121,7 @@ def main() -> int:
     from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
     from .backend import Backend
-    from .tray import Tray
+    from .tray import Tray, app_icon
 
     app = QApplication([sys.argv[0], *args])
     app.setApplicationName("couriercollie")
@@ -129,7 +129,7 @@ def main() -> int:
     # Ties the window, its notifications and its taskbar badge to the menu entry.
     app.setDesktopFileName(integration.APP_ID)
     fill_in_icons()
-    app.setWindowIcon(QIcon.fromTheme(integration.ICON))
+    app.setWindowIcon(app_icon())  # by name from the icon theme, else the file (tray.app_icon)
     # Let Ctrl+C in the terminal close the app.
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
