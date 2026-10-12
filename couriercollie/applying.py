@@ -6,8 +6,9 @@ command you approve once, run in the clone's folder, inside the app, after each 
   its install, setup or update scripts. The README's update steps are quoted, to help choose; never followed.
 - Approval covers the command and the files it names (a script, a compose file): if an update changes them, the step
   isn't run until you've looked again (fingerprint). So a pulled change can't slip new commands past you (D6).
-- A step that asks for a password can't be answered here (there's no terminal), so it stops, and can be run in a
-  terminal instead.
+- A step that asks for a password (sudo) gets a password window: it runs with a sudo that asks through
+  couriercollie's own window (sudo -A: run). If none can be shown (doas, or a sudo named by its full path), it
+  stops, and can be run in a terminal instead.
 """
 
 import hashlib
@@ -245,23 +246,42 @@ def review_text(path: str, command: str) -> str:
     return "\n".join(parts).rstrip() + "\n"
 
 
-# What sudo, doas and pkexec say when there's no terminal (or no password window) to type a password in. The step
-# runs with English messages (run), so this matches on any system.
+# What sudo (and sudo-rs), doas and pkexec say when there's no terminal (or password window) to type a password in,
+# or the password window was closed without one. The step runs with English messages (run), so this matches on any
+# system.
 _PASSWORD = re.compile(r"terminal is required|tty is required|password is required|no tty present|askpass|"
-                       r"authentication agent", re.I)
+                       r"authentication required|authentication agent", re.I)
 
 
 def asked_for_password(output: list[str]) -> bool:
     return any(_PASSWORD.search(line) for line in output[-20:])
 
 
-def run(path: str, command: str, line: Callable[[str], None], started: Callable[[subprocess.Popen], None]) -> int:
+def password_window(launcher: str | Path, folder: Path) -> dict[str, str]:
+    """What a step needs for sudo to ask for the password in a window: there's no terminal to type it in. sudo does
+    that only when told to (-A), so the step finds a "sudo" here first that tells it, and the window is
+    couriercollie's own (`couriercollie --askpass`, app.askpass). Written to `folder`, which only you can read."""
+    folder.mkdir(parents=True, exist_ok=True)
+    folder.chmod(0o700)
+    files = {"askpass": f'#!/bin/sh\nexec {shlex.quote(str(launcher))} --askpass "$@"\n'}
+    if real := shutil.which("sudo"):
+        files["sudo"] = f'#!/bin/sh\nexec {shlex.quote(real)} -A "$@"\n'
+    for name, text in files.items():
+        (folder / name).write_text(text)
+        (folder / name).chmod(0o700)
+    return {"SUDO_ASKPASS": str(folder / "askpass"), "PATH": f"{folder}{os.pathsep}{os.environ.get('PATH', '')}"}
+
+
+def run(path: str, command: str, line: Callable[[str], None], started: Callable[[subprocess.Popen], None],
+        asking: dict[str, str] | None = None) -> int:
     """Run the step in the clone's folder, passing each line of its output on as it comes. Nothing can be typed in
-    (no terminal): a password prompt fails instead of waiting. Returns its exit code."""
+    (no terminal): `asking` (password_window) lets sudo ask in a window instead; anything else that asks for a
+    password fails rather than waiting. Returns its exit code."""
     # English messages: how a password prompt that failed is told (asked_for_password), on any system.
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C.UTF-8"}
     for name in ("SUDO_ASKPASS", "LANGUAGE"):
         env.pop(name, None)
+    env.update(asking or {})
     process = subprocess.Popen(["/bin/sh", "-c", command], cwd=path, stdin=subprocess.DEVNULL,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace",
                                start_new_session=True, env=env)

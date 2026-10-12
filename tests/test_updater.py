@@ -675,3 +675,17 @@ class CompareHereTest(unittest.TestCase):
         self.assertIsNone(updater.compare_here(str(self.repo), self.a, "f" * 40))  # not fetched yet: ask the site
         self.assertIsNone(updater.compare_here(self.dir.name, self.a, self.c))  # not a clone
         self.assertIsNone(updater.compare_here("", self.a, self.c))
+
+
+class SomeoneElsesTest(unittest.TestCase):
+    def test_another_persons_clone_is_theirs(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / ".git").mkdir()
+            self.assertEqual(updater.someone_elses(d), "")  # yours
+            self.assertEqual(updater.someone_elses(str(Path(d) / "gone")), "")
+            saved = updater._owner
+            self.addCleanup(setattr, updater, "_owner", saved)
+            updater._owner = lambda path: 0
+            self.assertEqual(updater.someone_elses(d), "")  # the system's: updated as root, with your password
+            updater._owner = lambda path: 65534
+            self.assertEqual(updater.someone_elses(d), "nobody")

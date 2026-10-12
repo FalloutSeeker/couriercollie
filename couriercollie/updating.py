@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Slot
 
-from . import applying, assets, checker, config, flatpaks, icons, packages, sources, updater
+from . import applying, assets, checker, config, flatpaks, icons, integration, packages, sources, updater
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, TrackedRepo
 from .sources import RepoRef
 
@@ -108,6 +108,8 @@ def _can_update(repo: TrackedRepo) -> bool:
     keep it up to date, and two updaters would fight over the same files."""
     if repo.managed_by:
         return False
+    if _is_clone(repo) and updater.someone_elses(repo.local_path):
+        return False  # another person's clone: its updates are theirs (shown only)
     return (_is_clone(repo) or _is_appimage(repo) or _is_program(repo) or _is_package(repo) or _is_flatpak(repo)
             or _can_clone(repo))
 
@@ -442,7 +444,10 @@ class Updating:
             self.reposChanged.emit()
             self.detailsChanged.emit(repo_id)
 
-        self._run(lambda: applying.run(path, command, line, started), done)
+        # sudo in the step asks for the password in a window, which says whose step it is.
+        asking = {**applying.password_window(integration.LAUNCHER, integration.runtime_dir() / "askpass"),
+                  "COURIERCOLLIE_STEP": repo.name}
+        self._run(lambda: applying.run(path, command, line, started, asking), done)
 
     @Slot(str)
     def stopStep(self, repo_id):

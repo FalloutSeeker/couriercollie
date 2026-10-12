@@ -184,9 +184,13 @@ def updates_message(names: list[str]) -> tuple[str, str]:
 # Only one copy: the running app listens here; a second launch, or the background checker, talks to it
 
 
+def runtime_dir() -> Path:
+    """This session's folder for the app's own files (only you can read it), as the desktop gives it."""
+    return Path(os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/{APP_ID}-{os.getuid()}")
+
+
 def socket_path() -> Path:
-    runtime = os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/{APP_ID}-{os.getuid()}"
-    return Path(runtime) / f"{APP_ID}.socket"
+    return runtime_dir() / f"{APP_ID}.socket"
 
 
 def tell_running_app(message: str) -> bool:

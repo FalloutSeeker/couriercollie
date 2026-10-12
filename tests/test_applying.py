@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -109,7 +110,9 @@ class RunTest(unittest.TestCase):
                 os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
         for said in ("sudo: a terminal is required to read the password; either use the -S option",
                      "doas: a tty is required", "sudo: a password is required",
-                     "Error executing command as another user: No authentication agent found."):
+                     "Error executing command as another user: No authentication agent found.",
+                     "sudo: Authentication required but not attempted",  # sudo-rs, the password window closed
+                     "sudo: A terminal is required to authenticate"):  # sudo-rs
             self.assertTrue(applying.asked_for_password(["building…", said]), said)
         self.assertFalse(applying.asked_for_password(["error: disk full"]))
 
@@ -120,3 +123,65 @@ class RunTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PasswordWindowTest(unittest.TestCase):
+    """sudo in a step asks for the password in couriercollie's own window (there's no terminal to type it in)."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.dir.name)
+        # A stand-in for the system's sudo: says how it was run, and whether a password helper was given.
+        system = self.root / "system"
+        system.mkdir()
+        (system / "sudo").write_text('#!/bin/sh\necho "sudo $* | askpass: $SUDO_ASKPASS | for: $COURIERCOLLIE_STEP"\n')
+        (system / "sudo").chmod(0o755)
+        self.saved = os.environ["PATH"]
+        os.environ["PATH"] = f"{system}{os.pathsep}{self.saved}"
+
+    def tearDown(self):
+        os.environ["PATH"] = self.saved
+        self.dir.cleanup()
+
+    def test_sudo_in_a_step_asks_through_the_window(self):
+        asking = applying.password_window("/usr/bin/couriercollie", self.root / "askpass")
+        folder = self.root / "askpass"
+        self.assertEqual(oct(folder.stat().st_mode & 0o777), "0o700")  # only you can read it
+        self.assertIn("/usr/bin/couriercollie --askpass", (folder / "askpass").read_text())
+        out = []
+        code = applying.run(self.dir.name, "sudo make install", out.append, lambda p: None,
+                            {**asking, "COURIERCOLLIE_STEP": "SMOD"})
+        self.assertEqual(code, 0)
+        self.assertEqual(out, [f"sudo -A make install | askpass: {folder / 'askpass'} | for: SMOD"])
+
+    def test_the_window(self):
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QApplication
+
+        from couriercollie import app as app_module
+
+        qt = QApplication.instance() or QApplication([])
+        os.environ["COURIERCOLLIE_STEP"] = "SMOD"
+        self.addCleanup(os.environ.pop, "COURIERCOLLIE_STEP", None)
+        seen = []
+
+        def answer(text):
+            dialog = qt.activeModalWidget()
+            seen.append(dialog.labelText())
+            if text is None:
+                dialog.reject()
+            else:
+                dialog.setTextValue(text)
+                dialog.accept()
+
+        import contextlib
+        import io
+
+        for text, code, printed in (("pw", 0, "pw\n"), (None, 1, "")):
+            QTimer.singleShot(300, lambda t=text: answer(t))
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(app_module.askpass("[sudo] password for you: "), code)
+            self.assertEqual(out.getvalue(), printed)
+        self.assertIn("The step after updating SMOD asks for your password.", seen[0])
+        self.assertIn("[sudo] password for you:", seen[0])

@@ -25,6 +25,7 @@ import http.client
 import os
 import re
 import platform
+import pwd
 import shlex
 import shutil
 import subprocess
@@ -147,6 +148,21 @@ def _writable(path: str) -> bool:
 
 def _owner(path: str) -> int:
     return (Path(path) / ".git").stat().st_uid
+
+
+def someone_elses(path: str) -> str:
+    """The person a clone belongs to, if it's another's (not yours, nor the system's): its updates are theirs, so it's
+    only shown here. "" otherwise, or if it can't be told."""
+    try:
+        owner = _owner(path)
+    except OSError:
+        return ""
+    if owner in (0, os.geteuid()):
+        return ""
+    try:
+        return pwd.getpwuid(owner).pw_name
+    except KeyError:
+        return str(owner)
 
 
 def _as_root(path: str) -> bool:

@@ -1425,6 +1425,8 @@ class Backend(QObject, Updating, Account):
             "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing and not follow_disk,
             "followDiskBranch": follow_disk,
             "isClone": bool(repo) and _is_clone(repo),
+            # Another person's clone: shown, but its updates are theirs.
+            "theirs": updater.someone_elses(repo.local_path) if repo and _is_clone(repo) else "",
             # Install, for an AppImage or program you have but couriercollie doesn't know where (added by hand).
             "newCopy": bool(repo) and _new_copy(repo),
             # Install clones the project into clonesFolder.

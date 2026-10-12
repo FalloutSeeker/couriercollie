@@ -112,20 +112,34 @@ print("=== a step after updating that asks for a password", flush=True)
 mine = HOME / "src/tpm"
 rid = repo_at(mine)
 if rid:
+    from couriercollie import integration
+
+    # The password window, answered as a person would: here by a stand-in for it (no one to click in a container).
+    answers = HOME / "answer"
+    helper = HOME / "fake-couriercollie"
+    helper.write_text(f'#!/bin/sh\n[ "$1" = --askpass ] || exit 2\necho "$COURIERCOLLIE_STEP" > {HOME}/asked-for\n'
+                      f'[ -s {answers} ] && cat {answers} || exit 1\n')
+    helper.chmod(0o755)
+    integration.LAUNCHER = helper
+    answers.write_text("pw\n")
     b.approveStep(rid, "sudo touch /srv/applied")
     d = update(rid)
-    print(f"  update: {d['updateNote']}", flush=True)
-    check("the step ran after the update, and stopped at the password", d["stepResult"] == "password",
-          (d["stepResult"], d["stepOutput"][-200:]))
-    line = d["stepTerminalLine"]
-    check("…with the line to run in a terminal", line == f"cd {mine} && sudo touch /srv/applied", line)
-    check("…and a reminder that the update isn't in use yet", d["applyReminder"] != "", d["applyReminder"])
-    in_terminal(line, password=True)
-    check("run in a terminal, with the password typed, the step did its work", Path("/srv/applied").exists())
-    b.markApplied(rid)
+    print(f"  update: {d['updateNote']} / step: {d['stepResult']}", flush=True)
+    check("the step ran after the update, and sudo asked in the password window",
+          (HOME / "asked-for").read_text().strip() == b._config.find(rid).name, (HOME / "asked-for").exists())
+    check("…typed there, the step did its work, and the update is applied", d["stepResult"] == "applied"
+          and Path("/srv/applied").exists() and d["applyReminder"] == "", (d["stepResult"], d["stepOutput"][-200:]))
+    # Cancelled: the window gives no password, the step stops, and the terminal is there instead.
+    answers.write_text("")
+    subprocess.run(["sudo", "-k"])  # (sudo forgets the password it just had)
+    b.runStep(rid)
+    pump(lambda: not b.details(rid).get("stepRunning"))
     d = b.details(rid)
-    check("Mark as Applied: the reminder goes", d["applyReminder"] == "", d["applyReminder"])
-    check("…and stays gone after a fresh start", Backend(SETTINGS).details(rid)["applyReminder"] == "")
+    check("cancelled, the step stops, and says to run it again or in a terminal", d["stepResult"] == "password",
+          (d["stepResult"], d["stepOutput"][-200:]))
+    in_terminal(d["stepTerminalLine"], password=True)
+    b.markApplied(rid)
+    check("…run in a terminal, then Mark as Applied", b.details(rid)["applyReminder"] == "")
 
 # ---- 2. A clone that belongs to another user -------------------------------------------------------------------------
 print("=== a clone that belongs to another user", flush=True)
@@ -134,12 +148,9 @@ rid = repo_at(theirs)
 if rid:
     d = refresh(rid)
     print(f"  before: {d['headline']} / {b.repo(rid)['checkText']}", flush=True)
-    d = update(rid)
-    note = d["updateNote"]
-    print(f"  update: {note}", flush=True)
-    check("Update says it belongs to another user, and what they'd run", "belongs to another user" in note
-          and f"cd {theirs} && git pull --ff-only" in note, note)
-    # As that user, in a terminal (here: through sudo, as them).
+    check("it says whose it is, and offers no Update", d["theirs"] == "other" and not d["canUpdate"]
+          and not b.repo(rid)["canUpdate"], (d["theirs"], d["canUpdate"]))
+    # They update it themselves (here: in a terminal, through sudo, as them).
     in_terminal(f"sudo -u other sh -c 'cd {theirs} && git pull --ff-only'", password=True)
     d = refresh(rid)
     check("after they pull, Refresh says it's up to date", d["statusKind"] == "current", (d["headline"], d["status"]))

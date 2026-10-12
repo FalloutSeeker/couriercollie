@@ -349,6 +349,16 @@ Kirigami.ScrollablePage {
             text: Labels.plain(page.details.managedElsewhere)
         }
 
+        // Another person's clone (in a shared folder): what's new is shown, but updating it is up to them.
+        Kirigami.InlineMessage {
+            objectName: "theirs"
+            Layout.fillWidth: true
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 34
+            visible: page.ready && (page.details.theirs || "") !== ""
+            type: Kirigami.MessageType.Information
+            text: Labels.plain(`This clone belongs to ${page.details.theirs}, so updating it is up to them. What\u2019s new is still shown here.`)
+        }
+
         // Built only for other systems (Android, Windows, etc.): nothing here can install it.
         Kirigami.InlineMessage {
             objectName: "otherSystems"
@@ -867,7 +877,7 @@ Kirigami.ScrollablePage {
                     : afterUpdating.result === "password" ? Kirigami.MessageType.Warning
                     : Kirigami.MessageType.Information
                 text: afterUpdating.result === "applied" ? "Applied."
-                    : afterUpdating.result === "password" ? "It asked for a password, which can only be typed in a terminal. Copy the command, run it in one, then Mark as Applied."
+                    : afterUpdating.result === "password" ? "It asked for a password, and none was given. Run it again to type it, or copy the command to run it in a terminal, then Mark as Applied."
                     : afterUpdating.result === "stopped" ? "Stopped."
                     : `Failed (exit code ${page.details.stepCode}). The end of its output is below.`
                 actions: [
