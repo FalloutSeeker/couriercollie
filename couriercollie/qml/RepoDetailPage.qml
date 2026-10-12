@@ -759,15 +759,15 @@ Kirigami.ScrollablePage {
                     : afterUpdating.result === "password" ? Kirigami.MessageType.Warning
                     : Kirigami.MessageType.Information
                 text: afterUpdating.result === "applied" ? "Applied."
-                    : afterUpdating.result === "password" ? "It asked for a password, which can only be typed in a terminal."
+                    : afterUpdating.result === "password" ? "It asked for a password, which can only be typed in a terminal. Copy the command, run it in one, then Mark as Applied."
                     : afterUpdating.result === "stopped" ? "Stopped."
                     : `Failed (exit code ${page.details.stepCode}). The end of its output is below.`
                 actions: [
                     Kirigami.Action {
-                        text: "Run in Terminal"
-                        icon.name: "utilities-terminal"
+                        text: "Copy Command"
+                        icon.name: "edit-copy"
                         visible: afterUpdating.result === "password"
-                        onTriggered: backend.runStepInTerminal(page.repoId)
+                        onTriggered: backend.copyText(page.details.stepTerminalLine)
                     }
                 ]
             }

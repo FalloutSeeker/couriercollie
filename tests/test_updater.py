@@ -129,14 +129,13 @@ class AfterUpdatingTest(UpstreamCase):
         self.assertNotEqual(self.repo().script_run_at, self.repo().installed)
 
     def test_a_password_is_asked_for_in_a_terminal(self):
-        # sudo can't ask without a terminal: the step fails at once, and offers one.
+        # sudo can't ask without a terminal: the step fails at once, and its command is offered to paste into one.
         self.backend.approveStep(self.id, "echo 'sudo: a terminal is required to read the password' >&2; exit 1")
-        self.backend.runStep(self.id)
-        self.assertEqual(self.details()["stepResult"], "password")
-        saved = updater.terminal_for
-        updater.terminal_for = lambda path, run: ("/bin/true", [])  # instead of a terminal window
-        self.addCleanup(setattr, updater, "terminal_for", saved)
-        self.assertEqual(self.backend.runStepInTerminal(self.id), "")
+        self.update()
+        d = self.details()
+        self.assertEqual(d["stepResult"], "password")
+        self.assertEqual(d["stepTerminalLine"], f"cd {self.clone} && {d['step']}")
+        self.assertNotEqual(d["applyReminder"], "")  # applied once you've run it and said so (Mark as Applied)
 
     def test_nothing_can_be_typed_in(self):
         # A step that waits for input gets none, so it can't hang the page.
@@ -363,21 +362,10 @@ class InstallScriptTest(unittest.TestCase):
         Path(self.path, "install.sh").write_text("x" * (updater.SCRIPT_MAX_BYTES + 1))
         self.assertEqual(updater.install_scripts(self.path), [])
 
-    def test_runs_as_its_first_line_says_from_its_folder_and_stays_open(self):
+    def test_runs_as_its_first_line_says_from_the_clones_folder(self):
         script = Path(self.path, "install.sh")
         script.write_text("#!/usr/bin/env bash\necho hi\n")
-        # A Konsole of its own, so this doesn't depend on which terminal this computer has.
-        bin_dir = Path(self.path, "bin")
-        bin_dir.mkdir()
-        (bin_dir / "konsole").write_text("#!/bin/sh\n")
-        (bin_dir / "konsole").chmod(0o755)
-        saved = os.environ["PATH"]
-        os.environ["PATH"] = f"{bin_dir}:{saved}"
-        self.addCleanup(os.environ.__setitem__, "PATH", saved)
         self.assertEqual(updater._interpreter(script), ["/usr/bin/env", "bash", "./install.sh"])
-        program, args = updater.terminal_for(self.path, ["/bin/sh", "-c", "./install.sh"])
-        self.assertEqual(Path(program).name, "konsole")
-        self.assertEqual(args, ["--workdir", self.path, "--hold", "-e", "/bin/sh", "-c", "./install.sh"])
         Path(self.path, "scripts").mkdir()
         Path(self.path, "scripts/setup.sh").write_text("echo hi\n")
         self.assertEqual(updater._interpreter(Path(self.path, "scripts/setup.sh"), "scripts/setup.sh"),

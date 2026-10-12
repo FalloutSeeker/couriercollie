@@ -63,9 +63,59 @@ class ComposeTest(unittest.TestCase):
             c = applying.running_compose(folder, containers=lambda engine: running[engine])
             self.assertEqual((c.tool, c.services), (["docker", "compose"], ["web"]))
 
+    def test_labels_from_any_docker_or_podman(self):
+        # podman: an object; docker (any version): "a=1,b=2", as a string; anything else is skipped.
+        output = ('{"com.docker.compose.service":"app"}\n"com.docker.compose.service=web,x=1"\n'
+                  'json\n\n')
+        self.assertEqual(applying.parse_labels(output),
+                         [{"com.docker.compose.service": "app"}, {"com.docker.compose.service": "web", "x": "1"}])
+
+    def test_the_older_standalone_docker_compose(self):
+        import os
+
+        with tempfile.TemporaryDirectory() as bin_dir:
+            # A docker without the compose plugin, and the standalone docker-compose.
+            (Path(bin_dir) / "docker").write_text("#!/bin/sh\nexit 1\n")
+            (Path(bin_dir) / "docker-compose").write_text("#!/bin/sh\n")
+            for name in ("docker", "docker-compose"):
+                (Path(bin_dir) / name).chmod(0o755)
+            saved = os.environ["PATH"]
+            os.environ["PATH"] = bin_dir
+            try:
+                self.assertEqual(applying._docker_compose(), ["docker-compose"])
+            finally:
+                os.environ["PATH"] = saved
+
     def test_nothing_running_from_here(self):
         with tempfile.TemporaryDirectory() as folder:
             self.assertIsNone(applying.running_compose(folder, containers=lambda engine: [self.labels("/x", "a")]))
+
+
+class RunTest(unittest.TestCase):
+    def run_step(self, command, folder="."):
+        output = []
+        code = applying.run(folder, command, output.append, lambda process: None)
+        return code, output
+
+    def test_english_messages_so_a_password_prompt_is_told_on_any_system(self):
+        import os
+
+        saved = {k: os.environ.get(k) for k in ("LANG", "LANGUAGE", "LC_ALL")}
+        os.environ.update(LANG="de_DE.UTF-8", LANGUAGE="de", LC_ALL="de_DE.UTF-8")
+        try:
+            self.assertEqual(self.run_step('echo "$LC_ALL [$LANGUAGE]"'), (0, ["C.UTF-8 []"]))
+        finally:
+            for k, v in saved.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+        for said in ("sudo: a terminal is required to read the password; either use the -S option",
+                     "doas: a tty is required", "sudo: a password is required",
+                     "Error executing command as another user: No authentication agent found."):
+            self.assertTrue(applying.asked_for_password(["building…", said]), said)
+        self.assertFalse(applying.asked_for_password(["error: disk full"]))
+
+    def test_to_paste_into_a_terminal(self):
+        self.assertEqual(applying.terminal_line("/home/u/my apps/board", "make install"),
+                         "cd '/home/u/my apps/board' && make install")
 
 
 if __name__ == "__main__":

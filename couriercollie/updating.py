@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QProcess, Slot
+from PySide6.QtCore import Slot
 
 from . import applying, assets, checker, config, flatpaks, icons, packages, sources, updater
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, TrackedRepo
@@ -447,25 +447,6 @@ class Updating:
         if (run := self._steps.get(repo_id)) and run.process:
             run.stopped = True
             applying.stop(run.process)
-
-    @Slot(str, result=str)
-    def runStepInTerminal(self, repo_id):
-        """For a step that asks for a password: the same, approved command, in a terminal window where it can be
-        typed. Returns why it couldn't start, or ""."""
-        repo = self._config.find(repo_id)
-        if not repo or not repo.apply_command or not self._step_still_approved(repo):
-            return "The step isn\u2019t approved as it is now."
-        try:
-            program, args = updater.terminal_for(repo.local_path, ["/bin/sh", "-c", repo.apply_command])
-        except updater.UpdateError as e:
-            return str(e)
-        started, _pid = QProcess.startDetached(program, args, repo.local_path)
-        if not started:
-            return f"Couldn\u2019t open {Path(program).name}."
-        if repo.script_run_at != repo.installed:
-            repo.script_run_at = repo.installed  # started; whether it worked, the terminal shows
-            self._changed(repo_id)
-        return ""
 
     @Slot(str)
     def markApplied(self, repo_id):

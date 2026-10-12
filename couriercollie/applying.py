@@ -104,31 +104,43 @@ class Compose:
     services: list[str]  # the ones running: only these are rebuilt, so a profile that's off stays off
 
 
-def _containers(engine: str) -> list[dict[str, str]]:
-    """The running containers' labels, from podman or docker."""
-    exe = shutil.which(engine)
-    if not exe:
-        return []
-    try:
-        out = subprocess.run([exe, "ps", "--format", "json"], capture_output=True, text=True, timeout=15)
-    except (OSError, subprocess.TimeoutExpired):
-        return []
-    if out.returncode != 0 or not out.stdout.strip():
-        return []
-    try:
-        # podman: one JSON array; docker: one JSON object per line, its labels as "a=1,b=2".
-        rows = json.loads(out.stdout) if out.stdout.lstrip().startswith("[") else \
-            [json.loads(line) for line in out.stdout.splitlines() if line.strip()]
-    except ValueError:
-        return []
+def parse_labels(output: str) -> list[dict[str, str]]:
+    """`ps --format '{{json .Labels}}'`, one container a line: podman gives an object, docker "a=1,b=2" (a string).
+    That format works on every version of both; `--format json` is only in Docker 23 and later."""
     labels = []
-    for row in rows if isinstance(rows, list) else []:
-        found = row.get("Labels") if isinstance(row, dict) else None
+    for line in output.splitlines():
+        try:
+            found = json.loads(line)
+        except ValueError:
+            continue
         if isinstance(found, str):
             found = dict(pair.split("=", 1) for pair in found.split(",") if "=" in pair)
         if isinstance(found, dict):
             labels.append({str(k): str(v) for k, v in found.items()})
     return labels
+
+
+def _containers(engine: str) -> list[dict[str, str]]:
+    """The running containers' labels, from podman or docker. None if it can't be asked: not installed, or (docker)
+    you aren't allowed to use it without sudo."""
+    exe = shutil.which(engine)
+    if not exe:
+        return []
+    try:
+        out = subprocess.run([exe, "ps", "--format", "{{json .Labels}}"], capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    return parse_labels(out.stdout) if out.returncode == 0 else []
+
+
+def _docker_compose() -> list[str]:
+    """Docker's compose: the plugin (`docker compose`), or the older standalone `docker-compose`."""
+    try:
+        if subprocess.run(["docker", "compose", "version"], capture_output=True, timeout=15).returncode == 0:
+            return ["docker", "compose"]
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return ["docker-compose"] if shutil.which("docker-compose") else ["docker", "compose"]
 
 
 def running_compose(path: str, containers=_containers) -> Compose | None:
@@ -144,7 +156,7 @@ def running_compose(path: str, containers=_containers) -> Compose | None:
         if engine == "podman":
             tool = ["podman-compose"] if shutil.which("podman-compose") else ["podman", "compose"]
         else:
-            tool = ["docker", "compose"]
+            tool = _docker_compose()
         return Compose(tool, mine[0].get("com.docker.compose.project", ""), files, services)
     return None
 
@@ -219,8 +231,10 @@ def review_text(path: str, command: str) -> str:
     return "\n".join(parts).rstrip() + "\n"
 
 
-# What sudo and friends say when there's no terminal to type a password in.
-_PASSWORD = re.compile(r"terminal is required|password is required|no tty present|askpass", re.I)
+# What sudo, doas and pkexec say when there's no terminal (or no password window) to type a password in. The step
+# runs with English messages (run), so this matches on any system.
+_PASSWORD = re.compile(r"terminal is required|tty is required|password is required|no tty present|askpass|"
+                       r"authentication agent", re.I)
 
 
 def asked_for_password(output: list[str]) -> bool:
@@ -230,8 +244,10 @@ def asked_for_password(output: list[str]) -> bool:
 def run(path: str, command: str, line: Callable[[str], None], started: Callable[[subprocess.Popen], None]) -> int:
     """Run the step in the clone's folder, passing each line of its output on as it comes. Nothing can be typed in
     (no terminal): a password prompt fails instead of waiting. Returns its exit code."""
-    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-    env.pop("SUDO_ASKPASS", None)
+    # English messages: how a password prompt that failed is told (asked_for_password), on any system.
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C.UTF-8"}
+    for name in ("SUDO_ASKPASS", "LANGUAGE"):
+        env.pop(name, None)
     process = subprocess.Popen(["/bin/sh", "-c", command], cwd=path, stdin=subprocess.DEVNULL,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace",
                                start_new_session=True, env=env)
@@ -239,6 +255,11 @@ def run(path: str, command: str, line: Callable[[str], None], started: Callable[
     for text in process.stdout:
         line(text.rstrip("\n"))
     return process.wait()
+
+
+def terminal_line(path: str, command: str) -> str:
+    """The step as one line to paste into a terminal, where a password can be typed."""
+    return f"cd {shlex.quote(path)} && {command}"
 
 
 def stop(process: subprocess.Popen) -> None:

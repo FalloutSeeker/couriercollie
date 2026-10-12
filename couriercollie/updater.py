@@ -265,17 +265,6 @@ def _interpreter(script: Path, name: str = "") -> list[str]:
     return ["sh", relative]
 
 
-def terminal_for(path: str, run: list[str]) -> tuple[str, list[str]]:
-    """(program, arguments) that run a command in a terminal window, from `path`, kept open after it finishes."""
-    if konsole := shutil.which("konsole"):
-        return konsole, ["--workdir", path, "--hold", "-e", *run]
-    if xdg := shutil.which("xdg-terminal-exec"):
-        # No "keep open" option here, so the script's window waits for Enter when it's done.
-        line = shlex.join(run) + "; echo; read -r -p 'Finished. Press Enter to close.' _"
-        return xdg, [f"--dir={path}", "sh", "-c", line]
-    raise UpdateError("No terminal app was found to run it in (Konsole, or one that xdg-terminal-exec knows).")
-
-
 # ---------------------------------------------------------------------------------------------------------------------
 # AppImages: downloaded next to the one you have (or into ~/Applications, DECISIONS.md D8), checked, then swapped in.
 # The old file is removed only once the new one is in place (D6).

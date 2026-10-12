@@ -1367,6 +1367,8 @@ class Backend(QObject, Updating, Account):
             "stepResult": run.result if run else "",
             "stepCode": run.code if run else 0,
             "stepOutput": "\n".join(run.output) if run else "",
+            # For a step that asks for a password: to paste into a terminal, where it can be typed.
+            "stepTerminalLine": applying.terminal_line(repo.local_path, repo.apply_command) if repo.apply_command else "",
             "applyReminder": reminder,
             "applySteps": d.readme_steps,
             "readmeUrl": readme.as_uri() if readme else "",
