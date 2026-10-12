@@ -21,6 +21,7 @@ Whatever is downloaded is checked against the checksum the project published, wh
 import contextlib
 import hashlib
 import os
+import re
 import platform
 import shlex
 import shutil
@@ -82,9 +83,23 @@ def git_out(path: str, *args: str, timeout: int = 30) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
-def _last_line(result: subprocess.CompletedProcess) -> str:
-    lines = [line for line in (result.stderr or result.stdout).splitlines() if line.strip()]
-    return lines[-1].strip() if lines else f"git exited with {result.returncode}"
+# Closing lines that say nothing themselves (zypper's "Please see the above error message for a hint."), and what a
+# line that says why looks like.
+_SAYS_NOTHING = re.compile(r"see the above|problem occurred during or after|has been aborted|abort, retry, ignore",
+                           re.I)
+_SAYS_WHY = re.compile(r"error|fail|cannot|can't|couldn't|unable|conflict|nothing provides|not found|no such|"
+                       r"denied|signature|requires|broken|refus", re.I)
+
+
+def _last_line(result: subprocess.CompletedProcess, program: str = "git") -> str:
+    """Why a command failed, in one line: the last that says why (an error, a conflict, a missing dependency), from
+    its errors before its output; else its last line that says anything."""
+    streams = [[s.strip() for s in text.splitlines() if s.strip() and not _SAYS_NOTHING.search(s)]
+               for text in (result.stderr or "", result.stdout or "")]
+    for lines in streams:
+        if why := [line for line in lines if _SAYS_WHY.search(line)]:
+            return why[-1]
+    return next((lines[-1] for lines in streams if lines), f"{program} exited with {result.returncode}")
 
 
 def _remote_for(path: str, repo_ids: list[str]) -> str:
@@ -693,7 +708,7 @@ def install_package(asset, others: list, kind: str, package: str = "", progress=
     if result.returncode == _CHANGED:
         raise UpdateError("The downloaded file changed after it was checked, so nothing was installed.")
     if result.returncode != 0:
-        raise UpdateError(f"{tool} couldn\u2019t install it: {_last_line(result)}")
+        raise UpdateError(f"{tool} couldn\u2019t install it: {_last_line(result, tool)}")
     return found, version, verified, tool
 
 
@@ -714,5 +729,5 @@ def install_flatpak(asset, others: list, app_id: str = "", progress=None, get_te
     if result is None:
         raise UpdateError("Couldn\u2019t run flatpak.")
     if result.returncode != 0:
-        raise UpdateError(f"flatpak couldn\u2019t install it: {_last_line(result)}")
+        raise UpdateError(f"flatpak couldn\u2019t install it: {_last_line(result, 'flatpak')}")
     return found, verified

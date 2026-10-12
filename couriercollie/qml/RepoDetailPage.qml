@@ -69,6 +69,11 @@ Kirigami.ScrollablePage {
             onTriggered: backend.loadDetails(page.repoId, true)
         },
         Kirigami.Action {
+            text: "Rename\u2026"
+            icon.name: "edit-rename"
+            onTriggered: renameDialog.open()
+        },
+        Kirigami.Action {
             text: "Open Project Page"
             icon.name: "internet-services"
             onTriggered: Qt.openUrlExternally(page.repo.url)
@@ -93,6 +98,71 @@ Kirigami.ScrollablePage {
         }
 
         target: backend
+    }
+
+    // Your own name for the repo (the list's and the page's); its address stays as it is.
+    Kirigami.Dialog {
+        id: renameDialog
+
+        function rename() {
+            const problem = backend.renameRepo(page.repoId, nameField.text);
+            renameError.text = problem;
+            if (problem === "")
+                renameDialog.close();
+        }
+
+        objectName: "renameDialog"
+        title: "Rename"
+        padding: Kirigami.Units.largeSpacing
+        preferredWidth: Kirigami.Units.gridUnit * 22
+        standardButtons: Kirigami.Dialog.NoButton
+        customFooterActions: [
+            Kirigami.Action {
+                text: "Rename"
+                icon.name: "edit-rename"
+                enabled: nameField.text.trim() !== ""
+                onTriggered: renameDialog.rename()
+            },
+            Kirigami.Action {
+                text: "Cancel"
+                icon.name: "dialog-cancel"
+                onTriggered: renameDialog.close()
+            }
+        ]
+        onOpened: {
+            nameField.text = page.repo.name || "";
+            renameError.text = "";
+            nameField.selectAll();
+            nameField.forceActiveFocus();
+        }
+
+        ColumnLayout {
+            spacing: Kirigami.Units.largeSpacing
+
+            Kirigami.InlineMessage {
+                id: renameError
+
+                Layout.fillWidth: true
+                type: Kirigami.MessageType.Error
+                visible: text !== ""
+            }
+
+            QQC2.TextField {
+                id: nameField
+
+                objectName: "renameField"
+                Layout.fillWidth: true
+                maximumLength: 80
+                onAccepted: renameDialog.rename()
+            }
+
+            QQC2.Label {
+                Layout.fillWidth: true
+                text: `Only how it\u2019s shown here. It\u2019s still ${page.repo.domain}/${page.repo.path}.`
+                wrapMode: Text.Wrap
+                opacity: 0.7
+            }
+        }
     }
 
     // Approving a clone's step after updates (applying.py): the command and the files it names, read first (D6).
@@ -232,12 +302,18 @@ Kirigami.ScrollablePage {
                 spacing: Kirigami.Units.smallSpacing / 2
 
                 Kirigami.Heading {
+                    objectName: "repoName"
                     Layout.fillWidth: true
                     level: 1
                     font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.6
                     text: page.repo.name || ""
                     textFormat: Text.PlainText
                     elide: Text.ElideRight
+
+                    // Double-click the name to rename it, as with a category.
+                    TapHandler {
+                        onDoubleTapped: renameDialog.open()
+                    }
                 }
 
                 QQC2.Label {

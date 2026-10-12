@@ -123,6 +123,8 @@ class ProjectInfo:
     # The project's picture: its own icon (GitLab), or its organization's or group's picture. Not a person's profile
     # picture, which wouldn't represent the project. Empty if there's none.
     icon_url: str = ""
+    # Its own website, as the project gives it on GitHub ("https://neovim.io"). Empty if none (or on GitLab).
+    homepage: str = ""
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -200,6 +202,75 @@ def same_project(url: str, repo_ids: list[str]) -> bool:
     project by another of its official addresses. Never by a similar name."""
     key = _project_key(url)
     return key is not None and key in {_project_key(i) for i in repo_ids}
+
+
+def _website(url: str) -> str:
+    parsed = urllib.parse.urlparse(url.strip() if "://" in url else "https://" + url.strip())
+    host = (parsed.hostname or "").lower().removeprefix("www.")
+    return f"{host}{parsed.path.rstrip('/')}" if host else ""
+
+
+def same_website(a: str, b: str) -> bool:
+    """Whether two addresses are the same page ("https://neovim.io/" and "http://www.neovim.io")."""
+    return bool(_website(a)) and _website(a) == _website(b)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Package registries: a distro package's homepage may be its crates.io or PyPI page rather than its repository
+# (Fedora's Rust packages: https://crates.io/crates/ripgrep). The registry says which repository it comes from; asked
+# once per page, and remembered.
+
+_CRATE = re.compile(r"^https?://crates\.io/crates/([A-Za-z0-9_-]+)", re.I)
+_PYPI = re.compile(r"^https?://(?:pypi\.org/project|pypi\.io/project|pypi\.python\.org/pypi)/([A-Za-z0-9_.-]+)", re.I)
+_registry_answers: dict[str, list[str]] | None = None
+_registry_lock = threading.Lock()
+
+
+def _registry_file() -> Path:
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "couriercollie" / "registries.json"
+
+
+def registry_repositories(url: str, get=None) -> list[str]:
+    """The addresses a crates.io or PyPI page's registry gives for the package's source (repository, homepage).
+    [] for any other address, or if the registry couldn't be asked (asked again next time)."""
+    global _registry_answers
+    if m := _CRATE.match(url):
+        api = f"https://crates.io/api/v1/crates/{m[1]}"
+    elif m := _PYPI.match(url):
+        api = f"https://pypi.org/pypi/{m[1]}/json"
+    else:
+        return []
+    with _registry_lock:
+        if _registry_answers is None:
+            try:
+                _registry_answers = json.loads(_registry_file().read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                _registry_answers = {}
+        if api in _registry_answers:
+            return _registry_answers[api]
+    try:
+        data = (get or http_get_json)(api)
+    except SourceError:
+        return []
+    if not isinstance(data, dict):
+        return []
+    if "crate" in data:
+        crate = data.get("crate") or {}
+        found = [crate.get("repository"), crate.get("homepage")]
+    else:
+        info = data.get("info") or {}
+        found = [*(info.get("project_urls") or {}).values(), info.get("home_page")]
+    found = [f for f in found if isinstance(f, str) and f.strip()]
+    with _registry_lock:
+        _registry_answers[api] = found
+        try:
+            _registry_file().parent.mkdir(parents=True, exist_ok=True)
+            tmp = _registry_file().with_suffix(f".{os.getpid()}.tmp")
+            tmp.write_text(json.dumps(_registry_answers), encoding="utf-8")
+            os.replace(tmp, _registry_file())
+        except OSError:
+            pass  # asked again next time
+    return found
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -388,6 +459,7 @@ def parse_github_project(data: dict) -> ProjectInfo:
         description=data.get("description") or "",
         default_branch=data.get("default_branch") or "",
         icon_url=icon,
+        homepage=data.get("homepage") if isinstance(data.get("homepage"), str) else "",
     )
 
 

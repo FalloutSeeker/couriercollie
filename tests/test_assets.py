@@ -1,3 +1,4 @@
+import os
 import unittest
 
 from couriercollie import assets
@@ -223,6 +224,69 @@ class ManagedElsewhereTest(unittest.TestCase):
         answers = {"dpkg-query": "tool|https://github.com/a/tool\n",
                    "apt": "Listing...\ntool/now 1.0 all [installed,local]\n"}
         self.assertIsNone(packages.managed_by_system(["github.com/a/tool"], run=lambda *a: answers.get(a[0], "")))
+
+    def test_a_crates_io_or_pypi_homepage_is_asked_which_repository(self):
+        # Fedora's Rust packages give crates.io as their homepage: the registry says where the project lives.
+        import tempfile
+
+        from couriercollie import packages, sources
+
+        cache = tempfile.TemporaryDirectory()
+        self.addCleanup(cache.cleanup)
+        saved_env, saved_answers = os.environ.get("XDG_CACHE_HOME"), sources._registry_answers
+        os.environ["XDG_CACHE_HOME"], sources._registry_answers = cache.name, None
+        self.addCleanup(lambda: (os.environ.pop("XDG_CACHE_HOME") if saved_env is None
+                                 else os.environ.__setitem__("XDG_CACHE_HOME", saved_env),
+                                 setattr(sources, "_registry_answers", saved_answers)))
+        asked = []
+        answers = {"https://crates.io/api/v1/crates/ripgrep": {"crate": {"repository":
+                                                                         "https://github.com/BurntSushi/ripgrep"}},
+                   "https://pypi.org/pypi/yt-dlp/json": {"info": {"home_page": "",
+                                                                  "project_urls": {"Source": "https://github.com/yt-dlp/yt-dlp"}}}}
+
+        def get(url):
+            asked.append(url)
+            return answers[url]
+        self.assertEqual(sources.registry_repositories("https://crates.io/crates/ripgrep", get),
+                         ["https://github.com/BurntSushi/ripgrep"])
+        self.assertEqual(sources.registry_repositories("https://pypi.org/project/yt-dlp/", get),
+                         ["https://github.com/yt-dlp/yt-dlp"])
+        self.assertEqual(sources.registry_repositories("https://example.org/tool", get), [])  # not a registry
+        sources._registry_answers = None  # a new run: from the file, without asking again
+        self.assertEqual(sources.registry_repositories("https://crates.io/crates/ripgrep", get),
+                         ["https://github.com/BurntSushi/ripgrep"])
+        self.assertEqual(len(asked), 2)
+        # Couldn't be asked: not remembered, so it's asked again next time.
+        def down(url):
+            raise sources.Unreachable("no connection")
+        self.assertEqual(sources.registry_repositories("https://crates.io/crates/fd-find", down), [])
+        self.assertNotIn("https://crates.io/api/v1/crates/fd-find", sources._registry_answers)
+
+        assets.PACKAGE_TOOLS = {"dnf"}
+        self.addCleanup(setattr, assets, "PACKAGE_TOOLS", None)
+        saved = sources.registry_repositories
+        sources.registry_repositories = lambda url, get=None: saved(url, get)
+        self.addCleanup(setattr, sources, "registry_repositories", saved)
+        run = lambda *a: {"dnf": "ripgrep\n", "rpm": "2.0"}.get(a[0], "")  # noqa: E731
+        homepages = [("ripgrep", "https://crates.io/crates/ripgrep"), ("other", "https://crates.io/crates/other")]
+        sources._registry_answers["https://crates.io/api/v1/crates/other"] = ["https://github.com/someone/other"]
+        found = packages.managed_by_system(["github.com/BurntSushi/ripgrep"], run, homepages)
+        self.assertEqual(found[:2], ("dnf", "ripgrep"))
+
+    def test_the_projects_own_website_if_only_one_package_has_it(self):
+        from couriercollie import packages, sources
+
+        self.assertTrue(sources.same_website("https://neovim.io/", "http://www.neovim.io"))
+        self.assertFalse(sources.same_website("https://neovim.io/doc", "https://neovim.io"))
+        assets.PACKAGE_TOOLS = {"dnf"}
+        self.addCleanup(setattr, assets, "PACKAGE_TOOLS", None)
+        run = lambda *a: {"dnf": "x\n", "rpm": "1.0"}.get(a[0], "")  # noqa: E731
+        homepages = [("neovim", "https://neovim.io"), ("qt6-qtbase", "http://www.qt.io"), ("qt6-qtsvg", "http://www.qt.io")]
+        self.assertEqual(packages.managed_by_system(["github.com/neovim/neovim"], run, homepages,
+                                                    website="https://neovim.io/")[1], "neovim")
+        # A website many packages share says nothing about which project a package is.
+        self.assertIsNone(packages.managed_by_system(["github.com/qt/qtbase"], run, homepages, website="https://qt.io"))
+        self.assertIsNone(packages.managed_by_system(["github.com/neovim/neovim"], run, homepages, website="-"))
 
     def test_kde_and_gnome_mirrors_are_the_same_project(self):
         from couriercollie import sources

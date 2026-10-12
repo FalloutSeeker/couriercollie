@@ -86,7 +86,8 @@ class AfterUpdatingTest(UpstreamCase):
         if script is not None:
             (self.other / "deploy.sh").write_text(script)
             git(self.other, "commit", "-q", "-am", "new deploy script")
-        self.push_upstream()
+        self.updates = getattr(self, "updates", 0) + 1
+        self.push_upstream(text=f"update {self.updates}\n")
         self.backend.updateRepo(self.id)
 
     def test_approved_once_then_each_update_applies_itself(self):
@@ -118,6 +119,16 @@ class AfterUpdatingTest(UpstreamCase):
         self.backend.approveStep(self.id, "sh ./deploy.sh")
         self.backend.runStep(self.id)
         self.assertEqual((self.details()["stepResult"], self.details()["stepChanged"]), ("applied", False))
+
+    def test_a_new_update_forgets_how_the_step_went_before(self):
+        # Applied for the last version says nothing about this one, which waits to be looked at again.
+        self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
+        self.update()
+        self.assertEqual(self.details()["stepResult"], "applied")
+        self.update("#!/bin/sh\necho changed\n")
+        d = self.details()
+        self.assertEqual((d["stepChanged"], d["stepResult"], d["stepOutput"]), (True, "", ""))
+        self.assertNotEqual(d["applyReminder"], "")
 
     def test_a_failed_step_says_so_and_isnt_applied(self):
         self.backend.approveStep(self.id, "echo building; echo 'error: out of space' >&2; exit 3")
@@ -190,8 +201,16 @@ class StopStepTest(unittest.TestCase):
             self.assertFalse(thread.is_alive())
             self.assertNotEqual(result["code"], 0)
             # The background sleep it started is gone too (its whole process group).
-            out = subprocess.run(["pgrep", "-g", str(processes[0].pid)], capture_output=True, text=True)
-            self.assertEqual(out.stdout.strip(), "")
+            import time
+
+            for _ in range(50):
+                try:
+                    os.killpg(processes[0].pid, 0)  # anything left in the group?
+                except ProcessLookupError:
+                    break
+                time.sleep(0.1)
+            else:
+                self.fail("something it started is still running")
 
 
 class PullTest(UpstreamCase):
@@ -342,6 +361,31 @@ class PullTest(UpstreamCase):
         git(self.clone, "remote", "rename", "origin", "fork")
         git(self.clone, "remote", "rename", "project", "origin")
         self.assertEqual(updater.pull(str(self.clone), "main", ["github.com/x/y"])[1], newest)
+
+
+class WhyItFailedTest(unittest.TestCase):
+    """The one line said when a package manager or git fails: the one that says why."""
+
+    def why(self, stdout="", stderr="", program="zypper"):
+        return updater._last_line(subprocess.CompletedProcess([], 8, stdout, stderr), program)
+
+    def test_zypper(self):
+        # Its last lines say nothing ("Please see the above error message for a hint.").
+        out = ("warning: gh.rpm: Header V4 RSA/SHA512 Signature, key ID 62313325: NOKEY\n"
+               "gh-2.102.0-1.x86_64 (Plain RPM files cache): Signature verification failed [4-Signatures public key "
+               "is not available]\nAbort, retry, ignore? [a/r/i] (a): a\nProblem occurred during or after "
+               "installation or removal of packages:\nInstallation has been aborted as directed.\n"
+               "Please see the above error message for a hint.\n")
+        self.assertEqual(self.why(out), "gh-2.102.0-1.x86_64 (Plain RPM files cache): Signature verification failed "
+                                        "[4-Signatures public key is not available]")
+
+    def test_apt_and_git(self):
+        self.assertEqual(self.why("Reading package lists...\n", "E: Unable to locate package x\nN: see apt(8)\n", "apt"),
+                         "E: Unable to locate package x")
+        self.assertEqual(self.why("", "fatal: repository 'https://x/y.git/' not found\n", "git"),
+                         "fatal: repository 'https://x/y.git/' not found")
+        self.assertEqual(self.why("all went oddly\n", "", "dnf"), "all went oddly")  # nothing says why: the last line
+        self.assertEqual(self.why("", "", "pacman"), "pacman exited with 8")
 
 
 class InstallScriptTest(unittest.TestCase):

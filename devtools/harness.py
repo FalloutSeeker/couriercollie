@@ -49,7 +49,11 @@ class Harness:
         from PySide6.QtWidgets import QApplication
         from PySide6.QtCore import QUrl
 
+        import couriercollie.backend
         from couriercollie.backend import Backend
+
+        # A project's own website is asked of GitHub once per repo; the checks' projects are made up, so not here.
+        couriercollie.backend._homepage_of = lambda ref, host: "-"
 
         self.messages = []
         qInstallMessageHandler(lambda _m, _c, text: self.messages.append(text))

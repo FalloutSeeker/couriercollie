@@ -342,6 +342,7 @@ class Updating:
         """The clone was just updated here. A running program doesn't use the new files yet: its approved step (if
         any) runs now; if what it runs has changed since it was approved, it waits to be looked at again."""
         repo.updated_to = repo.installed
+        self._steps.pop(repo.id, None)  # the last run was for the version before: it says nothing about this one
         self._changed(repo.id)
         if repo.apply_command and self._step_still_approved(repo):
             self.runStep(repo.id)

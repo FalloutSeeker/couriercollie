@@ -153,7 +153,7 @@ applying.running_compose = lambda path: applying.Compose(["podman-compose"], "ae
                                                          [f"{path}/docker-compose.yml"], ["app"]) \
     if Path(path).name == "aerothemeplasma" else None
 # Not this computer's package manager: only Dolphin is "installed with dnf".
-backend_module._managed_elsewhere = lambda ids: (("Your package manager keeps this up to date.", "dnf", "26.08.1")
+backend_module._managed_elsewhere = lambda ids, website="": (("Your package manager keeps this up to date.", "dnf", "26.08.1")
                                                  if "github.com/KDE/dolphin" in ids else ("", "", ""))
 
 
@@ -239,6 +239,15 @@ h.run([
     h.until(lambda: b.details("gitgud.io/aeroshell/atp/aerothemeplasma")["stepResult"] != "", 30000),
     (500, shot("5d-step-failed")),
     *page("github.com/ImranR98/Obtainium", "6-versions-only"),
+    # Renaming: double-click the name, type, Enter.
+    (0, lambda: h.double_click("repoName")),
+    (500, lambda: h.check("rename opens on a double-click", h.visible("renameDialog"))),
+    (0, lambda: h.win.findChild(QObject, "renameField").setProperty("text", "Obtainium (phone)")),
+    (300, shot("6c-rename")),
+    (0, lambda: h.call("renameDialog", "rename")),
+    (500, lambda: h.check("renamed in the list and on the page", b.repo("github.com/ImranR98/Obtainium")["name"]
+                          == "Obtainium (phone)" and h.find("text:Obtainium (phone)") is not None)),
+    (0, lambda: b.renameRepo("github.com/ImranR98/Obtainium", "Obtainium")),
     *page("github.com/KDE/dolphin", "6b-package-manager"),
     *page("github.com/example/gone", "7-error"),
     *page("github.com/example/notes", "8-branch-not-installed"),

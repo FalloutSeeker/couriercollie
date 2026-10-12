@@ -246,7 +246,7 @@ def find_managed(repos: list[TrackedRepo]) -> dict[str, str]:
     found = {}
     for r in repos:
         ids = [r.id, *r.aliases]
-        if system := packages.managed_by_system(ids, homepages=homepages):
+        if system := packages.managed_by_system(ids, homepages=homepages, website=r.homepage):
             found[r.id] = system[0]
         elif flatpaks.managed_by_flatpak(ids, apps=apps):
             found[r.id] = "Flatpak"

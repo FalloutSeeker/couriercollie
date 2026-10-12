@@ -19,8 +19,10 @@ _PLACE = re.compile(r"(RPM|Debian|Arch) package “(.+)”")
 # The command that installs a package file (given after it), run as root, by full path.
 INSTALL = {
     "dnf": ["/usr/bin/dnf", "install", "-y"],
-    # A file from a project's release isn't signed with a key zypper knows.
-    "zypper": ["/usr/bin/zypper", "--non-interactive", "install", "--allow-unsigned-rpm"],
+    # A file from a project's release is unsigned, or signed with a key zypper doesn't know (GitHub CLI's), and zypper
+    # would refuse it. It was already checked against the project's published checksum, as dnf relies on (dnf doesn't
+    # check signatures on files at all); packages from your repositories are still checked against their signed lists.
+    "zypper": ["/usr/bin/zypper", "--non-interactive", "--no-gpg-checks", "install", "--allow-unsigned-rpm"],
     "apt": ["/usr/bin/apt-get", "install", "-y"],
     "pacman": ["/usr/bin/pacman", "-U", "--noconfirm"],
 }
@@ -168,18 +170,29 @@ def offered_by_a_repository(name: str, run=_out) -> bool:
     return False
 
 
-def managed_by_system(repo_ids: list[str], run=_out, homepages: list[tuple[str, str]] | None = None
-                      ) -> tuple[str, str, str] | None:
+def managed_by_system(repo_ids: list[str], run=_out, homepages: list[tuple[str, str]] | None = None,
+                      website: str = "") -> tuple[str, str, str] | None:
     """(package manager, package, its version) if the project behind these addresses is installed as a package that
-    a repository you have enabled offers: the package manager keeps it up to date. Matched by the package's homepage
-    (sources.same_project), never by a similar name. `homepages`: installed_homepages(), if already read."""
+    a repository you have enabled offers: the package manager keeps it up to date. Never matched by a similar name;
+    by the package's homepage:
+    - the project's address (sources.same_project);
+    - its crates.io or PyPI page, whose registry gives the project's address (sources.registry_repositories);
+    - the project's own `website` ("https://neovim.io"), if that package is the only one with it: a website many
+      packages share (https://www.qt.io) says nothing about which project a package is.
+    `homepages`: installed_homepages(), if already read."""
     from . import sources
 
+    homepages = installed_homepages(run) if homepages is None else homepages
+    matches = [name for name, homepage in homepages
+               if any(sources.same_project(url, repo_ids)
+                      for url in (homepage, *sources.registry_repositories(homepage)))]
+    if website and website != "-":
+        sharing = {name for name, homepage in homepages if sources.same_website(homepage, website)}
+        if len(sharing) == 1:
+            matches += sharing
     # Several packages can share a project's homepage (dolphin, dolphin-libs): the one named like the project first.
     names = {i.rsplit("/", 1)[-1].lower() for i in repo_ids}
-    homepages = installed_homepages(run) if homepages is None else homepages
-    matches = sorted((name for name, homepage in homepages if sources.same_project(homepage, repo_ids)),
-                     key=lambda name: name.lower() not in names)
+    matches = sorted(dict.fromkeys(matches), key=lambda name: name.lower() not in names)
     for name in matches:
         if offered_by_a_repository(name, run):
             tool = next((t for t in ("dnf", "zypper", "apt", "pacman") if assets.has(t)), "")

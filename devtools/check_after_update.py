@@ -114,8 +114,9 @@ try:
     run("git", "push", "-q", "origin", "HEAD:main", cwd=other)
     b.updateRepo(ID)
     d = b.details(ID)
-    check("a changed compose file stops the step", d["stepChanged"] and d["stepResult"] == "applied"
-          and serving(clone) == "2", f"{d['stepChanged']} {serving(clone)}")
+    # (The last run's "Applied" was for version 2: it goes with the new update.)
+    check("a changed compose file stops the step", d["stepChanged"] and d["stepResult"] == ""
+          and serving(clone) == "2", f"{d['stepChanged']} {d['stepResult']} {serving(clone)}")
     check("…and the update is still to apply", d["applyReminder"] != "")
     b.approveStep(ID, d["step"])  # looked at again
     b.runStep(ID)

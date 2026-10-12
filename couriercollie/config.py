@@ -96,6 +96,9 @@ class TrackedRepo:
     # The newest release has builds, but only for other systems (Android, Windows, macOS): only its versions are
     # tracked, and Install never clones it (a phone app's source is no use here). Found when its page loads.
     other_systems: bool = False
+    # The project's own website, as it gives it on GitHub ("https://neovim.io"), or "-" if it gives none: a package
+    # whose homepage is that website is this project (packages.managed_by_system). Looked up once.
+    homepage: str = ""
 
 
 @dataclass

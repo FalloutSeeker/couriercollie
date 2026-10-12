@@ -400,6 +400,16 @@ class BackendTest(unittest.TestCase):
             self.backend.setInstalled(LOCALSEND, "-")
             self.assertTrue(self.backend.details(LOCALSEND)["installClones"], files)
 
+    def test_rename(self):
+        b = self.backend
+        self.assertEqual(b.renameRepo(LOCALSEND, "  My   File Sharer \n"), "")
+        self.assertEqual((b.repo(LOCALSEND)["name"], self.saved(LOCALSEND).name), ("My File Sharer",) * 2)
+        self.assertEqual(self.saved(LOCALSEND).id, LOCALSEND)  # its address stays
+        self.assertEqual(b.renameRepo(LOCALSEND, "   "), "Type a name.")
+        self.assertIn("too long", b.renameRepo(LOCALSEND, "x" * 81))
+        self.assertEqual(b.repo(LOCALSEND)["name"], "My File Sharer")  # unchanged by those
+        self.assertNotEqual(b.renameRepo("github.com/no/such", "x"), "")
+
     def test_branch_with_no_shared_history(self):
         # Added by hand on "main"; "dev" was started from scratch.
         self.relations["b" * 40] = sources.DIVERGED
@@ -646,7 +656,7 @@ class ScannedClonePageTest(unittest.TestCase):
         import couriercollie.backend as backend_module
 
         saved = backend_module._managed_elsewhere
-        backend_module._managed_elsewhere = lambda ids: ("Your package manager keeps this up to date.", "dnf", "1.0")
+        backend_module._managed_elsewhere = lambda ids, website="": ("Your package manager keeps this up to date.", "dnf", "1.0")
         self.addCleanup(setattr, backend_module, "_managed_elsewhere", saved)
         smod = "gitgud.io/aeroshell/smod"
         self.backend.loadDetails(smod, True)

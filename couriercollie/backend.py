@@ -280,11 +280,23 @@ def _scan_note(f: scan.Found, problem: str, similar: TrackedRepo | None) -> str:
     return " ".join(notes)
 
 
-def _managed_elsewhere(repo_ids: list[str]) -> tuple[str, str, str]:
+def _homepage_of(ref: RepoRef, host: str) -> str:
+    """The project's own website, as it gives it on GitHub; "-" if it gives none (GitLab has no such field), "" if
+    the site couldn't be asked (asked again next time). One request, once per repo (TrackedRepo.homepage)."""
+    if host != "github":
+        return "-"
+    try:
+        return sources.project_info(ref).homepage or "-"
+    except SourceError:
+        return ""
+
+
+def _managed_elsewhere(repo_ids: list[str], website: str = "") -> tuple[str, str, str]:
     """If the project is installed in a way something else keeps up to date (a package from a repository you have
     enabled, or a Flatpak from a Flatpak repository): (a note for its page, what keeps it updated, the installed
-    version). couriercollie then never updates it (_can_update): two updaters would fight over the same files."""
-    if found := packages.managed_by_system(repo_ids):
+    version). couriercollie then never updates it (_can_update): two updaters would fight over the same files.
+    `website`: the project's own (TrackedRepo.homepage), which a package may give as its homepage."""
+    if found := packages.managed_by_system(repo_ids, website=website):
         tool, _name, version = found
         return "Your package manager keeps this up to date.", tool, version
     if found := flatpaks.managed_by_flatpak(repo_ids):
@@ -976,6 +988,7 @@ class Backend(QObject, Updating, Account):
                 added_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 # The typed address, if the site redirected (renamed or moved project).
                 aliases=[ref.id] if ref.id.lower() != info.ref.id.lower() else [],
+                homepage=info.homepage or "-",
             )
             if rels:
                 self._auto_pick(repo, rels)
@@ -1006,6 +1019,24 @@ class Backend(QObject, Updating, Account):
             a = suitable[0]
             repo.asset_pattern = assets.pattern_for(a.name, latest.tag)
             repo.kind = assets.classify(a.name, a.url).kind
+
+    # A name is for the list: long enough for any project's, short enough to fit a row.
+    NAME_MAX = 80
+
+    @Slot(str, str, result=str)
+    def renameRepo(self, repo_id, name):
+        """Your own name for a repo, shown in the list and on its page. Returns why it can't be, or ""."""
+        repo, name = self._config.find(repo_id), " ".join(name.split())  # one line, no stray spaces
+        if not repo:
+            return "This repo isn\u2019t tracked any more."
+        if not name:
+            return "Type a name."
+        if len(name) > self.NAME_MAX:
+            return f"That\u2019s too long: keep it to {self.NAME_MAX} characters."
+        if name != repo.name:
+            repo.name = name
+            self._changed(repo_id)
+        return ""
 
     @Slot(str)
     def removeRepo(self, repo_id):
@@ -1142,7 +1173,7 @@ class Backend(QObject, Updating, Account):
         ref, host = RepoRef.from_id(repo_id), repo.host
         scanned, local_path = repo.source == config.SOURCE_SCANNED, repo.local_path
         follow, branch, installed, prereleases = repo.follow, repo.branch, repo.installed, repo.prereleases
-        addresses = [repo.id, *repo.aliases]
+        addresses, homepage = [repo.id, *repo.aliases], repo.homepage
 
         # One API request for the releases, and one for what's new on a branch you're behind on. Branches and the
         # version on disk come from git, which doesn't count against API limits.
@@ -1157,8 +1188,9 @@ class Backend(QObject, Updating, Account):
             scripts = updater.install_scripts(local_path) if clone else []
             steps = _without_images(applying.readme_steps(local_path)) if clone else ""
             compose = applying.running_compose(local_path) if clone else None
-            note, managed_by, managed_version = _managed_elsewhere(addresses)
-            return on_disk, managed_by, Details(managed_elsewhere=note, managed_version=managed_version,
+            website = homepage or _homepage_of(ref, host)  # once
+            note, managed_by, managed_version = _managed_elsewhere(addresses, website)
+            return on_disk, managed_by, website, Details(managed_elsewhere=note, managed_version=managed_version,
                 state="ready", releases=rels, more_releases=len(rels) == PAGE_RELEASES, default_branch=default,
                 branches=branches, branch_error=branch_error, comparison=comparison, commits_base=yours,
                 commits_head=head, local_missing=bool(on_disk) and not on_disk[1], branch_on_disk=branch_on_disk,
@@ -1170,10 +1202,10 @@ class Backend(QObject, Updating, Account):
             if error:
                 self._details[repo_id] = Details(state="error", error=self._error_text(error))
             else:
-                on_disk, managed_by, self._details[repo_id] = result
+                on_disk, managed_by, website, self._details[repo_id] = result
                 if repo := self._config.find(repo_id):
-                    managed_changed = managed_by != repo.managed_by
-                    repo.managed_by = managed_by
+                    managed_changed = managed_by != repo.managed_by or website != repo.homepage
+                    repo.managed_by, repo.homepage = managed_by, website
                     # A scanned repo's version is whatever's on disk now (e.g. after a `git pull` outside the app).
                     from_disk = bool(on_disk and on_disk[0] and on_disk[0] != repo.installed)
                     if from_disk:

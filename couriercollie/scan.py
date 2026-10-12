@@ -54,6 +54,7 @@ class Found:
     other_paths: list[str] = field(default_factory=list)  # the same project found in more places
     aliases: list[str] = field(default_factory=list)  # old addresses it was found under
     needs_password: bool = False  # in a folder this user can't change (e.g. owned by the system in /opt)
+    homepage: str = ""  # the project's own website, once identified ("-" if it gives none)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -343,6 +344,7 @@ def _identify_one(item: Found, lookup: Callable[[RepoRef], sources.ProjectInfo])
         item.aliases.append(item.id)
     item.id, item.url, item.host = info.ref.id, info.ref.web_url, info.host
     item.description = info.description
+    item.homepage = info.homepage or "-"
     if item.kind == assets.KIND_GIT:
         item.name = info.name or item.name
     return Checked(item)
@@ -408,7 +410,7 @@ def merge(config: Config, found: list[Found], resolve: Callable[[str], str | Non
         if repo is None:
             repo = TrackedRepo(
                 id=item.id, name=item.name, url=item.url, host=item.host, description=item.description,
-                added_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                added_at=datetime.now(timezone.utc).isoformat(timespec="seconds"), homepage=item.homepage,
             )
             config.repos.append(repo)
             result.added.append(repo)
