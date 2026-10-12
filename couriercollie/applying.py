@@ -1,17 +1,24 @@
-"""After a clone is updated: a running program only uses the new files once it's restarted, rebuilt or reinstalled,
-and how is up to each project. So a clone's page shows:
+"""After a clone is updated: a running program only uses the new files once it's rebuilt, reinstalled or restarted,
+and how is up to each project. So each clone can have one step to run after an update (TrackedRepo.apply_command): a
+command you approve once, run in the clone's folder, inside the app, after each Update.
 
-- the project's own update steps, quoted from its README (never followed by the app: a README is written for people,
-  and a command guessed from it could do anything);
-- what the app can do for certain: rebuild and restart the containers running from the clone's compose files, as they
-  were started. Like an install script, it's shown first and runs in a terminal you can watch (DECISIONS.md, D6).
+- Suggested from what's certain: rebuilding the containers running from the clone's compose files, or running one of
+  its install, setup or update scripts. The README's update steps are quoted, to help choose; never followed.
+- Approval covers the command and the files it names (a script, a compose file): if an update changes them, the step
+  isn't run until you've looked again (fingerprint). So a pulled change can't slip new commands past you (D6).
+- A step that asks for a password can't be answered here (there's no terminal), so it stops, and can be run in a
+  terminal instead.
 """
 
+import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
+import signal
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -143,7 +150,100 @@ def running_compose(path: str, containers=_containers) -> Compose | None:
 
 
 def compose_command(c: Compose) -> list[str]:
-    """Rebuild the running services from the updated files and restart them, with the same project and files."""
+    """Rebuild the running services from the updated files and restart them, with the same project and files.
+    --force-recreate: podman-compose keeps a container whose compose file is unchanged, even when its image was just
+    rebuilt, so it would go on running the old version."""
     project = ["-p", c.project] if c.project else []
     files = [arg for f in c.files for arg in ("-f", f)]
-    return [*c.tool, *project, *files, "up", "-d", "--build", *c.services]
+    return [*c.tool, *project, *files, "up", "-d", "--build", "--force-recreate", *c.services]
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# The step
+
+
+@dataclass
+class Suggestion:
+    label: str
+    command: str
+
+
+def suggestions(path: str, scripts: list[str], compose: Compose | None) -> list[Suggestion]:
+    """Steps to choose from: rebuilding the running containers, and each install, setup or update script."""
+    from .updater import _interpreter
+
+    found = [Suggestion("Rebuild and restart its containers", shlex.join(compose_command(compose)))] if compose else []
+    for name in scripts:
+        found.append(Suggestion(f"Run {name}", shlex.join(_interpreter(Path(path) / name, name))))
+    return found
+
+
+# A file bigger than this isn't read into the approval: nothing to read before running.
+FILE_MAX_BYTES = 1024 * 1024
+
+
+def named_files(path: str, command: str) -> list[Path]:
+    """The clone's files the command names (a script, a compose file): what approving it covers."""
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return []
+    root, files = Path(path).resolve(), []
+    for word in words:
+        if word.startswith("-"):
+            continue
+        file = (root / word).resolve()
+        try:
+            if file.is_relative_to(root) and file.is_file() and file.stat().st_size <= FILE_MAX_BYTES \
+                    and file not in files:
+                files.append(file)
+        except OSError:
+            continue
+    return files
+
+
+def fingerprint(path: str, command: str) -> str:
+    """What was approved: the command, and the content of the files it names."""
+    digest, root = hashlib.sha256(command.encode()), Path(path).resolve()
+    for file in named_files(path, command):
+        digest.update(b"\0" + str(file.relative_to(root)).encode() + b"\0" + file.read_bytes())
+    return digest.hexdigest()
+
+
+def review_text(path: str, command: str) -> str:
+    """The command and the files it names, to read before approving it."""
+    root = Path(path).resolve()
+    parts = [command]
+    for file in named_files(path, command):
+        parts.append(f"\n# ---- {file.relative_to(root)} ----\n" + file.read_text(encoding="utf-8", errors="replace"))
+    return "\n".join(parts).rstrip() + "\n"
+
+
+# What sudo and friends say when there's no terminal to type a password in.
+_PASSWORD = re.compile(r"terminal is required|password is required|no tty present|askpass", re.I)
+
+
+def asked_for_password(output: list[str]) -> bool:
+    return any(_PASSWORD.search(line) for line in output[-20:])
+
+
+def run(path: str, command: str, line: Callable[[str], None], started: Callable[[subprocess.Popen], None]) -> int:
+    """Run the step in the clone's folder, passing each line of its output on as it comes. Nothing can be typed in
+    (no terminal): a password prompt fails instead of waiting. Returns its exit code."""
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    env.pop("SUDO_ASKPASS", None)
+    process = subprocess.Popen(["/bin/sh", "-c", command], cwd=path, stdin=subprocess.DEVNULL,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace",
+                               start_new_session=True, env=env)
+    started(process)
+    for text in process.stdout:
+        line(text.rstrip("\n"))
+    return process.wait()
+
+
+def stop(process: subprocess.Popen) -> None:
+    """Stop the step and anything it started."""
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        pass

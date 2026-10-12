@@ -68,7 +68,7 @@ h.run([
                         details()["updateNote"])),
     (0, lambda: h.check("up to date, found on this computer", details()["statusKind"] == "current"
                         and h.find("text:Found on this computer") is not None)),
-    (0, lambda: h.check("its install script is offered", h.find("showScript:install.sh") is not None)),
+    (0, lambda: h.check("its install script is suggested", h.find("suggestion:Run install.sh") is not None)),
     (0, lambda: h.check("no Install any more", h.find("updateNow") is None)),
     (0, lambda: h.shot("install-clone-1")),
 ])

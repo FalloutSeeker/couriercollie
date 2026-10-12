@@ -75,7 +75,8 @@ sign-in.
 - Downloads are checked against the project's published checksum. You're warned when there isn't one.
 - It only asks for your password when an update changes system files: installing a package (your package
   manager asks), or updating a git clone owned by the system, such as one in `/opt`.
-- A project's install script, or the command that rebuilds its containers, is shown to you before it runs.
+- For a git clone, you can approve one step to run after each update (rebuild its containers, run its install
+  script, etc.). It's shown to you first, and if an update changes it, it waits for you to look again.
 - Anything your package manager installed (from your distro's repositories, or from Flathub) is never updated here.
   couriercollie only shows its version; your package manager keeps it up to date.
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
-import shlex
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -19,9 +19,20 @@ from . import applying, assets, checker, config, flatpaks, icons, packages, sour
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, TrackedRepo
 from .sources import RepoRef
 
-# Not a script: rebuilding and restarting a clone's running containers (applying.compose_command), offered beside its
-# install scripts and run the same way.
-COMPOSE = ":compose"
+# The last lines of a step's output kept to show: enough to see how it ended.
+STEP_OUTPUT_LINES = 300
+
+
+@dataclass
+class StepRun:
+    """A run of a clone's step after an update (applying.run), while the app is open."""
+    version: str  # the clone's version it applies
+    running: bool = True
+    stopped: bool = False
+    output: list[str] = field(default_factory=list)
+    result: str = ""  # "applied", "failed", "password" (it asked for one), "stopped"
+    code: int = 0
+    process: object = None
 
 if TYPE_CHECKING:
     from .backend import Details
@@ -116,6 +127,7 @@ class Updating:
         self._updating: set[str] = set()
         self._update_notes: dict[str, tuple[str, str]] = {}
         self._progress: dict[str, float] = {}  # a download's progress, 0 to 1, per repo
+        self._steps: dict[str, StepRun] = {}  # each clone's last step run after an update, while the app is open
         self._program_choices: dict[str, list[str]] = {}  # programs to choose from, when an archive has several
         self._phases: dict[str, str] = {}  # "installing" once an RPM's download is done and dnf runs
 
@@ -218,8 +230,8 @@ class Updating:
                 self._changed(repo_id)
                 where = updater.shown(folder)
                 what = f"Cloned {ref} into {where}." if by_branch else f"Cloned {project.name} at {ref} into {where}."
-                self._update_notes[repo_id] = ("done", what + (" To install it, see Applying the Update, below."
-                                                               if scripts else ""))
+                self._update_notes[repo_id] = ("done", what + (" To install it, choose its step under After "
+                                                               "Updating, then Run Now." if scripts else ""))
             self.reposChanged.emit()
             self.detailsChanged.emit(repo_id)
             if repo and error:
@@ -327,28 +339,15 @@ class Updating:
         self._run(work, done)
 
     def _updated_here(self, repo: TrackedRepo):
-        """The clone was just updated here: until that's applied, its page says a running program doesn't use it yet,
-        and its containers (if any) are looked for again."""
+        """The clone was just updated here. A running program doesn't use the new files yet: its approved step (if
+        any) runs now; if what it runs has changed since it was approved, it waits to be looked at again."""
         repo.updated_to = repo.installed
         self._changed(repo.id)
-        if (d := self._details.get(repo.id)) and repo.local_path:
-            path = repo.local_path
-            self._run(lambda: (applying.running_compose(path), applying.readme_steps(path)),
-                      lambda found, error: self._found_how_to_apply(repo.id, found) if not error else None)
+        if repo.apply_command and self._step_still_approved(repo):
+            self.runStep(repo.id)
 
-    def _found_how_to_apply(self, repo_id: str, found):
-        from .backend import _without_images
-
-        if d := self._details.get(repo_id):
-            d.compose, d.readme_steps = found[0], _without_images(found[1])
-            self.detailsChanged.emit(repo_id)
-
-    @Slot(str)
-    def markApplied(self, repo_id):
-        """The update is applied (by hand, or by the project's own updater): the reminder goes."""
-        if (repo := self._config.find(repo_id)) and repo.script_run_at != repo.installed:
-            repo.script_run_at = repo.installed
-            self._changed(repo_id)
+    def _step_still_approved(self, repo: TrackedRepo) -> bool:
+        return applying.fingerprint(repo.local_path, repo.apply_command) == repo.apply_approved
 
     def _pulled(self, repo: TrackedRepo, branch: str, head: str):
         """After a pull, the clone is at the branch's newest commit (as just fetched): your version, the page and the
@@ -375,45 +374,102 @@ class Updating:
             self._update_notes.pop(repo_id, None)
             self._changed(repo_id)
 
-    @Slot(str, str, result=str)
-    def scriptText(self, repo_id, name):
-        """An install script's text, or the command that rebuilds the clone's containers (COMPOSE), to read before
-        running it; or why it can't be shown."""
-        repo = self._config.find(repo_id)
-        if name == COMPOSE:
-            d = self._details.get(repo_id)
-            if not repo or not d or not d.compose:
-                return "# No containers from this folder are running."
-            c = d.compose
-            return (f"# Rebuilds {', '.join(c.services)} ({c.project}) from the updated files and restarts them, with "
-                    f"the compose\n# files they were started with. Their data in volumes is kept.\n\n"
-                    + shlex.join(applying.compose_command(c)) + "\n")
-        try:
-            return updater.script_text(repo.local_path if repo else "", name)
-        except (updater.UpdateError, OSError) as e:
-            return f"# {e}"
+    # -- the step after an update (applying.py) -----------------------------------------------------------------
 
     @Slot(str, str, result=str)
-    def runInstallScript(self, repo_id, name):
-        """Run an install script in a terminal window, from the clone's folder. Only ever from a click, after the
-        script was shown (DECISIONS.md, D6). Returns why it couldn't start, or ""."""
+    def reviewStep(self, repo_id, command):
+        """The command and the files it names, to read before approving it."""
         repo = self._config.find(repo_id)
-        if not repo or not _can_update(repo):
-            return "This repo has no clone on this computer to run a script in."
-        try:
-            if name == COMPOSE:
-                # Looked for again: the containers may have changed since the page loaded.
-                if not (compose := applying.running_compose(repo.local_path)):
-                    return "No containers from this folder are running any more."
-                program, args = updater.terminal_for(repo.local_path, applying.compose_command(compose))
+        if not repo or not _is_clone(repo):
+            return ""
+        return applying.review_text(repo.local_path, command.strip())
+
+    @Slot(str, str)
+    def approveStep(self, repo_id, command):
+        """Run this after each update, as it is now: what it names is remembered, so a change is noticed."""
+        if (repo := self._config.find(repo_id)) and _is_clone(repo) and (command := command.strip()):
+            repo.apply_command, repo.apply_approved = command, applying.fingerprint(repo.local_path, command)
+            self._changed(repo_id)
+
+    @Slot(str)
+    def removeStep(self, repo_id):
+        if repo := self._config.find(repo_id):
+            repo.apply_command, repo.apply_approved = "", ""
+            self._steps.pop(repo_id, None)
+            self._changed(repo_id)
+
+    @Slot(str)
+    def runStep(self, repo_id):
+        """Run the approved step now, in the clone's folder, its output shown on the page. Only as approved."""
+        repo = self._config.find(repo_id)
+        if not repo or not repo.apply_command or repo_id in self._updating or not _is_clone(repo):
+            return
+        if not self._step_still_approved(repo):
+            self.detailsChanged.emit(repo_id)  # the page asks for it to be looked at again
+            return
+        run = self._steps[repo_id] = StepRun(version=repo.installed)
+        self._updating.add(repo_id)
+        self.reposChanged.emit()
+        self.detailsChanged.emit(repo_id)
+        path, command = repo.local_path, repo.apply_command
+
+        def line(text):
+            def add():
+                run.output.append(text)
+                del run.output[:-STEP_OUTPUT_LINES]
+                self.detailsChanged.emit(repo_id)
+            self._deliver.emit(add)
+
+        def started(process):
+            run.process = process
+
+        def done(code, error):
+            self._updating.discard(repo_id)
+            run.process, run.running = None, False
+            if error:
+                run.result, run.output = "failed", [*run.output, str(error)]
+            elif run.stopped:
+                run.result = "stopped"
+            elif code == 0:
+                run.result = "applied"
+                if (repo := self._config.find(repo_id)) and repo.installed == run.version:
+                    repo.script_run_at = run.version
+                    self._changed(repo_id)
             else:
-                program, args = updater.terminal_command(repo.local_path, name)
+                run.result, run.code = ("password" if applying.asked_for_password(run.output) else "failed"), code
+            self.reposChanged.emit()
+            self.detailsChanged.emit(repo_id)
+
+        self._run(lambda: applying.run(path, command, line, started), done)
+
+    @Slot(str)
+    def stopStep(self, repo_id):
+        if (run := self._steps.get(repo_id)) and run.process:
+            run.stopped = True
+            applying.stop(run.process)
+
+    @Slot(str, result=str)
+    def runStepInTerminal(self, repo_id):
+        """For a step that asks for a password: the same, approved command, in a terminal window where it can be
+        typed. Returns why it couldn't start, or ""."""
+        repo = self._config.find(repo_id)
+        if not repo or not repo.apply_command or not self._step_still_approved(repo):
+            return "The step isn\u2019t approved as it is now."
+        try:
+            program, args = updater.terminal_for(repo.local_path, ["/bin/sh", "-c", repo.apply_command])
         except updater.UpdateError as e:
             return str(e)
         started, _pid = QProcess.startDetached(program, args, repo.local_path)
         if not started:
             return f"Couldn\u2019t open {Path(program).name}."
         if repo.script_run_at != repo.installed:
-            repo.script_run_at = repo.installed
+            repo.script_run_at = repo.installed  # started; whether it worked, the terminal shows
             self._changed(repo_id)
         return ""
+
+    @Slot(str)
+    def markApplied(self, repo_id):
+        """The update is applied (by hand, or by the project's own updater): the reminder goes."""
+        if (repo := self._config.find(repo_id)) and repo.script_run_at != repo.installed:
+            repo.script_run_at = repo.installed
+            self._changed(repo_id)

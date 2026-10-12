@@ -95,68 +95,58 @@ Kirigami.ScrollablePage {
         target: backend
     }
 
+    // Approving a clone's step after updates (applying.py): the command and the files it names, read first (D6).
     Kirigami.Dialog {
-        id: scriptDialog
+        id: stepDialog
 
-        property string name
-        property string heading
-        property string error
+        property string command
 
-        function show(name, heading) {
-            scriptDialog.name = name;
-            scriptDialog.heading = heading || `Run ${name}?`;
-            error = "";
-            scriptText.text = backend.scriptText(page.repoId, name);
+        function review(command) {
+            stepDialog.command = command.trim();
+            reviewText.text = backend.reviewStep(page.repoId, stepDialog.command);
             open();
         }
 
-        objectName: "scriptDialog"
-        title: heading
+        objectName: "stepDialog"
+        title: "Run this after each update?"
         padding: Kirigami.Units.largeSpacing
         preferredWidth: Kirigami.Units.gridUnit * 40
         standardButtons: Kirigami.Dialog.NoButton
         customFooterActions: [
             Kirigami.Action {
-                text: "Run in Terminal"
-                icon.name: "utilities-terminal"
+                text: "Approve"
+                icon.name: "dialog-ok-apply"
                 onTriggered: {
-                    scriptDialog.error = backend.runInstallScript(page.repoId, scriptDialog.name);
-                    if (scriptDialog.error === "")
-                        scriptDialog.close();
+                    backend.approveStep(page.repoId, stepDialog.command);
+                    afterUpdating.editing = false;
+                    stepDialog.close();
                 }
             },
             Kirigami.Action {
                 text: "Cancel"
                 icon.name: "dialog-cancel"
-                onTriggered: scriptDialog.close()
+                onTriggered: stepDialog.close()
             }
         ]
 
         ColumnLayout {
             spacing: Kirigami.Units.largeSpacing
 
-            Kirigami.InlineMessage {
-                Layout.fillWidth: true
-                visible: scriptDialog.error !== ""
-                type: Kirigami.MessageType.Error
-                text: scriptDialog.error
-            }
-
             QQC2.Label {
                 Layout.fillWidth: true
-                text: `It runs in a terminal window, in ${page.repo.shownPath}, as you. It may ask for your password itself (for example through sudo), and can change anything that allows. Read it first; scripts it calls aren\u2019t shown here.`
+                text: `After each Update, it runs in ${page.repo.shownPath}, as you, with its output shown here. Read it, and the files it names (below), first: they can change anything you can. If they change, it won\u2019t run until you approve it again.`
                 wrapMode: Text.Wrap
             }
 
-            // As tall as the script, up to about 20 lines; longer ones scroll.
+            // As tall as the text, up to about 20 lines; longer ones scroll.
             QQC2.ScrollView {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(scriptText.implicitHeight, Kirigami.Units.gridUnit * 20)
+                Layout.preferredHeight: Math.min(reviewText.implicitHeight, Kirigami.Units.gridUnit * 20)
 
                 QQC2.TextArea {
-                    id: scriptText
+                    id: reviewText
 
-                    objectName: "scriptText"
+                    objectName: "reviewText"
                     readOnly: true
                     font: Kirigami.Theme.fixedWidthFont
                     wrapMode: TextEdit.NoWrap
@@ -581,30 +571,42 @@ Kirigami.ScrollablePage {
             }
         }
 
-        // ---- Applying the update (a clone): pulling only changes the files (applying.py) --------------------------
+        // ---- After updating (a clone): one step, approved once, run after each Update (applying.py) --------------
 
         ColumnLayout {
-            objectName: "applying"
+            id: afterUpdating
+
+            readonly property bool hasStep: (page.details.step || "") !== ""
+            readonly property bool running: page.details.stepRunning === true
+            readonly property string result: page.details.stepResult || ""
+            // Choosing or changing the step.
+            property bool editing: false
+
+            objectName: "afterUpdating"
             Layout.fillWidth: true
             Layout.maximumWidth: Kirigami.Units.gridUnit * 34
             Layout.topMargin: Kirigami.Units.gridUnit
-            visible: page.ready && ((page.details.applyReminder || "") !== "" || (page.details.applySteps || "") !== ""
-                                    || (page.details.applyActions || []).length > 0)
+            visible: page.ready && page.details.afterUpdating === true
             spacing: Kirigami.Units.smallSpacing
 
             Kirigami.Heading {
                 level: 3
-                text: "Applying the Update"
+                text: "After Updating"
             }
 
-            // An update made here that a running program doesn't use yet.
             Kirigami.InlineMessage {
                 objectName: "applyReminder"
                 Layout.fillWidth: true
-                visible: (page.details.applyReminder || "") !== ""
+                visible: (page.details.applyReminder || "") !== "" && page.details.stepChanged !== true
                 type: Kirigami.MessageType.Information
                 text: page.details.applyReminder || ""
                 actions: [
+                    Kirigami.Action {
+                        text: "Run Now"
+                        icon.name: "media-playback-start"
+                        visible: afterUpdating.hasStep
+                        onTriggered: backend.runStep(page.repoId)
+                    },
                     Kirigami.Action {
                         text: "Mark as Applied"
                         icon.name: "dialog-ok-apply"
@@ -613,7 +615,187 @@ Kirigami.ScrollablePage {
                 ]
             }
 
-            // The project's own steps, quoted: read, never followed by the app.
+            Kirigami.InlineMessage {
+                objectName: "stepChanged"
+                Layout.fillWidth: true
+                visible: page.details.stepChanged === true
+                type: Kirigami.MessageType.Warning
+                text: "What the step runs has changed since you approved it, so it won\u2019t run until you\u2019ve looked again."
+                actions: [
+                    Kirigami.Action {
+                        text: "Review\u2026"
+                        icon.name: "document-preview"
+                        onTriggered: stepDialog.review(page.details.step)
+                    }
+                ]
+            }
+
+            // Choosing the step: suggestions fill in the command, which can be changed before approving it.
+            QQC2.Label {
+                Layout.fillWidth: true
+                visible: !afterUpdating.hasStep || afterUpdating.editing
+                text: "Update only changes the clone\u2019s files: a running program uses them once it\u2019s rebuilt, reinstalled or restarted. Choose how, and each Update will do it."
+                wrapMode: Text.Wrap
+                opacity: 0.8
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                visible: (!afterUpdating.hasStep || afterUpdating.editing) && (page.details.stepSuggestions || []).length > 0
+                spacing: Kirigami.Units.smallSpacing
+
+                Repeater {
+                    model: page.details.stepSuggestions || []
+
+                    delegate: QQC2.Button {
+                        required property var modelData
+
+                        objectName: "suggestion:" + modelData.label
+                        text: modelData.label
+                        onClicked: stepField.text = modelData.command
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                visible: !afterUpdating.hasStep || afterUpdating.editing
+
+                QQC2.TextField {
+                    id: stepField
+
+                    objectName: "stepField"
+                    Layout.fillWidth: true
+                    placeholderText: "A command, run in the clone\u2019s folder"
+                    font: Kirigami.Theme.fixedWidthFont
+                }
+
+                QQC2.Button {
+                    objectName: "reviewStep"
+                    enabled: stepField.text.trim() !== ""
+                    text: "Review and Approve\u2026"
+                    icon.name: "document-preview"
+                    onClicked: stepDialog.review(stepField.text)
+                }
+
+                QQC2.Button {
+                    visible: afterUpdating.editing
+                    text: "Cancel"
+                    onClicked: afterUpdating.editing = false
+                }
+            }
+
+            // The step: what runs, and how it last went.
+            QQC2.Label {
+                visible: afterUpdating.hasStep && !afterUpdating.editing
+                text: "Runs after each Update, in the clone\u2019s folder:"
+                opacity: 0.7
+            }
+
+            QQC2.Label {
+                objectName: "stepCommand"
+                Layout.fillWidth: true
+                visible: afterUpdating.hasStep && !afterUpdating.editing
+                text: page.details.step || ""
+                textFormat: Text.PlainText
+                font: Kirigami.Theme.fixedWidthFont
+                wrapMode: Text.WrapAnywhere
+            }
+
+            RowLayout {
+                visible: afterUpdating.hasStep && !afterUpdating.editing
+
+                QQC2.Button {
+                    objectName: "runStep"
+                    visible: !afterUpdating.running
+                    enabled: page.details.stepChanged !== true && !page.details.updating
+                    text: "Run Now"
+                    icon.name: "media-playback-start"
+                    onClicked: backend.runStep(page.repoId)
+                }
+
+                QQC2.Button {
+                    objectName: "stopStep"
+                    visible: afterUpdating.running
+                    text: "Stop"
+                    icon.name: "media-playback-stop"
+                    onClicked: backend.stopStep(page.repoId)
+                }
+
+                QQC2.BusyIndicator {
+                    visible: afterUpdating.running
+                    running: visible
+                    Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                    Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                }
+
+                QQC2.Button {
+                    objectName: "changeStep"
+                    visible: !afterUpdating.running
+                    flat: true
+                    text: "Change\u2026"
+                    icon.name: "document-edit"
+                    onClicked: {
+                        stepField.text = page.details.step;
+                        afterUpdating.editing = true;
+                    }
+                }
+
+                QQC2.Button {
+                    visible: !afterUpdating.running
+                    flat: true
+                    text: "Remove"
+                    icon.name: "edit-delete-remove"
+                    onClicked: backend.removeStep(page.repoId)
+                }
+            }
+
+            Kirigami.InlineMessage {
+                objectName: "stepResult"
+                Layout.fillWidth: true
+                visible: afterUpdating.result !== "" && !afterUpdating.running
+                type: afterUpdating.result === "applied" ? Kirigami.MessageType.Positive
+                    : afterUpdating.result === "failed" ? Kirigami.MessageType.Error
+                    : afterUpdating.result === "password" ? Kirigami.MessageType.Warning
+                    : Kirigami.MessageType.Information
+                text: afterUpdating.result === "applied" ? "Applied."
+                    : afterUpdating.result === "password" ? "It asked for a password, which can only be typed in a terminal."
+                    : afterUpdating.result === "stopped" ? "Stopped."
+                    : `Failed (exit code ${page.details.stepCode}). The end of its output is below.`
+                actions: [
+                    Kirigami.Action {
+                        text: "Run in Terminal"
+                        icon.name: "utilities-terminal"
+                        visible: afterUpdating.result === "password"
+                        onTriggered: backend.runStepInTerminal(page.repoId)
+                    }
+                ]
+            }
+
+            // Its output as it runs, scrolled to the end; the last lines are kept after.
+            QQC2.ScrollView {
+                id: outputView
+
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(stepOutput.implicitHeight, Kirigami.Units.gridUnit * 12)
+                visible: (page.details.stepOutput || "") !== ""
+                QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
+
+                QQC2.TextArea {
+                    id: stepOutput
+
+                    objectName: "stepOutput"
+                    readOnly: true
+                    text: page.details.stepOutput || ""
+                    textFormat: TextEdit.PlainText
+                    font: Kirigami.Theme.fixedWidthFont
+                    // Long lines (paths, mostly) wrap rather than scroll sideways.
+                    wrapMode: TextEdit.WrapAnywhere
+                    onTextChanged: cursorPosition = length
+                }
+            }
+
+            // The project's own steps, quoted to help choose: read, never followed by the app.
             QQC2.Label {
                 Layout.fillWidth: true
                 Layout.topMargin: Kirigami.Units.smallSpacing
@@ -646,33 +828,6 @@ Kirigami.ScrollablePage {
                     wrapMode: Text.Wrap
                     onLinkActivated: link => Qt.openUrlExternally(link)
                 }
-            }
-
-            // What the app can run for you: shown first, then run in a terminal you can watch (D6). Never on its own.
-            Flow {
-                Layout.fillWidth: true
-                Layout.topMargin: Kirigami.Units.smallSpacing
-                visible: (page.details.applyActions || []).length > 0
-                spacing: Kirigami.Units.smallSpacing
-
-                Repeater {
-                    model: page.details.applyActions || []
-
-                    delegate: QQC2.Button {
-                        required property var modelData
-
-                        objectName: "showScript:" + modelData.name
-                        text: modelData.label
-                        highlighted: (page.details.applyReminder || "") !== ""
-                        icon.name: modelData.name === ":compose" ? "view-refresh" : "run-build"
-                        onClicked: scriptDialog.show(modelData.name, modelData.title)
-                    }
-                }
-            }
-
-            Hint {
-                visible: (page.details.applyActions || []).length > 0
-                text: "Update only changes the clone\u2019s files. These aren\u2019t run by it: each is shown first, then runs in a terminal window."
             }
         }
 

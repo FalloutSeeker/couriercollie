@@ -54,7 +54,7 @@ class ComposeTest(unittest.TestCase):
             command = applying.compose_command(c)
             # Only the running services are rebuilt, with the same files: a profile that's off stays off.
             self.assertIn("/c/deploy/compose.gpu.yml", command)
-            self.assertEqual(command[command.index("up"):], ["up", "-d", "--build", "app", "nginx"])
+            self.assertEqual(command[command.index("up"):], ["up", "-d", "--build", "--force-recreate", "app", "nginx"])
             self.assertEqual(command[command.index("-p"):command.index("-p") + 2], ["-p", "board"])
 
     def test_docker_when_podman_has_none(self):

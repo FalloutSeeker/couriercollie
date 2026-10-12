@@ -6,7 +6,6 @@ installed and no password is asked for. Downloads go to a temporary folder.
     python3 -I devtools/check_rpm.py
 """
 
-import os
 import sys
 import tempfile
 from pathlib import Path

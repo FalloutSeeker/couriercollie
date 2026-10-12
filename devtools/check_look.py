@@ -98,6 +98,8 @@ b = h.backend
 from couriercollie import account, checker, github_login, sources  # noqa: E402
 from couriercollie import backend as backend_module  # noqa: E402
 
+from PySide6.QtCore import QObject  # noqa: E402
+
 DATE = datetime(2026, 9, 30, tzinfo=timezone.utc)
 
 
@@ -224,12 +226,18 @@ h.run([
     *page("github.com/neovim/neovim", "3b-new-copy"),
     *page("github.com/zed-industries/zed", "4-not-installed"),
     *page("gitgud.io/aeroshell/atp/aerothemeplasma", "5-clone-behind"),
-    (0, lambda: h.click("showScript:install.sh")),
-    (600, shot("5b-script")),
-    (0, lambda: h.call("scriptDialog", "close")),
-    (300, lambda: h.click("showScript::compose")),
-    (600, shot("5c-rebuild")),
-    (0, lambda: h.call("scriptDialog", "close")),
+    # After Updating: a suggestion fills in the step; it's reviewed, then approved.
+    (0, lambda: h.click("suggestion:Rebuild and restart its containers")),
+    (300, lambda: h.click("reviewStep")),
+    (600, shot("5b-approve")),
+    (0, lambda: b.approveStep("gitgud.io/aeroshell/atp/aerothemeplasma",
+                              h.win.findChild(QObject, "stepDialog").property("command"))),
+    (0, lambda: h.call("stepDialog", "close")),
+    (500, shot("5c-step")),
+    # Run: the fake project has no compose file, so it fails, with its output shown.
+    (0, lambda: h.click("runStep")),
+    h.until(lambda: b.details("gitgud.io/aeroshell/atp/aerothemeplasma")["stepResult"] != "", 30000),
+    (500, shot("5d-step-failed")),
     *page("github.com/ImranR98/Obtainium", "6-versions-only"),
     *page("github.com/KDE/dolphin", "6b-package-manager"),
     *page("github.com/example/gone", "7-error"),

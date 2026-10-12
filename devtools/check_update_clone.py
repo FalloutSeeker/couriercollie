@@ -49,14 +49,13 @@ h = harness.start(copy_settings_from=settings)
 b = h.backend
 from PySide6.QtCore import QObject  # noqa: E402
 
-from couriercollie import checker, sources, updater  # noqa: E402
+from couriercollie import checker, sources  # noqa: E402
 
 releases = []  # the project's releases, as the site would list them; one is added later
 sources.releases = lambda ref, host, **_: list(releases)
 sources.branches = lambda ref: ("main", [sources.Branch("main", newest)])
 sources.compare = lambda ref, host, yours, head: sources.Comparison(
     sources.SAME if yours == head else sources.BEHIND, 2, [sources.Commit(newest, "change 2")])
-updater.terminal_command = lambda path, name: ("/bin/sh", [f"./{name}"])  # instead of a terminal window
 
 
 released = {}
@@ -102,7 +101,7 @@ h.run([
     (0, lambda: h.check("your version follows", b._config.find(ID).installed == newest)),
     (0, lambda: h.check("says what it did", details()["updateNote"] == "Pulled 2 new commits.", details()["updateNote"])),
     (0, lambda: h.check("…and that a running program needs it applied", h.find("applyReminder") is not None)),
-    (0, lambda: h.check("…with the install script offered there", h.find("showScript:install.sh") is not None)),
+    (0, lambda: h.check("…with its install script suggested", h.find("suggestion:Run install.sh") is not None)),
     (0, lambda: h.check("now up to date", details()["statusKind"] == "current")),
     (0, lambda: h.check("Update gone from page and list", h.find("updateNow") is None
                         and h.find("updateButton:" + ID) is None)),
@@ -113,18 +112,23 @@ h.run([
     (500, lambda: h.check("Refresh clears the note", h.find("updateNote") is None and details()["updateNote"] == "")),
     (0, lambda: h.check("…showing the new version, up to date", details()["versionText"] == f"commit {newest[:7]}"
                         and details()["statusKind"] == "current", details()["versionText"])),
-    (0, lambda: h.click("showScript:install.sh")),
-    (500, lambda: h.check("the script is shown before running", h.visible("scriptDialog"))),
-    (0, lambda: h.check("…all of it", "echo installed" in (h.win.findChild(QObject, "scriptText").property("text")
-                                                          or ""))),
-    (0, lambda: h.check("not run just by showing it", not (clone / "installed.txt").exists())),
-    (0, lambda: h.shot("update-clone-2-script")),
-    (0, lambda: h.click("text:Run in Terminal")),
-    h.until(lambda: (clone / "installed.txt").exists(), 10000),
-    (300, lambda: h.check("Run in Terminal runs it, in the clone's folder", (clone / "installed.txt").exists())),
-    (300, lambda: h.check("…and then the update counts as applied", h.find("applyReminder") is None
-                          and details()["applyReminder"] == "")),
-    (0, lambda: h.shot("update-clone-2b-script-ran")),
+    # After Updating: choose its install script, read it, approve it; Run Now applies the update, here.
+    (0, lambda: h.click("suggestion:Run install.sh")),
+    (300, lambda: h.click("reviewStep")),
+    (500, lambda: h.check("the step is shown before it's approved", h.visible("stepDialog"))),
+    (0, lambda: h.check("…with the script itself", "echo installed" in (h.win.findChild(QObject, "reviewText")
+                                                                       .property("text") or ""))),
+    (0, lambda: h.shot("update-clone-2-approve")),
+    (0, lambda: h.click("text:Approve")),
+    (300, lambda: h.check("approving runs nothing", not (clone / "installed.txt").exists()
+                          and details()["step"] == "/bin/sh ./install.sh", details()["step"])),
+    (0, lambda: h.click("runStep")),
+    h.until(lambda: details()["stepResult"] != "", 10000),
+    (300, lambda: h.check("Run Now runs it, in the clone's folder", (clone / "installed.txt").exists()
+                          and details()["stepResult"] == "applied", details()["stepResult"])),
+    (0, lambda: h.check("…and then the update counts as applied", h.find("applyReminder") is None
+                        and details()["applyReminder"] == "")),
+    (0, lambda: h.shot("update-clone-2b-applied")),
     # From the list, an update that's refused (the clone was switched to another branch) opens the page to say why.
     (0, lambda: (git("switch", "-q", "-c", "mine", cwd=clone), git("reset", "-q", "--hard", start, cwd=clone))),
     (0, lambda: (setattr(b._config.find(ID), "installed", start), checked_once(), h.win.closeRepo())),

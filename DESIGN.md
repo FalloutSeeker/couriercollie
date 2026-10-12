@@ -70,16 +70,16 @@ Details:
   - **Found on every check**, and on opening the page, so a repo never opened is covered too.
   - **Matched by homepage, never by name.** KDE's and GNOME's GitHub mirrors count as the same project as their own
     sites (github.com/KDE/dolphin is invent.kde.org/system/dolphin).
-- **Applying the Update** (a clone): Update only changes the clone's files; a running program uses them once it's
-  restarted, rebuilt or installed again, and how is up to each project. So the page shows:
-  - **A reminder** after an update made here, until it's applied (an action below run, or Mark as Applied).
-  - **The README's update steps,** quoted: the section under a heading about updating, or a paragraph starting "To
-    update". Never followed by the app: a README is written for people, and a command guessed from it could do
-    anything.
-  - **What can be run:** install, setup and update scripts (top folder or `scripts/`), and **Rebuild and Restart
-    Containers** when containers from the clone's compose files are running (the same project, files and services,
-    from Compose's labels: `podman-compose` or `docker compose … up -d --build`). Each is shown first, then runs in
-    a terminal.
+- **After Updating** (a clone): Update only changes the clone's files; a running program uses them once it's rebuilt,
+  reinstalled or restarted. So a clone can have one step, a command run in its folder after each Update:
+  - **Chosen once:** suggestions (rebuilding the containers running from its compose files, or one of its install,
+    setup or update scripts) fill in the command, which can be edited. The README's update steps are quoted beside
+    it, to help choose; never followed.
+  - **Approved once:** the command and the clone's files it names are shown first. If an update changes them, the
+    step doesn't run until approved again.
+  - **Run inside the app,** its output shown live, ending in Applied or Failed (with the exit code). Nothing can be
+    typed in: a step that asks for a password stops, and offers to run in a terminal instead.
+  - **A reminder** while an update made here isn't applied (no step, or it failed); Mark as Applied clears it.
 - **A clone on another branch than the one followed:** the page explains it, and offers to follow the clone's branch
   instead of an Update that would refuse.
 

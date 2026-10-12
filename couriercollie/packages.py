@@ -134,7 +134,7 @@ def _out(*args: str) -> str:
 
 def installed_homepages(run=_out) -> list[tuple[str, str]]:
     """(package name, homepage) of every installed package, from this computer's package manager."""
-    if has_rpm := assets.has("dnf") or assets.has("zypper"):
+    if assets.has("dnf") or assets.has("zypper"):
         lines = run("rpm", "-qa", "--qf", "%{NAME}|%{URL}\\n")
     elif assets.has("apt"):
         lines = run("dpkg-query", "--show", "--showformat=${Package}|${Homepage}\\n")

@@ -252,13 +252,6 @@ def install_scripts(path: str) -> list[str]:
             if (folder / n).is_file() and (folder / n).stat().st_size <= SCRIPT_MAX_BYTES]
 
 
-def script_text(path: str, name: str) -> str:
-    """The script, to read before running it."""
-    if name not in install_scripts(path):
-        raise UpdateError(f"There’s no {name} in {path}.")
-    return (Path(path) / name).read_text(encoding="utf-8", errors="replace")
-
-
 def _interpreter(script: Path, name: str = "") -> list[str]:
     """How to run the script (`name`: its path from the clone's folder, where it's run from): itself if it may be
     run, else what its first line names, else sh."""
@@ -270,14 +263,6 @@ def _interpreter(script: Path, name: str = "") -> list[str]:
     if first.startswith("#!") and (words := shlex.split(first[2:])):
         return [*words, relative]
     return ["sh", relative]
-
-
-def terminal_command(path: str, name: str) -> tuple[str, list[str]]:
-    """(program, arguments) that run the script in a terminal window, from the clone's folder, kept open after it
-    finishes so its output can be read."""
-    if name not in install_scripts(path):
-        raise UpdateError(f"There’s no {name} in {path}.")
-    return terminal_for(path, _interpreter(Path(path) / name, name))
 
 
 def terminal_for(path: str, run: list[str]) -> tuple[str, list[str]]:

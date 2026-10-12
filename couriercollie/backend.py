@@ -21,7 +21,7 @@ from PySide6.QtWidgets import QApplication
 from . import (applying, assets, checker, config, flatpaks, github_login, icons, integration, packages, scan, sources,
                updater)
 from .account import Account
-from .updating import (COMPOSE, Updating, _can_clone, _can_update, _head, _is_appimage, _is_clone, _is_flatpak,
+from .updating import (Updating, _can_clone, _can_update, _head, _is_appimage, _is_clone, _is_flatpak,
                        _is_package, _is_program, _needs_password, _new_copy, _newest_version)
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, Config, ConfigError, TrackedRepo
 from .sources import RepoRef, SourceError
@@ -1334,7 +1334,6 @@ class Backend(QObject, Updating, Account):
             "updating": repo_id in self._updating,
             "updateNoteKind": self._update_notes.get(repo_id, ("", ""))[0],
             "updateNote": self._update_notes.get(repo_id, ("", ""))[1],
-            "installScripts": d.install_scripts,
             **self._applying(repo, d),
             "managedElsewhere": d.managed_elsewhere,
             "branches": [
@@ -1344,24 +1343,34 @@ class Backend(QObject, Updating, Account):
             ],
         }
 
-    @staticmethod
-    def _applying(repo: TrackedRepo | None, d: Details) -> dict:
-        """The page's "Applying the Update" box, for a clone (applying.py): a reminder while an update made here
-        isn't applied, the README's update steps, and what can be run: install scripts, rebuilding its containers."""
+    def _applying(self, repo: TrackedRepo | None, d: Details) -> dict:
+        """The page's "After Updating" section, for a clone (applying.py): its step and how it last ran,
+        suggestions, the README's update steps, and a reminder while an update made here isn't applied."""
         if not repo or repo.managed_by or not _is_clone(repo):
-            return {"applyReminder": "", "applySteps": "", "applyActions": [], "readmeUrl": ""}
-        actions = [{"name": n, "label": f"Show and Run {n}\u2026", "title": f"Run {n}?"} for n in d.install_scripts]
-        if d.compose:
-            actions.append({"name": COMPOSE, "label": "Rebuild and Restart Containers\u2026",
-                            "title": "Rebuild and restart its containers?"})
+            return {"afterUpdating": False}
+        run = self._steps.get(repo.id)
+        changed = bool(repo.apply_command) and applying.fingerprint(repo.local_path, repo.apply_command) \
+            != repo.apply_approved
         reminder = ""
-        if repo.updated_to and repo.updated_to == repo.installed and repo.script_run_at != repo.installed:
-            reminder = (f"Updated here to {_version_text(repo.installed)}. If it\u2019s running, it uses the update "
-                        "only once it\u2019s restarted, rebuilt or installed again"
-                        + (": see below." if actions or d.readme_steps else "."))
+        if repo.updated_to and repo.updated_to == repo.installed and repo.script_run_at != repo.installed \
+                and not (run and run.running):
+            reminder = f"Updated here to {_version_text(repo.installed)}, but not applied yet: a running program " \
+                       "uses it once it\u2019s rebuilt, reinstalled or restarted."
         readme = applying.readme_path(repo.local_path) if d.readme_steps else None
-        return {"applyReminder": reminder, "applySteps": d.readme_steps, "applyActions": actions,
-                "readmeUrl": readme.as_uri() if readme else ""}
+        return {
+            "afterUpdating": True,
+            "step": repo.apply_command,
+            "stepChanged": changed,
+            "stepSuggestions": [{"label": s.label, "command": s.command}
+                                for s in applying.suggestions(repo.local_path, d.install_scripts, d.compose)],
+            "stepRunning": bool(run and run.running),
+            "stepResult": run.result if run else "",
+            "stepCode": run.code if run else 0,
+            "stepOutput": "\n".join(run.output) if run else "",
+            "applyReminder": reminder,
+            "applySteps": d.readme_steps,
+            "readmeUrl": readme.as_uri() if readme else "",
+        }
 
     @staticmethod
     def _current_comparison(repo: TrackedRepo, d: Details) -> sources.Comparison | None:
