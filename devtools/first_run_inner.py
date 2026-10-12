@@ -9,6 +9,9 @@ from pathlib import Path
 
 sys.path.insert(0, "/app/devtools")
 import harness  # noqa: E402
+import relay_client  # noqa: E402  (GitHub's API through the relay, with your login)
+
+print("GitHub through the relay:", relay_client.RELAY or "no", flush=True)
 
 HOME = Path(os.environ["HOME"])
 # What a person might already have: an AppImage they downloaded a while ago, and an old clone.
@@ -107,7 +110,7 @@ b.checkNow()
 pump(lambda: not b.checking, 300)
 shot("list-after-check")
 for r in b._config.repos:
-    print(" ", r.name, "|", b.repo(r.id)["checkText"], flush=True)
+    print(" ", r.name, "|", b.repo(r.id)["checkText"], "|", b.repo(r.id).get("checkDetail", ""), flush=True)
 win.openSettings()
 pump(seconds=1)
 shot("settings", h.window("Settings"))
