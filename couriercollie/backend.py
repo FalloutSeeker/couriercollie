@@ -240,12 +240,15 @@ def _join_folders(folders: list[str]) -> str:
     return ", ".join(names[:-1]) + ", and " + names[-1]
 
 
-def _compare(ref: RepoRef, host: str, yours: str, head: str) -> sources.Comparison | None:
-    """How your version relates to a branch's newest commit. None if there's nothing to compare, or it couldn't be."""
+def _compare(ref: RepoRef, host: str, yours: str, head: str, clone: str = "") -> sources.Comparison | None:
+    """How your version relates to a branch's newest commit. None if there's nothing to compare, or it couldn't be.
+    `clone`: where yours is on disk: asked first (updater.compare_here), then the site."""
     if not head or not yours or yours == NOT_INSTALLED:
         return None
     if yours == head:
         return sources.Comparison(sources.SAME)  # no need to ask
+    if found := updater.compare_here(clone, yours, head):
+        return found
     try:
         return sources.compare(ref, host, yours, head)
     except SourceError:
@@ -1258,7 +1261,8 @@ class Backend(QObject, Updating, Account):
             default, branches, branch_error = _fetch_branches(ref)
             yours = on_disk[0] if on_disk and on_disk[0] else installed
             head = next((b.sha for b in branches if b.name == (branch or default)), "")
-            comparison = _compare(ref, host, yours, head) if follow == FOLLOW_BRANCH else None
+            comparison = _compare(ref, host, yours, head, local_path if scanned else "") \
+                if follow == FOLLOW_BRANCH else None
             clone = scanned and (Path(local_path) / ".git").exists()
             scripts = updater.install_scripts(local_path) if clone else []
             steps = _without_images(applying.readme_steps(local_path)) if clone else ""
@@ -1691,7 +1695,7 @@ class Backend(QObject, Updating, Account):
         def work():
             on_disk, branch_on_disk = _on_disk(scanned, local_path)
             yours = on_disk[0] if on_disk and on_disk[0] else installed
-            return on_disk, branch_on_disk, yours, _compare(ref, host, yours, head)
+            return on_disk, branch_on_disk, yours, _compare(ref, host, yours, head, local_path if scanned else "")
 
         def done(result, error):
             repo, d = self._config.find(repo_id), self._details.get(repo_id)

@@ -12,8 +12,8 @@ really is an AppImage), then swapped in; the old one is removed once the new one
 Flatpak bundles: installed for you with flatpak (flatpaks.py), which never updates a bundle by itself.
 
 Git clones: a project you don't have yet is cloned into ~/src. The new commits on the followed branch are pulled,
-fast-forward only, so nothing of yours is merged, rebased or thrown away. A project's install script is never run
-here; it's shown to you first, and runs in a terminal window you can watch (and type your password into, if it asks).
+fast-forward only, so nothing of yours is merged, rebased or thrown away. What runs after an update (a step you
+approved: applying.py) is never run unseen; one that asks for a password is copied to a terminal to run there.
 
 Whatever is downloaded is checked against the checksum the project published, when there is one, before it's used.
 """
@@ -105,6 +105,28 @@ def _last_line(result: subprocess.CompletedProcess, program: str = "git") -> str
         if why := [line for line in lines if _SAYS_WHY.search(line)]:
             return why[-1]
     return next((lines[-1] for lines in streams if lines), f"{program} exited with {result.returncode}")
+
+
+def compare_here(path: str, yours: str, head: str) -> "sources.Comparison | None":
+    """How your commit relates to the branch's newest, worked out by git in the clone itself, when it has both (once
+    fetched, or after you pulled by hand): free (no request to the site), and it knows commits of yours that were
+    never pushed, which the site can't. None if the clone doesn't have both, or isn't there."""
+    if not path or not (Path(path) / ".git").exists():
+        return None
+    for sha in (yours, head):
+        if _git(path, "cat-file", "-e", f"{sha}^{{commit}}").returncode != 0:
+            return None
+    counts = git_out(path, "rev-list", "--left-right", "--count", f"{yours}...{head}").split()
+    if len(counts) != 2:
+        return None
+    ahead, behind = int(counts[0]), int(counts[1])  # yours only; the branch's only
+    if not ahead and not behind:
+        return sources.Comparison(sources.SAME)
+    if not ahead:
+        log = git_out(path, "log", "--format=%H%x09%s", "-n", "50", f"{yours}..{head}")
+        commits = [sources.Commit(*line.split("\t", 1)) for line in log.splitlines() if "\t" in line]
+        return sources.Comparison(sources.BEHIND, behind, commits)
+    return sources.Comparison(sources.AHEAD if not behind else sources.DIVERGED, behind)
 
 
 def _remote_for(path: str, repo_ids: list[str]) -> str:

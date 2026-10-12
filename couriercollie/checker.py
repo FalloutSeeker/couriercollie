@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import assets, flatpaks, packages, scan, sources
+from . import assets, flatpaks, packages, scan, sources, updater
 from .config import FOLLOW_BRANCH, NOT_INSTALLED, SOURCE_SCANNED, Settings, TrackedRepo
 from .sources import RepoRef, SourceError
 
@@ -189,8 +189,9 @@ def _check_branch(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
         return Result(FAILED, f"Couldn’t check: there’s no branch “{branch}” anymore")
     c = None
     if yours and yours not in (NOT_INSTALLED, head):
+        clone = repo.local_path if repo.source == SOURCE_SCANNED else ""
         try:
-            c = sources.compare(ref, repo.host, yours, head)
+            c = updater.compare_here(clone, yours, head) or sources.compare(ref, repo.host, yours, head)
         except sources.RateLimited:
             raise  # not "couldn't compare": check_repo marks it, so the rest of GitHub's repos aren't asked
         except SourceError:

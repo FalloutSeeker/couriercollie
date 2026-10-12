@@ -630,3 +630,48 @@ class CloneTest(UpstreamCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CompareHereTest(unittest.TestCase):
+    """Comparing your commit with the branch's newest in the clone itself, when it has both."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.repo = Path(self.dir.name) / "clone"
+        self.env = {**os.environ, "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+                    "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+        self.git("init", "-q", "-b", "main", str(self.repo), cwd=self.dir.name)
+        self.a = self.commit("first")
+        self.b = self.commit("second")
+        self.c = self.commit("third")  # the branch's newest
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def git(self, *args, cwd=None):
+        return subprocess.run(["git", *args], cwd=cwd or self.repo, env=self.env, check=True, capture_output=True,
+                              text=True).stdout.strip()
+
+    def commit(self, message):
+        self.git("commit", "-q", "--allow-empty", "-m", message)
+        return self.git("rev-parse", "HEAD")
+
+    def test_behind_with_the_new_commits(self):
+        from couriercollie import sources
+
+        c = updater.compare_here(str(self.repo), self.a, self.c)
+        self.assertEqual((c.relation, c.total, [x.title for x in c.commits]), (sources.BEHIND, 2, ["third", "second"]))
+
+    def test_a_commit_of_your_own_never_pushed(self):
+        from couriercollie import sources
+
+        mine = self.commit("my own change")  # on top of the newest: you have everything, and more
+        self.assertEqual(updater.compare_here(str(self.repo), mine, self.c).relation, sources.AHEAD)
+        self.git("reset", "-q", "--hard", self.a)
+        mine = self.commit("my own change, from before")
+        self.assertEqual(updater.compare_here(str(self.repo), mine, self.c).relation, sources.DIVERGED)
+
+    def test_only_when_the_clone_has_both(self):
+        self.assertIsNone(updater.compare_here(str(self.repo), self.a, "f" * 40))  # not fetched yet: ask the site
+        self.assertIsNone(updater.compare_here(self.dir.name, self.a, self.c))  # not a clone
+        self.assertIsNone(updater.compare_here("", self.a, self.c))
