@@ -580,6 +580,11 @@ def newest_releases(ref: RepoRef, host: str, count: int, prereleases: bool) -> l
     rels = releases(ref, host, count=count)
     if len(rels) == count < RELEASES_PER_PAGE and not prereleases and all(r.prerelease for r in rels):
         rels = releases(ref, host)
+    # A release under a moving name (Neovim's "stable") is a copy of a numbered one, and could be listed first and
+    # taken for the newest: left out where there are numbered releases. Pre-releases ("nightly") are kept, as are
+    # projects that only publish under such a name ("continuous").
+    if any(not r.prerelease and re.search(r"\d", r.tag) for r in rels):
+        rels = [r for r in rels if r.prerelease or re.search(r"\d", r.tag)]
     return rels
 
 

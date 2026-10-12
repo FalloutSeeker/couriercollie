@@ -340,3 +340,23 @@ class LsRemoteTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NewestReleasesTest(unittest.TestCase):
+    """Releases under a moving name, as Neovim's: "nightly" (a pre-release), "stable" (a copy of the newest)."""
+
+    def setUp(self):
+        self.saved = sources.releases
+        self.addCleanup(setattr, sources, "releases", self.saved)
+
+    def newest(self, *tags):
+        rels = [sources.Release(t, t, None, t == "nightly", "", "") for t in tags]
+        sources.releases = lambda ref, host, count=30: rels[:count]
+        return [r.tag for r in sources.newest_releases(sources.RepoRef("github.com", "a/b"), "github", 10, False)]
+
+    def test_a_copy_under_a_moving_name_is_left_out(self):
+        # "stable" listed first (published a moment after v0.12.6) mustn't be taken for the newest.
+        self.assertEqual(self.newest("nightly", "stable", "v0.12.6", "v0.12.5"), ["nightly", "v0.12.6", "v0.12.5"])
+
+    def test_a_project_that_only_publishes_under_such_a_name_keeps_it(self):
+        self.assertEqual(self.newest("continuous"), ["continuous"])
