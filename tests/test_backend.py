@@ -410,6 +410,55 @@ class BackendTest(unittest.TestCase):
         self.assertEqual(b.repo(LOCALSEND)["name"], "My File Sharer")  # unchanged by those
         self.assertNotEqual(b.renameRepo("github.com/no/such", "x"), "")
 
+    def test_couriercollie_tracks_itself_once(self):
+        from couriercollie import assets, integration, packages
+
+        b = self.backend
+        self.addCleanup(setattr, integration, "INSTALLED", integration.INSTALLED)
+        self.addCleanup(setattr, assets, "PACKAGE_TOOLS", assets.PACKAGE_TOOLS)
+        self.addCleanup(setattr, packages, "installed_version", packages.installed_version)
+        integration.INSTALLED = True  # installed as a package
+        packages.installed_version = lambda kind, name: ("0.6.0", name == "couriercollie")
+        files = {"dnf": "couriercollie-0.7.0-1.fc44.noarch.rpm", "zypper": "couriercollie-0.7.0-1.noarch.rpm",
+                 "apt": "couriercollie_0.7.0_all.deb", "pacman": "couriercollie-0.7.0-1-any.pkg.tar.zst"}
+        for tool, file in files.items():
+            assets.PACKAGE_TOOLS = {tool}
+            b._config.repos = [r for r in b._config.repos if r.id != b.MYSELF]
+            b._config.settings.tracked_itself = False
+            b._track_myself()
+            me = b._config.repos[0]  # first in the list
+            self.assertEqual((me.id, me.installed, me.source), (b.MYSELF, "0.6.0", "scanned"), tool)
+            # Its own distro's file in a release, and none of the others'.
+            self.assertEqual([f for f in files.values() if assets.matches(me.asset_pattern, f)], [file], tool)
+        # Once only: stopped tracking, it stays gone.
+        b.removeRepo(b.MYSELF)
+        b._track_myself()
+        self.assertIsNone(b._config.find(b.MYSELF))
+        self.assertTrue(self.saved(LOCALSEND) and config.load(self.path).settings.tracked_itself)
+
+    def test_couriercollie_run_from_its_clone_follows_the_branch(self):
+        import subprocess
+
+        from couriercollie import integration
+
+        clone = Path(self.dir.name) / "couriercollie"
+        env = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t", "PATH": "/usr/bin:/bin"}
+        subprocess.run(["git", "init", "-q", "-b", "main", str(clone)], check=True, env=env)
+        subprocess.run(["git", "-C", str(clone), "commit", "-q", "--allow-empty", "-m", "x"], check=True, env=env)
+        self.addCleanup(setattr, integration, "INSTALLED", integration.INSTALLED)
+        self.addCleanup(setattr, integration, "PROJECT", integration.PROJECT)
+        integration.INSTALLED, integration.PROJECT = False, clone
+        self.backend._track_myself()
+        me = self.backend._config.find(self.backend.MYSELF)
+        head = subprocess.run(["git", "-C", str(clone), "rev-parse", "HEAD"], capture_output=True, text=True).stdout
+        self.assertEqual((me.follow, me.branch, me.kind, me.local_path, me.installed),
+                         ("branch", "main", "git", str(clone), head.strip()))
+        # Already tracked (added by hand, or found by a scan): not added again.
+        self.backend._config.settings.tracked_itself = False
+        self.backend._track_myself()
+        self.assertEqual(len([r for r in self.backend._config.repos if r.id == self.backend.MYSELF]), 1)
+
     def test_branch_with_no_shared_history(self):
         # Added by hand on "main"; "dev" was started from scratch.
         self.relations["b" * 40] = sources.DIVERGED

@@ -31,7 +31,7 @@ Download the package for your distro from [Releases](https://github.com/FalloutS
 | Fedora 43+ | `sudo dnf install ./couriercollie-*.fc*.noarch.rpm` |
 | openSUSE Tumbleweed, Leap 16+ | `sudo zypper install --allow-unsigned-rpm ./couriercollie-*.noarch.rpm` |
 | Ubuntu 26.04+, Debian 13+ | `sudo apt install ./couriercollie_*_all.deb` |
-| Arch | `sudo pacman -U ./couriercollie-*-any.pkg.tar.zst` |
+| Arch (btw) | `sudo pacman -U ./couriercollie-*-any.pkg.tar.zst` |
 
 Your package manager installs everything else it needs. Then open **couriercollie** from your app menu.
 
@@ -51,7 +51,7 @@ cd couriercollie
 | Fedora 43+ | `sudo dnf install python3-pyside6 kf6-kirigami` |
 | openSUSE Tumbleweed, Leap 16+ | `sudo zypper install python3 python3-pyside6 kf6-kirigami-imports` |
 | Ubuntu 26.04+, Debian 13+ | `sudo apt install python3-pyside6.qtquick python3-pyside6.qtwidgets python3-pyside6.qtdbus python3-pyside6.qtnetwork qml6-module-org-kde-kirigami qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts` |
-| Arch | `sudo pacman -S pyside6 kirigami` |
+| Arch (btw) | `sudo pacman -S pyside6 kirigami` |
 
 Kirigami is KDE's toolkit for app windows: one library, not the rest of KDE.
 
@@ -105,8 +105,7 @@ The scan folders are your home folder, `/opt`, `/usr/local` and `/srv`, where so
 rest of the system belongs to your package manager. Change them in Settings.
 
 **Which distros?** It's built and tested mainly on Fedora KDE. openSUSE, Ubuntu, Debian, Arch and GNOME are
-supported, but need feedback. Tried it somewhere? Please
-[open an issue](https://github.com/FalloutSeeker/couriercollie/issues), whether it worked or not.
+supported, but need feedback.
 
 **Start over:** `./run.sh --reset` brings the welcome screen back. Your old settings are kept as a dated backup.
 

@@ -475,7 +475,7 @@ class UpdateClickedTest(UpstreamCase):
         self.assertEqual(self.backend.details(self.id)["applyReminder"], "")
         self.backend.updateRepo(self.id)
         self.assertTrue(self.backend.details(self.id)["applyReminder"].startswith(
-            f"Updated here to commit {self.newest[:7]}, but not applied yet"))
+            f"Updated to commit {self.newest[:7]}, but not in use yet"))
         self.assertEqual(self.config.load(self.path).repos[0].updated_to, self.newest)  # kept
         self.backend.markApplied(self.id)  # done by hand, or by the project's own updater
         self.assertEqual(self.backend.details(self.id)["applyReminder"], "")

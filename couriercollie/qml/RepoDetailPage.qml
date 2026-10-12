@@ -183,13 +183,15 @@ Kirigami.ScrollablePage {
         preferredWidth: Kirigami.Units.gridUnit * 40
         standardButtons: Kirigami.Dialog.NoButton
         customFooterActions: [
+            // Approved, it runs straight away (then after each update): no second click.
             Kirigami.Action {
-                text: "Approve"
-                icon.name: "dialog-ok-apply"
+                text: "Approve and Run"
+                icon.name: "media-playback-start"
                 onTriggered: {
                     backend.approveStep(page.repoId, stepDialog.command);
                     afterUpdating.editing = false;
                     stepDialog.close();
+                    backend.runStep(page.repoId);
                 }
             },
             Kirigami.Action {
@@ -204,7 +206,7 @@ Kirigami.ScrollablePage {
 
             QQC2.Label {
                 Layout.fillWidth: true
-                text: `After each Update, it runs in ${page.repo.shownPath}, as you, with its output shown here. Read it, and the files it names (below), first: they can change anything you can. If they change, it won\u2019t run until you approve it again.`
+                text: `Runs now and after every update, in ${page.repo.shownPath}. Read it first: it can change anything you can. You\u2019ll be asked again if it changes.`
                 wrapMode: Text.Wrap
             }
 
@@ -696,7 +698,7 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 visible: page.details.stepChanged === true
                 type: Kirigami.MessageType.Warning
-                text: "What the step runs has changed since you approved it, so it won\u2019t run until you\u2019ve looked again."
+                text: "This step changed since you approved it. Review it to run it again."
                 actions: [
                     Kirigami.Action {
                         text: "Review\u2026"
@@ -710,7 +712,7 @@ Kirigami.ScrollablePage {
             QQC2.Label {
                 Layout.fillWidth: true
                 visible: !afterUpdating.hasStep || afterUpdating.editing
-                text: "Update only changes the clone\u2019s files: a running program uses them once it\u2019s rebuilt, reinstalled or restarted. Choose how, and each Update will do it."
+                text: "What should run after each update? For example, rebuild it or run its install script."
                 wrapMode: Text.Wrap
                 opacity: 0.8
             }
@@ -764,7 +766,7 @@ Kirigami.ScrollablePage {
             // The step: what runs, and how it last went.
             QQC2.Label {
                 visible: afterUpdating.hasStep && !afterUpdating.editing
-                text: "Runs after each Update, in the clone\u2019s folder:"
+                text: "After each update, this runs:"
                 opacity: 0.7
             }
 

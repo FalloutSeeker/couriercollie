@@ -119,13 +119,11 @@ h.run([
     (0, lambda: h.check("…with the script itself", "echo installed" in (h.win.findChild(QObject, "reviewText")
                                                                        .property("text") or ""))),
     (0, lambda: h.shot("update-clone-2-approve")),
-    (0, lambda: h.click("text:Approve")),
-    (300, lambda: h.check("approving runs nothing", not (clone / "installed.txt").exists()
-                          and details()["step"] == "/bin/sh ./install.sh", details()["step"])),
-    (0, lambda: h.click("runStep")),
+    (0, lambda: h.click("text:Approve and Run")),
     h.until(lambda: details()["stepResult"] != "", 10000),
-    (300, lambda: h.check("Run Now runs it, in the clone's folder", (clone / "installed.txt").exists()
-                          and details()["stepResult"] == "applied", details()["stepResult"])),
+    (300, lambda: h.check("approving runs it straight away, in the clone's folder", (clone / "installed.txt").exists()
+                          and details()["step"] == "/bin/sh ./install.sh" and details()["stepResult"] == "applied",
+                          details()["stepResult"])),
     (0, lambda: h.check("…and then the update counts as applied", h.find("applyReminder") is None
                         and details()["applyReminder"] == "")),
     (0, lambda: h.shot("update-clone-2b-applied")),

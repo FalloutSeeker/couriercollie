@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from PySide6.QtCore import Property, QFileSystemWatcher, QObject, QProcess, Qt, QTimer, Signal, Slot
+from PySide6.QtCore import Property, QFileSystemWatcher, QObject, QProcess, QTimer, Signal, Slot
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
@@ -381,9 +381,46 @@ class Backend(QObject, Updating, Account):
         self._watcher.addPath(str(self._state_path.parent))
         self._watcher.directoryChanged.connect(self._reload_checks)
         if self._desktop and not self._config_error:
+            self._track_myself()
             integration.set_background_checks(self._config.settings.auto_check)
             integration.set_start_at_login(self._config.settings.start_at_login)  # rewritten if couriercollie moved
             self._update_badge()
+
+    # couriercollie's own project, and its release files: the one for each package manager (devtools/build_package.sh
+    # names them), so each finds only its own.
+    MYSELF = "github.com/FalloutSeeker/couriercollie"
+    MY_FILES = {"dnf": (assets.KIND_RPM, "couriercollie-*.fc*.noarch.rpm"),
+                "zypper": (assets.KIND_RPM, "couriercollie-*-1.noarch.rpm"),
+                "apt": (assets.KIND_DEB, "couriercollie_*_all.deb"),
+                "pacman": (assets.KIND_ARCH, "couriercollie-*-1-any.pkg.tar.zst")}
+
+    def _track_myself(self):
+        """On the first start, couriercollie adds itself to the list, so you hear about its own updates; once only,
+        so if you stop tracking it, it stays gone. Followed as it's installed: its package (Update installs the new
+        one with your package manager), or, run from a git clone, the clone's branch (Update pulls it)."""
+        s = self._config.settings
+        if s.tracked_itself:
+            return
+        s.tracked_itself = True
+        if not self._config.find_any(self.MYSELF):
+            from . import __version__
+
+            repo = TrackedRepo(id=self.MYSELF, name="couriercollie", url=f"https://{self.MYSELF}", host="github",
+                               installed=__version__, icon=f"theme:{integration.ICON}", homepage="-",
+                               added_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
+            clone = integration.PROJECT
+            if not integration.INSTALLED and (clone / ".git").exists():
+                repo.follow, repo.branch, repo.kind = FOLLOW_BRANCH, "main", assets.KIND_GIT
+                repo.source, repo.local_path = config.SOURCE_SCANNED, str(clone)
+                repo.installed = updater.git_out(str(clone), "rev-parse", "HEAD") or __version__
+            else:
+                tool = next((t for t in self.MY_FILES if assets.has(t)), "")
+                kind, pattern = self.MY_FILES.get(tool, ("", ""))
+                if kind and packages.installed_version(kind, "couriercollie")[1]:
+                    repo.kind, repo.asset_pattern = kind, pattern
+                    repo.source, repo.local_path = config.SOURCE_SCANNED, packages.place(kind, "couriercollie")
+            self._config.repos.insert(0, repo)
+        self._save()
 
     def shutdown(self):
         self._signin_cancel.set()  # a sign-in waiting for its code to be entered stops
@@ -639,7 +676,10 @@ class Backend(QObject, Updating, Account):
         front, the list shows them. Clicking it brings the window forward."""
         if not fresh or not self._desktop or not self._config.settings.toasts:
             return
-        if QGuiApplication.applicationState() == Qt.ApplicationState.ApplicationActive:
+        # In front: a window of ours is shown and has the focus. (Qt's application state isn't enough: with the window
+        # closed to the tray, it can stay "active" with no window at all, and nothing would ever be announced.)
+        window = QGuiApplication.focusWindow()
+        if window is not None and window.isVisible() and window.isActive():
             return
         names = [r.name for r in self._config.repos if r.id in fresh]
         command = integration.notify_command(*integration.updates_message(names))
@@ -1386,8 +1426,7 @@ class Backend(QObject, Updating, Account):
         reminder = ""
         if repo.updated_to and repo.updated_to == repo.installed and repo.script_run_at != repo.installed \
                 and not (run and run.running):
-            reminder = f"Updated here to {_version_text(repo.installed)}, but not applied yet: a running program " \
-                       "uses it once it\u2019s rebuilt, reinstalled or restarted."
+            reminder = f"Updated to {_version_text(repo.installed)}, but not in use yet."
         readme = applying.readme_path(repo.local_path) if d.readme_steps else None
         return {
             "afterUpdating": True,

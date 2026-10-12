@@ -35,6 +35,9 @@ Off until turned on (D12). When on, **Scan** lists what it finds; you tick what 
 Paste a project's address (any GitHub or GitLab page of it). The app follows renames, fetches the releases, and
 picks the file for this computer if there's exactly one. A project without releases follows its default branch.
 
+**couriercollie itself** is added on the first start, once (if you stop tracking it, it stays gone): its own
+package file for your distro, or, run from a git clone, the clone's branch.
+
 ## 3. The repo page
 
 Top to bottom:
@@ -75,8 +78,8 @@ Details:
   - **Chosen once:** suggestions (rebuilding the containers running from its compose files, or one of its install,
     setup or update scripts) fill in the command, which can be edited. The README's update steps are quoted beside
     it, to help choose; never followed.
-  - **Approved once:** the command and the clone's files it names are shown first. If an update changes them, the
-    step doesn't run until approved again.
+  - **Approved once,** and run straight away: the command and the clone's files it names are shown first. If an
+    update changes them, the step doesn't run until approved again.
   - **Run inside the app,** its output shown live, ending in Applied or Failed (with the exit code). Nothing can be
     typed in: a step that needs elevation stops, and gives its command to run in your own terminal (Copy Command).
     A password is never typed into couriercollie.
@@ -104,8 +107,8 @@ Details:
   - **After an uninstall** (the package removed, or the project folder deleted), the timer's next wake finds
     couriercollie gone: it turns itself off and removes its files, and a project folder's menu entry, rather than
     failing every hour. Uninstalling a package can't reach your home folder; this can.
-- **Telling you:** a notification for updates not announced before, only when the window isn't in front. The taskbar
-  icon shows the number of updates.
+- **Telling you:** a notification for updates not announced before, only when the window isn't in front (closed to
+  the tray counts as not in front). The taskbar icon, and the tray icon, show the number of updates.
 - **Results** live in `~/.local/state/couriercollie/checks.json`, apart from the settings. That way the background
   check and the window never overwrite each other.
 

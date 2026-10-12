@@ -45,6 +45,8 @@ class Settings:
     start_at_login: bool = False
     # Closing the window leaves couriercollie running in the tray (tray.py), rather than quitting.
     keep_in_tray: bool = False
+    # couriercollie added itself to the list (Backend._track_myself): once, so if you stop tracking it, it stays gone.
+    tracked_itself: bool = False
 
 
 @dataclass
