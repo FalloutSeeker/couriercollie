@@ -256,6 +256,21 @@ class ProgramTest(AppImageCase):
                 self.install("v1", name)
         self.assertFalse(any(Path(self.dir.name).rglob("escaped")))
 
+    def test_a_program_on_its_own_not_in_an_archive(self):
+        # yq publishes "yq_linux_amd64", the program itself: installed as "yq", updated like any other.
+        _Files.files["tool_linux_amd64"] = ELF + b"1.0"
+        link, verified, replaced = self.install("v1.0", "tool_linux_amd64")
+        self.assertEqual((link.name, link.read_bytes(), verified, replaced), ("tool", ELF + b"1.0", True, False))
+        self.assertTrue(os.access(link, os.X_OK))
+        _Files.files["tool_linux_amd64"] = ELF + b"2.0"
+        link, _, replaced = self.install("v2.0", "tool_linux_amd64")
+        self.assertEqual((link.read_bytes(), replaced, updater.program_version(link)), (ELF + b"2.0", True, "v2.0"))
+        # Not a program after all (an error page, say): nothing installed.
+        _Files.files["tool_linux_amd64"] = b"<html>Not here</html>"
+        with self.assertRaises(updater.UpdateError):
+            self.install("v3.0", "tool_linux_amd64")
+        self.assertEqual(link.read_bytes(), ELF + b"2.0")
+
     def test_no_program_inside(self):
         _Files.files["docs.tar.gz"] = _archive("tar", {"docs/README": (b"text", 0o644)})
         with self.assertRaisesRegex(updater.UpdateError, "no program for Linux"):

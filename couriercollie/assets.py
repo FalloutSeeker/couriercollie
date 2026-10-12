@@ -29,9 +29,10 @@ _FOREIGN_EXT = {
     ".pkg": "macOS", ".apk": "Android", ".aab": "Android", ".ipa": "iOS",
 }
 # Archives beside a release's programs that hold none: eza's "completions-0.23.5.tar.gz" and "man-0.23.5.tar.gz", and
-# source code anywhere in the name (glab's "glab_1.122.0_source.tar.gz", WezTerm's "…-src.tar.gz").
+# source code or manual pages anywhere in the name (glab's "glab_1.122.0_source.tar.gz", WezTerm's "…-src.tar.gz",
+# yq's "yq_man_page_only.tar.gz").
 _NOT_A_PROGRAM = re.compile(r"(?:shell-)?(?:completions?|man|manpages?|docs?|vendor)(?![a-z])|"
-                            r".*(?<![a-z])(?:source|src|sources)(?![a-z])", re.I)
+                            r".*(?<![a-z])(?:source|src|sources|man[_-]?pages?|completions?)(?![a-z])", re.I)
 _NOT_SOFTWARE = (".zsync", ".sha256", ".sha512", ".sha256sum", ".sha512sum", ".sig", ".asc", ".minisig", ".pem", ".sbom",
                  ".json", ".txt", ".md5", ".spdx", ".intoto.jsonl", ".idsig", ".cert", ".crt", ".pub")
 # Whole words only, so "studios" isn't read as "iOS".
@@ -81,8 +82,9 @@ def classify(name: str, url: str = "", machine: str | None = None) -> AssetInfo:
     machine = machine or platform.machine()
     info = _classify_name(name.lower(), machine)
     if info.kind == KIND_FILE and url:
-        from_url = _classify_name(url.lower().split("?", 1)[0].rsplit("/", 1)[-1], machine)
-        if from_url.kind != KIND_FILE:
+        last = url.lower().split("?", 1)[0].rsplit("/", 1)[-1]
+        from_url = _classify_name(last, machine)
+        if from_url.kind != KIND_FILE and not _bare(last):  # a link's ".../download" is no file's name
             return from_url
     return info
 
@@ -119,7 +121,18 @@ def _kind_of(lower: str) -> "str | AssetInfo":
         return KIND_PROGRAM
     if lower.endswith(tuple(_FOREIGN_EXT)):
         return AssetInfo(KIND_OTHER, False, f"for {_FOREIGN_EXT['.' + lower.rsplit('.', 1)[-1]]}")
+    if _bare(lower) and ("linux" in lower or _ANY_ARCH.search(lower)):
+        return KIND_PROGRAM  # the program itself, not in an archive (installed as one: updater.install_program)
     return KIND_FILE
+
+
+def _bare(lower: str) -> bool:
+    """A file with no extension, as a program on its own is published: yq's "yq_linux_amd64", hugo's
+    "hugo_0.120.0_linux-amd64" (the dots there are the version's)."""
+    if any(c in lower for c in " ()"):
+        return False  # a label ("Linux (x86_64)", on GitLab), not a file's name
+    ext = lower.rsplit(".", 1)[1] if "." in lower else ""
+    return not re.fullmatch(r"[a-z][a-z0-9]{0,8}", ext)
 
 
 def _classify_name(lower: str, machine: str) -> AssetInfo:
@@ -147,7 +160,9 @@ def _classify_name(lower: str, machine: str) -> AssetInfo:
         return AssetInfo(kind, False, f"for {_ARCH_SAID.get(m.group(1), m.group(1))} processors")
     # No processor mentioned: usually fine for RPMs ("noarch") and AppImages with a single build. A file of unknown
     # type only counts if it says it's for Linux.
-    return AssetInfo(kind, kind != KIND_FILE or "linux" in lower, "")
+    # Unknown, or a bare program: only if it says it's for Linux ("kubectl" alone could be anyone's).
+    return AssetInfo(kind, "linux" in lower if kind == KIND_FILE or (kind == KIND_PROGRAM and _bare(lower)) else True,
+                     "")
 
 
 def _os_label(word: str) -> str:

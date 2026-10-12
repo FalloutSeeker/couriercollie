@@ -322,6 +322,17 @@ class ManagedElsewhereTest(unittest.TestCase):
         self.assertIsNone(flatpaks.managed_by_flatpak(["github.com/e/bundle"]))  # Flatpak never updates a bundle
 
 
+class ProgramOnItsOwnTest(unittest.TestCase):
+    def test_a_program_file_with_no_extension(self):
+        for name in ("yq_linux_amd64", "gitlab-runner-linux-amd64", "hugo_0.120.0_linux-amd64"):
+            info = assets.classify(name, machine="x86_64")
+            self.assertEqual((info.kind, info.suits), (KIND_PROGRAM, True), name)
+        self.assertFalse(assets.classify("yq_linux_arm64", machine="x86_64").suits)
+        self.assertFalse(assets.classify("yq_darwin_amd64", machine="x86_64").suits)
+        self.assertFalse(assets.classify("kubectl", machine="x86_64").suits)  # says nothing of Linux
+        self.assertEqual(assets.classify("app.bin", machine="x86_64").kind, KIND_FILE)  # has an extension
+
+
 class ThirtyTwoBitTest(unittest.TestCase):
     def test_32_bit_builds_arent_this_64_bit_pcs(self):
         # lazygit ships "linux_x86_64" and "linux_32-bit": only the first is for a 64-bit PC.
@@ -340,7 +351,7 @@ class ThirtyTwoBitTest(unittest.TestCase):
         self.assertTrue(assets.classify("pharmacy-tool-1.0-x86_64.tar.gz", machine="x86_64").suits)  # "arm" in a word
         for name in ("completions-0.23.5.tar.gz", "man-0.23.5.tar.gz", "manpages.tar.gz", "docs.zip", "source.tar.gz",
                      "shell-completions.tar.gz", "glab_1.122.0_source.tar.gz", "wezterm-20240203-110809-src.tar.gz",
-                     "nvim-linux-x86_64.appimage.zsync"):
+                     "nvim-linux-x86_64.appimage.zsync", "yq_man_page_only.tar.gz"):
             info = assets.classify(name, machine="x86_64")
             self.assertEqual((info.suits, info.build), (False, False), name)
         self.assertTrue(assets.classify("mandoc-1.0-linux-x86_64.tar.gz", machine="x86_64").suits)  # not "man-…"

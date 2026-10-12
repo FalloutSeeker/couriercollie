@@ -509,10 +509,16 @@ def _folder_name(text: str) -> str:
     return "".join(c if c.isalnum() or c in "._-" else "_" for c in text).strip(".") or "_"
 
 
-def _unpack(archive: Path, into: Path) -> None:
+def _unpack(archive: Path, into: Path, name: str = "program") -> None:
     """Unpacks an archive into `into`, refusing anything that would land outside it, links that point outside it,
-    device files, and archives that unpack to more than UNPACKED_MAX_BYTES."""
+    device files, and archives that unpack to more than UNPACKED_MAX_BYTES. A Linux program on its own, not in an
+    archive (yq's "yq_linux_amd64"), goes in as `name`, runnable."""
     into.mkdir(parents=True)
+    with archive.open("rb") as f:
+        if f.read(4) == b"\x7fELF":
+            shutil.copyfile(archive, into / name)
+            (into / name).chmod(0o755)
+            return
     if zipfile.is_zipfile(archive):
         with zipfile.ZipFile(archive) as z:
             members = z.infolist()
@@ -584,7 +590,8 @@ def install_program(repo_id: str, tag: str, asset, others: list, wanted: str = "
     shutil.rmtree(unpacking, ignore_errors=True)
     try:
         verified = _download_checked(asset, part, others, progress, get_text)
-        _unpack(part, unpacking)
+        # A program on its own is named for the project ("yq", not "yq_linux_amd64").
+        _unpack(part, unpacking, _folder_name(next((h for h in hints if h), "")) or _folder_name(asset.name))
         program = choose_program(unpacking, wanted, list(hints))
         link = bin_dir() / program.name
         before = link.resolve() if link.is_symlink() else None

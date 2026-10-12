@@ -119,7 +119,7 @@ Only when you click Update, or Install for something you don't have yet (D4).
 | Kind | What Update does | Password? |
 | --- | --- | --- |
 | AppImage | Downloads it beside the old one, swaps it in, keeps your menu entries pointing at it | No |
-| Program (release archive) | Unpacks into its own folder, switches the `~/.local/bin` link in one step | No |
+| Program (release archive, or the program file itself) | Unpacks (or copies) into its own folder, switches the `~/.local/bin` link in one step | No |
 | Package (`.rpm`, `.deb`, Arch) | Installs with dnf, zypper, apt or pacman | Yes |
 | Flatpak bundle | Installs it for you with flatpak | No |
 | Git clone | Pulls the followed branch (fast-forward only), or moves to the newest release's tag | Only if the system owns it |
