@@ -20,6 +20,7 @@ Whatever is downloaded is checked against the checksum the project published, wh
 
 import contextlib
 import hashlib
+import http.client
 import os
 import re
 import platform
@@ -367,7 +368,11 @@ def download(url: str, dest: Path, size: int | None, progress=None) -> str:
                 out.write(chunk)
                 if progress:
                     progress(done, total)
-    except (OSError, urllib.error.URLError) as e:
+            # A connection that dropped partway can look like the end of the file: only the whole of it counts. (A
+            # cut-off AppImage from a project with no checksum would otherwise be installed, broken.)
+            if total and done != total:
+                raise UpdateError(f"The download didn\u2019t finish: {done:,} of {total:,} bytes arrived. Try again.")
+    except (OSError, urllib.error.URLError, http.client.HTTPException) as e:
         dest.unlink(missing_ok=True)
         raise UpdateError(f"The download didn’t finish: {getattr(e, 'reason', None) or e}") from e
     except UpdateError:

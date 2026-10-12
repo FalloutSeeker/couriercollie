@@ -95,6 +95,32 @@ class InstallTest(AppImageCase):
     def test_no_published_checksum_is_said_not_hidden(self):
         self.assertFalse(updater.install_appimage(self.asset(digest=""), [], self.folder, None)[1])
 
+    def test_a_download_cut_off_partway_isnt_installed(self):
+        # The connection drops after the first part of an AppImage (from a project with no checksum): it starts like
+        # one, but it isn't whole. The old one stays.
+        import http.server
+        import threading
+
+        class Cut(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Length", "100000")
+                self.end_headers()
+                self.wfile.write(APP[:20] + b"x" * 5000)
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Cut)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.shutdown)
+        old = self.folder / "App-1.0-x86_64.AppImage"
+        old.write_bytes(b"old version")
+        with self.assertRaisesRegex(updater.UpdateError, "didn’t finish: 5,020 of 100,000 bytes"):
+            updater.install_appimage(Asset(NAME, f"http://127.0.0.1:{server.server_port}/a", 100000), [],
+                                     self.folder, old, get_text=lambda url: "")
+        self.assertEqual(sorted(p.name for p in self.folder.iterdir()), [old.name])
+
     def test_never_a_path_from_the_site(self):
         new, _ = updater.install_appimage(Asset("../../evil/" + NAME, self.url + NAME, len(APP), f"sha256:{SHA}"),
                                           [], self.folder, None)
