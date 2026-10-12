@@ -56,6 +56,8 @@ Kirigami.Dialog {
             QQC2.TextField {
                 id: urlField
 
+                objectName: "addUrl"
+
                 Layout.fillWidth: true
                 Kirigami.FormData.label: "Address:"
                 placeholderText: "https://github.com/owner/project"

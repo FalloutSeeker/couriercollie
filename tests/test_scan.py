@@ -219,6 +219,31 @@ class FindOnDiskTest(unittest.TestCase):
         found = scan.find_appimages([str(apps), str(self.home / "missing")])
         self.assertEqual([(f.id, f.kind, f.version) for f in found], [("github.com/localsend/localsend", "AppImage", "1.18.2")])
 
+    def test_renamed_appimage_follows_the_file_it_updates_from(self):
+        apps = self.home / "Applications"
+        apps.mkdir()
+        (apps / "nvim.appimage").write_bytes(
+            b"\x7fELF" + b"\0" * 5000 + b"gh-releases-zsync|neovim|neovim|latest|nvim-linux-x86_64.appimage.zsync\0")
+        found = scan.find_appimages([str(apps)])
+        self.assertEqual([(f.id, f.version, f.release_file) for f in found],
+                         [("github.com/neovim/neovim", "", "nvim-linux-x86_64.appimage")])
+        cfg = Config()
+        scan.merge(cfg, found)
+        self.assertEqual((cfg.repos[0].asset_pattern, cfg.repos[0].kind), ("nvim-linux-x86_64.appimage", "AppImage"))
+
+    def test_appimage_name_wins_over_a_wildcard_it_updates_from(self):
+        apps = self.home / "Applications"
+        apps.mkdir()
+        (apps / "LocalSend-1.18.2-linux-x86-64.AppImage").write_bytes(
+            b"\x7fELF" + b"\0" * 5000 + b"gh-releases-zsync|localsend|localsend|latest|*x86-64.AppImage.zsync\0")
+        (apps / "Other.AppImage").write_bytes(
+            b"\x7fELF" + b"\0" * 5000 + b"gh-releases-zsync|someone|other|latest|*x86_64.AppImage.zsync\0")
+        cfg = Config()
+        scan.merge(cfg, scan.find_appimages([str(apps)]))
+        patterns = {r.id: r.asset_pattern for r in cfg.repos}
+        self.assertEqual(patterns, {"github.com/localsend/localsend": "LocalSend-*-linux-x86-64.AppImage",
+                                    "github.com/someone/other": ""})  # "*" there is any text: you pick the file
+
     def test_version_in_appimage_names(self):
         for name, version in [("LocalSend-1.18.2-linux-x86-64.AppImage", "1.18.2"), ("App_v2.0.1.AppImage", "2.0.1"),
                               ("tool-3.1-beta.2-x86_64.AppImage", "3.1-beta.2"), ("NoVersion.AppImage", "")]:

@@ -66,6 +66,10 @@ class CheckRepoTest(unittest.TestCase):
         self.assertEqual(self.check(repo("github.com/a/app", installed="v1.19.0")).status, checker.UP_TO_DATE)
         self.assertEqual(self.check(repo("github.com/a/app", installed="1.19.0")).status, checker.UP_TO_DATE)
         self.assertEqual(self.check(repo("github.com/a/app", installed="-")).text, "Not installed · newest v1.19.0")
+        # Found on this computer without a version (an AppImage renamed without it): there, but unknown.
+        self.assertEqual(self.check(repo("github.com/a/app", installed="", source="scanned")).text,
+                         "Version unknown · newest v1.19.0")
+        self.assertEqual(self.check(repo("github.com/a/app", installed="")).text, "Not installed · newest v1.19.0")
         # Pre-releases count only if they're shown.
         self.assertEqual(self.check(repo("github.com/a/app", installed="v1.19.0", prereleases=True)).newest, "v2.0-rc1")
 

@@ -128,15 +128,17 @@ def installed_with(managed_by: str) -> str:
     return f"Installed with {'Flatpak' if managed_by == 'Flatpak' else 'Package Manager'}"
 
 
-def releases_result(shown: list[sources.Release], yours: str, managed_by: str = "") -> Result:
+def releases_result(shown: list[sources.Release], yours: str, managed_by: str = "", found: bool = False) -> Result:
     """The result for a repo following releases, from the releases it shows (newest first) and your version.
     `managed_by`: what installed it and keeps it updated ("dnf"), if that's the package manager or Flatpak: then
-    it's never an update here."""
+    it's never an update here. `found`: a scan found it on this computer, so without a version it's there, unknown."""
     if not shown:
         return Result(NO_RELEASES, "No releases yet")
     newest = shown[0].tag
     if managed_by:
         return Result(OTHER, installed_with(managed_by), newest)
+    if not yours and found:  # e.g. an AppImage renamed without its version
+        return Result(NOT_INSTALLED_YET, f"Version unknown · newest {newest}", newest)
     if not yours or yours == NOT_INSTALLED:
         return Result(NOT_INSTALLED_YET, f"Not installed · newest {newest}", newest)
     if assets.same_version(yours, newest):
@@ -168,7 +170,8 @@ def branch_result(branch: str, head: str, yours: str, c: sources.Comparison | No
 
 def _check_releases(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:
     rels = sources.newest_releases(ref, repo.host, CHECK_RELEASES, repo.prereleases)
-    return releases_result([r for r in rels if repo.prereleases or not r.prerelease], yours, repo.managed_by)
+    return releases_result([r for r in rels if repo.prereleases or not r.prerelease], yours, repo.managed_by,
+                           repo.source == SOURCE_SCANNED)
 
 
 def _check_branch(repo: TrackedRepo, ref: RepoRef, yours: str) -> Result:

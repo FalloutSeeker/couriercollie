@@ -637,7 +637,8 @@ class Backend(QObject, Updating, Account):
             shown = [r for r in d.releases if repo.prereleases or not r.prerelease]
             if not shown:
                 return
-            new = checker.releases_result(shown, repo.installed, repo.managed_by)
+            new = checker.releases_result(shown, repo.installed, repo.managed_by,
+                                          repo.source == config.SOURCE_SCANNED)
         old = self._checks.results.get(repo.id)
         if old and (old.status, old.text, old.newest) == (new.status, new.text, new.newest) and not old.not_rechecked:
             return
@@ -1202,6 +1203,9 @@ class Backend(QObject, Updating, Account):
         self._scan_items = [i for i in self._scan_items if i["key"] not in keys or i["status"] == "problem"]
         self._changed()
         self.scanChanged.emit()
+        # So the list says straight away what's out of date. Cheap: unchanged release lists don't count against the
+        # sites' hourly limits (sources.py, ETags).
+        self.checkNow()
 
     # -- the repo page ----------------------------------------------------------------------------------------------
 
@@ -1493,6 +1497,10 @@ class Backend(QObject, Updating, Account):
         elif installed == NOT_INSTALLED:
             text, status, kind, headline = "Not installed", f"The newest is {newest_text}.", STATUS_NOT_INSTALLED, \
                 "Not installed"
+        elif not installed and repo.source == config.SOURCE_SCANNED and repo.follow != FOLLOW_BRANCH:
+            # Found on this computer, so Update replaces it (rather than Install putting a second copy beside it).
+            text, status, kind, headline = "Unknown", f"Its version isn\u2019t in its file name. Update replaces it " \
+                f"with the newest, {newest_text}.", STATUS_UPDATE, "Version unknown"
         elif installed == newest or (repo.follow != FOLLOW_BRANCH and assets.same_version(installed, newest)):
             text, status, kind, headline = yours_text, "Up to date", STATUS_CURRENT, "Up to date"
         elif installed:

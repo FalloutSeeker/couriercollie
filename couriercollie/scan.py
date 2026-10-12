@@ -55,6 +55,7 @@ class Found:
     aliases: list[str] = field(default_factory=list)  # old addresses it was found under
     needs_password: bool = False  # in a folder this user can't change (e.g. owned by the system in /opt)
     homepage: str = ""  # the project's own website, once identified ("-" if it gives none)
+    release_file: str = ""  # for AppImages: the release file it updates from, e.g. "App-*-x86_64.AppImage"
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -228,8 +229,10 @@ def find_packages() -> list[Found]:
     return []
 
 
-# AppImages made with the standard tools carry where they update from, e.g. "gh-releases-zsync|owner|repo|latest|…".
-_UPDATE_INFO = re.compile(rb"gh-releases-zsync\|([A-Za-z0-9_.-]+)\|([A-Za-z0-9_.-]+)\|")
+# AppImages made with the standard tools carry where they update from, e.g.
+# "gh-releases-zsync|owner|repo|latest|App-*-x86_64.AppImage.zsync": the project, and (usually) its release file.
+_UPDATE_INFO = re.compile(rb"gh-releases-zsync\|([A-Za-z0-9_.-]+)\|([A-Za-z0-9_.-]+)\|"
+                          rb"(?:[^|\x00]*\|([A-Za-z0-9_.*+~-]+)\.zsync)?")
 # "1.18.2", optionally with a pre-release part like "-beta.2" or "-rc1" (but not "-linux").
 _VERSION_IN_NAME = re.compile(r"(?<![\d.])v?(\d+(?:\.\d+)+(?:[-~](?:rc|beta|alpha|pre|dev)[0-9.]*)?)(?=[-_.+]|$)",
                               re.I)
@@ -242,23 +245,26 @@ def appimage_version(filename: str) -> str:
     return m.group(1) if m else ""
 
 
-def appimage_source(path: Path) -> RepoRef | None:
+def appimage_source(path: Path) -> tuple[RepoRef, str] | None:
+    """Where an AppImage updates from: the project, and its release file ("" if it doesn't say)."""
     try:
         with open(path, "rb") as f:
             head = f.read(4 * 1024 * 1024)  # the update info sits near the start of the file
     except OSError:
         return None
-    m = _UPDATE_INFO.search(head)
-    return RepoRef("github.com", f"{m.group(1).decode()}/{m.group(2).decode()}") if m else None
+    if not (m := _UPDATE_INFO.search(head)):
+        return None
+    return RepoRef("github.com", f"{m.group(1).decode()}/{m.group(2).decode()}"), (m.group(3) or b"").decode()
 
 
 def _appimage(path: Path) -> Found | None:
     """An AppImage that says where it came from. Others can't be matched to a project, so they're left out; they can
     still be added by hand."""
-    if not path.is_file() or not (ref := appimage_source(path)):
+    if not path.is_file() or not (source := appimage_source(path)):
         return None
+    ref, release_file = source
     return Found(id=ref.id, name=ref.name, url=ref.web_url, host="github", path=str(path),
-                 kind=assets.KIND_APPIMAGE, version=appimage_version(path.name))
+                 kind=assets.KIND_APPIMAGE, version=appimage_version(path.name), release_file=release_file)
 
 
 def find_appimages(dirs: Iterable[str]) -> list[Found]:
@@ -428,6 +434,7 @@ def _apply(repo: TrackedRepo, item: Found) -> None:
     """What's on disk wins over what was set by hand: it's the version you actually have. A clone already tracked
     there that follows releases (moved to each release's tag) stays that way: found again by a scan, it's the same."""
     by_release = repo.kind == assets.KIND_GIT and repo.local_path == item.path and repo.follow != FOLLOW_BRANCH
+    exact = item.release_file if "*" not in item.release_file else ""
     repo.source = SOURCE_SCANNED
     repo.local_path = item.path
     if item.kind == assets.KIND_GIT and not by_release:
@@ -435,9 +442,10 @@ def _apply(repo: TrackedRepo, item: Found) -> None:
         repo.follow, repo.kind = FOLLOW_BRANCH, assets.KIND_GIT
         if item.branch:
             repo.branch = item.branch
-    elif item.kind == assets.KIND_APPIMAGE and not repo.asset_pattern and item.version:
-        # Follow the same file as the one on disk, e.g. "App-*-x86_64.AppImage".
-        repo.asset_pattern = assets.pattern_for(Path(item.path).name, item.version)
+    elif item.kind == assets.KIND_APPIMAGE and not repo.asset_pattern and (item.version or exact):
+        # Follow the same file as the one on disk, e.g. "App-*-x86_64.AppImage"; or, renamed without its version,
+        # the one it says it updates from, if that's one file (its "*" is any text, not just a version).
+        repo.asset_pattern = assets.pattern_for(Path(item.path).name, item.version) if item.version else exact
         repo.kind = assets.KIND_APPIMAGE
     if item.version and not by_release:  # (its version is the release's tag, read from disk when its page loads)
         repo.installed = item.version

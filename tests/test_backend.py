@@ -903,6 +903,8 @@ class ScanFlowTest(unittest.TestCase):
         ])
         config.save(cfg, self.path)
         self.backend = Backend(self.path)
+        self.checks = []  # Check Now, without the network
+        self.backend.checkNow = lambda: self.checks.append("checked")
 
     def tearDown(self):
         self.backend.shutdown()
@@ -950,6 +952,8 @@ class ScanFlowTest(unittest.TestCase):
         self.assertEqual(cfg.find("gitgud.io/aeroshell/smod").source, "scanned")
         # Tracked finds leave the results; problems stay so the user can read why.
         self.assertEqual([i["address"] for i in self.backend.scanItems], ["github.com/me/private"])
+        # And they're checked straight away, so the list says what's out of date.
+        self.assertEqual(self.checks, ["checked"])
 
     def test_scan_needs_scanning_turned_on(self):
         self.backend.updateSettings({"scanning": False})
