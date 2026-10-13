@@ -83,11 +83,13 @@ Details:
     changes it.
   - **Asked again** if an update changes what was approved: it doesn't run until you've read it.
   - **Run inside the app,** its output shown live, ending in finished or failed (with the exit code). Nothing can be
-    typed in, but sudo in it asks for your password in couriercollie's own window (sudo -A). Cancelled, or where no
-    window can be shown (doas), it stops, with Run Again and its command to run in a terminal (Copy Command).
+    typed in, but sudo in it asks for your password in the desktop's own password window (sudo -A), so couriercollie
+    never sees it. Cancelled, or with no such window (or doas), it stops, with Run Again and its command to run in a
+    terminal (Copy Command).
   - **Nothing to run** (no script, containers or build folder): Update only downloads, and doesn't ask.
-- **Part of another clone:** a clone inside another tracked clone's folder that its install script names (SMOD, in
-  AeroThemePlasma's) is shown, but not updated on its own: updating that one takes care of it.
+- **Part of another clone:** a clone inside another tracked clone's folder that its install script names (a theme
+  whose installer clones its parts into its own folder, say) is shown, but not updated on its own: updating that one
+  takes care of it.
 - **Another person's clone** (a shared folder): shown, but not updated here: its updates are theirs.
 - **A clone on another branch than the one followed:** the page explains it, and offers to follow the clone's branch
   instead of an Update that would refuse.

@@ -4,7 +4,8 @@ same project would be one tracked repo).
 What the app says to run in a terminal is run in one (a pseudo-terminal, the password typed as a person would), then
 the app is used as it would be next: Refresh, Update again.
 
-- A step after updating that asks for a password: typed in the password window, or (cancelled) run in a terminal.
+- A step after updating that asks for a password: typed in the desktop's password window, or (cancelled) run in a
+  terminal.
 - A clone that belongs to another user: pulled as that user, in a terminal; then Refresh.
 - A clone with commits of its own: combined by hand (git pull --rebase); then Refresh.
 - Files you changed that the update changes too: stashed in a terminal; then Update again.
@@ -112,15 +113,13 @@ print("=== a step after updating that asks for a password", flush=True)
 mine = HOME / "src/tpm"
 rid = repo_at(mine)
 if rid:
-    from couriercollie import integration
-
-    # The password window, answered as a person would: here by a stand-in for it (no one to click in a container).
+    # The desktop's own password window, answered as a person would: here by a stand-in for it (as Plasma names its
+    # own, in $SSH_ASKPASS), since no one can click in a container.
     answers = HOME / "answer"
-    helper = HOME / "fake-couriercollie"
-    helper.write_text(f'#!/bin/sh\n[ "$1" = --askpass ] || exit 2\necho "$COURIERCOLLIE_STEP" > {HOME}/asked-for\n'
-                      f'[ -s {answers} ] && cat {answers} || exit 1\n')
+    helper = HOME / "desktop-askpass"
+    helper.write_text(f'#!/bin/sh\necho asked > {HOME}/asked\n[ -s {answers} ] && cat {answers} || exit 1\n')
     helper.chmod(0o755)
-    integration.LAUNCHER = helper
+    os.environ["SSH_ASKPASS"] = str(helper)
     answers.write_text("pw\n")
     from couriercollie import applying
 
@@ -130,8 +129,7 @@ if rid:
     repo.apply_approved = applying.fingerprint(repo.local_path, repo.apply_command)
     d = update(rid)
     print(f"  update: {d['updateNote']} / step: {d['stepResult']}", flush=True)
-    check("the step ran after the update, and sudo asked in the password window",
-          (HOME / "asked-for").read_text().strip() == b._config.find(rid).name, (HOME / "asked-for").exists())
+    check("the step ran after the update, and sudo asked in the desktop's password window", (HOME / "asked").exists())
     check("…typed there, the step did its work", d["stepResult"] == "applied" and Path("/srv/applied").exists(),
           (d["stepResult"], d["stepOutput"][-200:]))
     # Cancelled: the window gives no password, the step stops, and the terminal is there instead.

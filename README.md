@@ -73,12 +73,11 @@ sign-in.
 
 - Nothing updates until you click Update.
 - Downloads are checked against the project's published checksum. You're warned when there isn't one.
-- couriercollie never asks for or sees your password. Installing a package, or updating a git clone owned by the
-  system (one in `/opt`, say), uses your desktop's own password window.
-- For a git clone, you can approve one step to run after each update (rebuild its containers, run its install
-  script, etc.). It's shown to you first, and if an update changes it, it waits for you to look again.
-- A step that needs elevation is never run inside couriercollie. You get its command to run in your own terminal,
-  where you type the password.
+- couriercollie never asks for or sees your password. Installing a package, updating a git clone owned by the
+  system (one in `/opt`, say), or a project's install script that needs `sudo`, all use your desktop's own password
+  window. Without one, you get the command to run in your own terminal instead.
+- For a git clone with an install script (or containers to rebuild), the first Update shows you what it will run
+  after downloading. If an update changes it, it waits for you to look again.
 - Anything your package manager installed (from your distro's repositories, or from Flathub) is never updated here.
   couriercollie only shows its version; your package manager keeps it up to date.
 

@@ -7,8 +7,8 @@ folder, inside the app.
   install, setup or update scripts, or building and installing again in its build folder. Nothing is typed in.
 - Approval covers the command and the files it names (a script, a compose file): if an update changes them, the step
   isn't run until you've looked again (fingerprint). So a pulled change can't slip new commands past you (D6).
-- A step that asks for a password (sudo) gets a password window: it runs with a sudo that asks through
-  couriercollie's own window (sudo -A: run). If none can be shown (doas, or a sudo named by its full path), it
+- A step that asks for a password (sudo) gets the desktop's own password window (password_window): couriercollie
+  never sees the password. If there's no such window (or the step uses doas, or a sudo named by its full path), it
   stops, and can be run in a terminal instead.
 """
 
@@ -250,19 +250,33 @@ def asked_for_password(output: list[str]) -> bool:
     return any(_PASSWORD.search(line) for line in output[-20:])
 
 
-def password_window(launcher: str | Path, folder: Path) -> dict[str, str]:
-    """What a step needs for sudo to ask for the password in a window: there's no terminal to type it in. sudo does
-    that only when told to (-A), so the step finds a "sudo" here first that tells it, and the window is
-    couriercollie's own (`couriercollie --askpass`, app.askpass). Written to `folder`, which only you can read."""
+# The desktop's own password windows, as sudo can use them (sudo -A): KDE's, GNOME's, and others'. The desktop says
+# which is its own ($SSH_ASKPASS: Plasma sets it), else the first of these that's installed.
+ASKPASS = ("/usr/bin/ksshaskpass", "/usr/libexec/openssh/gnome-ssh-askpass", "/usr/lib/openssh/gnome-ssh-askpass",
+           "/usr/libexec/seahorse/ssh-askpass", "/usr/lib/seahorse/ssh-askpass", "/usr/bin/lxqt-openssh-askpass",
+           "/usr/bin/ssh-askpass", "/usr/lib/ssh/ssh-askpass", "/usr/libexec/openssh/ssh-askpass")
+
+
+def desktop_askpass() -> str:
+    """The desktop's own password window for sudo, or "" if there's none."""
+    for path in (os.environ.get("SUDO_ASKPASS", ""), os.environ.get("SSH_ASKPASS", ""), *ASKPASS):
+        if path and os.path.isabs(path) and os.access(path, os.X_OK):
+            return path
+    return ""
+
+
+def password_window(folder: Path) -> dict[str, str]:
+    """What a step needs for sudo in it to ask for the password in the desktop's own window: there's no terminal to
+    type it in. The password goes from that window straight to sudo; couriercollie never sees it. sudo only uses the
+    window when told to (-A), so the step finds a "sudo" first that tells it, written to `folder` (only you can read
+    it). Without such a window, nothing: sudo then stops, and the step can be run in a terminal instead."""
+    if not (helper := desktop_askpass()) or not (real := shutil.which("sudo")):
+        return {}
     folder.mkdir(parents=True, exist_ok=True)
     folder.chmod(0o700)
-    files = {"askpass": f'#!/bin/sh\nexec {shlex.quote(str(launcher))} --askpass "$@"\n'}
-    if real := shutil.which("sudo"):
-        files["sudo"] = f'#!/bin/sh\nexec {shlex.quote(real)} -A "$@"\n'
-    for name, text in files.items():
-        (folder / name).write_text(text)
-        (folder / name).chmod(0o700)
-    return {"SUDO_ASKPASS": str(folder / "askpass"), "PATH": f"{folder}{os.pathsep}{os.environ.get('PATH', '')}"}
+    (folder / "sudo").write_text(f'#!/bin/sh\nexec {shlex.quote(real)} -A "$@"\n')
+    (folder / "sudo").chmod(0o700)
+    return {"SUDO_ASKPASS": helper, "PATH": f"{folder}{os.pathsep}{os.environ.get('PATH', '')}"}
 
 
 def run(path: str, command: str, line: Callable[[str], None], started: Callable[[subprocess.Popen], None],

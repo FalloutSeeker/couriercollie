@@ -5,7 +5,6 @@ from the project folder, `./run.sh`.
     couriercollie --check           check every repo for updates now
     couriercollie --check --if-due  only if automatic checks are on and the interval has passed (what the timer runs)
     couriercollie --reset           start over: the settings file is renamed to a dated backup
-    couriercollie --askpass PROMPT  a password window, for sudo in a step after updating (not to run by hand)
 
 Modules are imported inside the functions that need them: the background timer runs `--check --if-due` every hour,
 and usually finds nothing due, so it shouldn't pay for loading Qt.
@@ -45,29 +44,6 @@ def check(if_due: bool) -> int:
         print(f"{names.get(repo_id, repo_id)}: {result.text}" + (" (not rechecked)" if result.not_rechecked else ""))
     if fresh and cfg.settings.toasts:
         integration.notify_and_open_on_click(*integration.updates_message([names[i] for i in fresh]))
-    return 0
-
-
-def askpass(prompt: str) -> int:
-    """The password window for a step after updating that runs sudo (applying.password_window: sudo runs this, and
-    reads the password from it). Cancelled, it gives none, and the step stops: it can then be run in a terminal."""
-    choose_style()
-    from PySide6.QtWidgets import QApplication, QInputDialog, QLineEdit
-
-    from . import integration
-    from .tray import app_icon
-
-    app = QApplication.instance() or QApplication([sys.argv[0]])
-    app.setDesktopFileName(integration.APP_ID)
-    app.setWindowIcon(app_icon())
-    whose = os.environ.get("COURIERCOLLIE_STEP", "")
-    asks = f"The step after updating {whose} asks for your password." if whose else \
-        "A step after updating asks for your password."
-    text, ok = QInputDialog.getText(None, "Password", f"{asks}\n\n{prompt.strip() or 'Password:'}",
-                                    QLineEdit.EchoMode.Password)
-    if not ok:
-        return 1
-    print(text)
     return 0
 
 
@@ -114,8 +90,6 @@ def main() -> int:
     """Start the window, or do what was asked on the command line (see the top of this file). Only one copy runs:
     a second start brings the open window to the front instead."""
     args = sys.argv[1:]
-    if args[:1] == ["--askpass"]:
-        return askpass(" ".join(args[1:]))
     if "--reset" in args:
         from . import config, integration
 

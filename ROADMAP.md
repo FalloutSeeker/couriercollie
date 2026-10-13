@@ -3,16 +3,12 @@
 ## Before the first release
 
 - **Publish:** a public repository, with a release carrying the four packages and their `SHA256SUMS`
-  (`devtools/build_package.sh` builds and tries them), and the Arch package on the AUR. Needs a release tag, and the AUR's checksum for it.
-
-## Still to check by hand
-
-- **GNOME:** does the window follow GNOME's dark mode? Needs a real GNOME session.
-- **The RPM on a real desktop:** install it once and see it in the app menu. Tested so far only in a container.
+  (`devtools/build_package.sh` builds and tries them), and the Arch package on the AUR. Needs a release tag, and the
+  AUR's checksum for it.
 
 ## Later
 
-- A `collie` command (named in the README as coming soon): check and update from the terminal, with the same list.
+- A `collie` command: check and update from the terminal, with the same list.
 
 - Any git host by git alone (sourcehut, Bitbucket, self-hosted): new commits and tags, without a site's API.
 - Codeberg and other Gitea sites.

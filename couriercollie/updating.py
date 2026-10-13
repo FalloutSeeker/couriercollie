@@ -470,9 +470,8 @@ class Updating:
             self.reposChanged.emit()
             self.detailsChanged.emit(repo_id)
 
-        # sudo in the step asks for the password in a window, which says whose step it is.
-        asking = {**applying.password_window(integration.LAUNCHER, integration.runtime_dir() / "askpass"),
-                  "COURIERCOLLIE_STEP": repo.name}
+        # sudo in the step asks for the password in the desktop's own window (couriercollie never sees it).
+        asking = applying.password_window(integration.runtime_dir() / "sudo")
         self._run(lambda: applying.run(path, command, line, started, asking), done)
 
     @Slot(str)
