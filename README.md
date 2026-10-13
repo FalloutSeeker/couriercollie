@@ -75,24 +75,20 @@ sign-in.
 - Downloads are checked against the project's published checksum. You're warned when there isn't one.
 - couriercollie never sees your password: your desktop's own password window asks for it. If an install script
   needs `sudo` and your desktop has no password helper for it, you get the command to run in a terminal instead.
-- For a git clone with an install script, the first Update shows you what it will run after downloading. Containers
-  running from a clone are rebuilt and restarted with each update. If an update changes what runs (the script, or
-  the compose file), it waits for you to look again.
+- Git clones: the first Update shows you the install script it will run after downloading, and if an update changes
+  it, waits for you to look again. Running containers are rebuilt with each update.
 - Anything your package manager installed (from your distro's repositories, or from Flathub) is never updated here.
   couriercollie only shows its version; your package manager keeps it up to date.
 
-**Does it run all the time?** No, but automatic checks don't need the window. With them on, a small background
-timer runs a quick check now and then, and exits, even after you close the window. Turn automatic checks off in
-Settings and nothing runs unless you open couriercollie.
+**Does it run all the time?** No. With automatic checks on, a small background timer checks now and then and exits,
+even with the window closed. Turn them off and nothing runs unless you open couriercollie.
 
 **Do I need to sign in to GitHub?** Only if you track a lot of GitHub projects. GitHub allows 60 requests an hour
 without signing in, and 5,000 with.
 
-- couriercollie uses its registered app identity to ask GitHub for a read-only, public-data token on behalf of
-  whoever signs in.
-- That login can't see anything private or change anything.
+- The login is read-only: it can't see anything private or change anything.
 - It's kept in your desktop's password store (KDE Wallet, GNOME Keyring, etc.).
-- You can revoke it anytime in GitHub's Settings → Applications.
+- Revoke it anytime in GitHub's Settings → Applications.
 
 **What does a scan find?** Only what your package manager can't update:
 
@@ -100,8 +96,7 @@ without signing in, and 5,000 with.
 - Packages installed from a downloaded file that no repository you have offers.
 - Flatpak bundles installed from a file.
 
-The scan folders are your home folder, `/opt`, `/usr/local` and `/srv`, where software installed by hand lives. The
-rest of the system belongs to your package manager. Change them in Settings.
+Scan folders are your home folder, `/opt`, `/usr/local` and `/srv` by default; change them in Settings.
 
 **Which distros?** It's built and tested mainly on Fedora KDE. openSUSE, Ubuntu, Debian, Arch and GNOME are
 supported, but need feedback (Settings → Send Feedback…).
@@ -110,9 +105,8 @@ supported, but need feedback (Settings → Send Feedback…).
 `~/.config/couriercollie`.
 
 **Uninstall:** remove the package (e.g. `sudo dnf remove couriercollie`), or delete the folder if you ran it from
-source. Background checks turn themselves off the next time they'd run. Your settings, results and cache stay
-behind; delete `~/.config/couriercollie`, `~/.local/state/couriercollie` and `~/.cache/couriercollie` to remove
-everything.
+source. Background checks stop on their own. To remove everything, also delete `~/.config/couriercollie`,
+`~/.local/state/couriercollie` and `~/.cache/couriercollie`.
 
 <details>
 <summary>Where it keeps things</summary>

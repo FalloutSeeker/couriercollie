@@ -2,22 +2,15 @@
 
 ## 0.6.0 (not released yet)
 
-The first version: everything is new.
+The first version.
 
 - **Track** software from GitHub and GitLab: add a project by its address, or scan your computer for clones,
-  AppImages, packages installed from downloaded files and Flatpak bundles.
-- **Check** for new releases or new commits, by hand or on a schedule, with notifications and a taskbar count.
-  Offline or rate-limited checks keep the last result.
-- **Update** with a click:
-  - **AppImages and programs** are downloaded, checked and swapped in.
-  - **Packages** go through dnf, zypper, apt or pacman.
-  - **Flatpak bundles** go through flatpak.
-  - **Git clones** are pulled, or cloned if you don't have them yet.
-- **Install scripts** are shown before they run, in a terminal.
-- **Categories** you can drag repos into, and a filter for GitHub or GitLab.
-- **Optional, read-only GitHub sign-in**, kept in your desktop's password store.
-- **Works beyond Fedora KDE:** Qt's Fusion style where KDE's is missing, and its own icons. Packages for Fedora,
-  openSUSE, Ubuntu/Debian and Arch, which install everything they need.
-- **Repo icons:** the project's own picture when it's certain, else a letter on a colour of its own.
-- **Never updates what your package manager installed:** a project installed from your distro's repositories or
-  from Flathub shows its version only, with a warning. Your package manager (or Flatpak) keeps it up to date.
+  AppImages, packages installed from a file and Flatpak bundles.
+- **Check** for new releases or commits, by hand or on a schedule, with notifications and a count on the taskbar and
+  tray.
+- **Update with one click:** AppImages and programs are swapped in, packages go through your package manager, git
+  clones are pulled and their install script (shown to you first) or containers run.
+- **Safe by default:** downloads are checked against published checksums, and anything your package manager or
+  Flathub installed is only shown, never updated here.
+- **Categories,** start at login, a tray icon, optional read-only GitHub sign-in, and Send Feedback.
+- **Packages** for Fedora, openSUSE, Ubuntu/Debian and Arch. couriercollie keeps itself up to date too.
