@@ -179,3 +179,17 @@ class MergeTest(unittest.TestCase):
         base = config.Config(repos=[self.repo("a")])
         merged = config.merge(base, config.Config(repos=[self.repo("a", installed="v2")]), config.Config())
         self.assertEqual([(r.id, r.installed) for r in merged.repos], [("a", "v2")])
+
+
+class SymlinkTest(unittest.TestCase):
+    def test_a_linked_settings_file_stays_a_link(self):
+        # A dotfile manager (stow, say) keeps repos.toml elsewhere and links it: saving writes there.
+        with tempfile.TemporaryDirectory() as folder:
+            real, link = Path(folder) / "dotfiles" / "repos.toml", Path(folder) / "config" / "repos.toml"
+            real.parent.mkdir()
+            link.parent.mkdir()
+            config.save(Config(), real)
+            link.symlink_to(real)
+            config.save(Config(repos=[TrackedRepo(id="github.com/a/b", name="b", url="", host="github")]), link)
+            self.assertTrue(link.is_symlink())
+            self.assertEqual([r.id for r in config.load(real).repos], ["github.com/a/b"])

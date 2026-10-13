@@ -690,3 +690,10 @@ class UpdatedWhilePageLoadsTest(AppImageCase):
         repo = b._config.find(rid)
         self.assertEqual((repo.installed, Path(repo.local_path).name), ("v2.0", NAME))
         self.assertEqual(config.load(path).repos[0].installed, "v2.0")
+
+
+class DesktopQuoteTest(unittest.TestCase):
+    def test_percent_is_doubled(self):
+        # A lone % on an Exec line is a field code: a folder named "100% apps" must be written "100%% apps".
+        self.assertEqual(updater._desktop_quote(Path("/home/me/100% apps/App.AppImage")),
+                         '"/home/me/100%% apps/App.AppImage"')

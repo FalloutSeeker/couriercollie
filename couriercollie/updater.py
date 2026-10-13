@@ -523,11 +523,11 @@ def install_appimage(asset, others: list, folder: Path, old: Path | None,
 
 def _desktop_quote(path: Path) -> str:
     """A path as a desktop entry's Exec= argument. Two layers of escaping: the command line's (a backslash before
-    " ` $ and \\), then the file's own (each backslash doubled)."""
+    " ` $ and \\), then the file's own (each backslash doubled); and a % is written %% (a lone % is a field code)."""
     escaped = str(path).replace("\\", "\\\\\\\\")
     for ch in '"`$':
         escaped = escaped.replace(ch, "\\\\" + ch)
-    return f'"{escaped}"'
+    return f'"{escaped}"'.replace("%", "%%")
 
 
 def repoint_menu_entries(old: Path, new: Path) -> int:

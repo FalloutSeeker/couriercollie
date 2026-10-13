@@ -263,6 +263,8 @@ def dumps(config: Config) -> str:
 def save(config: Config, path: Path | None = None) -> str:
     """Write the settings file; returns what was written."""
     path = path or default_path()
+    if path.is_symlink():
+        path = path.resolve()  # (kept by a dotfile manager, say: the file it points to is written, the link kept)
     path.parent.mkdir(parents=True, exist_ok=True)
     text = dumps(config)
     # Write to a temporary file and rename, so a crash mid-write can't leave a half-written settings file.
