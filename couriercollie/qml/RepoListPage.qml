@@ -190,8 +190,9 @@ Kirigami.ScrollablePage {
                     if (c.lastChecked)
                         parts.push(c.checked > 0 && c.failed === c.checked
                                    ? "Couldn\u2019t check any" + (c.updates > 0 ? ` (${c.updates} known from before)` : "")
-                                   : c.updates === 0 && c.failed === 0 ? "All up to date"
+                                   : c.updates === 0 && c.failed === 0 && c.gone === 0 ? "All up to date"
                                    : c.updates === 0 ? "No updates" : c.updates === 1 ? "1 update" : `${c.updates} updates`,
+                                   ...(c.gone > 0 ? [`${c.gone} not found on this computer`] : []),
                                    ...(c.failed > 0 && c.failed < c.checked ? [`${c.failed} couldn\u2019t be checked`] : []),
                                    `checked ${c.lastChecked}`);
                     else

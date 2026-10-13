@@ -561,6 +561,8 @@ class Backend(QObject, Updating, Account):
             "failed": sum(1 for v in results.values() if v.status in (checker.FAILED, checker.UNREACHABLE)
                           or (v.not_rechecked and not v.retry_after)),
             "checked": len(results),
+            # Removed outside the app since (checker.GONE).
+            "gone": sum(1 for v in results.values() if v.text == checker.GONE),
             "lastChecked": _when_text(self._checks.last_run),
             "nextCheck": _when_text(_plus_hours(self._checks.last_run, s.check_interval_hours))
                          if s.auto_check and self._checks.last_run else "",

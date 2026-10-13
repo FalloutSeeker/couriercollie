@@ -544,10 +544,11 @@ Kirigami.ScrollablePage {
                     }
                 }
 
-                // Why it couldn't be compared, or what "ahead" means here, in full.
+                // Why it couldn't be compared, what "ahead" means here, or where what's gone was, in full.
                 QQC2.Label {
                     Layout.fillWidth: true
                     visible: statusBox.kind === "problem" || statusBox.kind === "ahead" || page.canFollowDisk
+                             || page.details.localMissing === true
                     textFormat: Text.PlainText
                     text: page.details.status || ""
                     wrapMode: Text.Wrap
