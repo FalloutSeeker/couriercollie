@@ -371,6 +371,7 @@ class Backend(QObject, Updating, Account):
         self._adding = False
         self._details: dict[str, Details] = {}
         self._scan_state = "idle"  # "idle", "scanning" or "done"
+        self._scan_started: dict[str, int] = {}  # updates finished when the scan started (Updating._finished)
         self._scan_error = ""
         self._scan_items: list[dict] = []  # for the results dialog
         self._scan_finds: dict[int, scan.Found] = {}  # by item key
@@ -1268,6 +1269,7 @@ class Backend(QObject, Updating, Account):
             return scan.identify(scan.find_all(folders), known=lambda repo_id: repo_id.lower() in known, lookup=lookup)
 
         self._scan_state, self._scan_error = "scanning", ""
+        self._scan_started = dict(self._finished)
         self.scanChanged.emit()
         self._run(work, self._scan_done)
 
@@ -1290,7 +1292,10 @@ class Backend(QObject, Updating, Account):
                                          "note": "Added by default"})
                 continue
             if tracked and not c.problem:
-                on_list.append(f)
+                # (Not one updated while the scan ran: it found the version from before.)
+                if tracked.id not in self._updating and \
+                        self._finished.get(tracked.id, 0) == self._scan_started.get(tracked.id, 0):
+                    on_list.append(f)
                 continue
             similar = None if c.problem else scan.looks_like(self._config, f)
             self._scan_finds[key] = f
@@ -1361,6 +1366,7 @@ class Backend(QObject, Updating, Account):
         ref, host = RepoRef.from_id(repo_id), repo.host
         scanned, local_path = repo.source == config.SOURCE_SCANNED, repo.local_path
         follow, branch, installed, prereleases = repo.follow, repo.branch, repo.installed, repo.prereleases
+        finished = self._finished.get(repo_id, 0)
         addresses, homepage, pattern = [repo.id, *repo.aliases], repo.homepage, repo.asset_pattern
 
         # One API request for the releases, and one for what's new on a branch you're behind on. Branches and the
@@ -1388,6 +1394,14 @@ class Backend(QObject, Updating, Account):
         def done(result, error):
             if not self._config.find(repo_id):
                 return  # removed while loading
+            if repo_id in self._updating or self._finished.get(repo_id, 0) != finished:
+                # Updated while this loaded: what it read from disk (your version, where it is) is from before. Loaded
+                # again, after the update.
+                if repo_id in self._updating:
+                    self._load_after.add(repo_id)
+                else:
+                    QTimer.singleShot(0, lambda: self.loadDetails(repo_id, True))
+                return
             if error:
                 self._details[repo_id] = Details(state="error", error=self._error_text(error))
             else:

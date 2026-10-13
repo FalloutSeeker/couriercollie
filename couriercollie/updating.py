@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Slot
+from PySide6.QtCore import QTimer, Slot
 
 from . import applying, assets, checker, config, flatpaks, icons, integration, packages, sources, updater
 from .config import FOLLOW_BRANCH, FOLLOW_RELEASES, NOT_INSTALLED, TrackedRepo
@@ -139,6 +139,18 @@ class Updating:
         self._steps: dict[str, StepRun] = {}  # each clone's last step run after an update, while the app is open
         self._program_choices: dict[str, list[str]] = {}  # programs to choose from, when an archive has several
         self._phases: dict[str, str] = {}  # "installing" once an RPM's download is done and dnf runs
+        # How many updates (or steps) have finished for each repo, while the app is open: a page or a scan that read
+        # the disk before one finished has read it as it was before (loadDetails, _scan_done).
+        self._finished: dict[str, int] = {}
+        self._load_after: set[str] = set()  # pages to load again once their update is done
+
+    def _done_updating(self, repo_id: str):
+        """An update (or its step) for this repo is over."""
+        self._updating.discard(repo_id)
+        self._finished[repo_id] = self._finished.get(repo_id, 0) + 1
+        if repo_id in self._load_after:
+            self._load_after.discard(repo_id)
+            QTimer.singleShot(0, lambda: self.loadDetails(repo_id, True))  # (once the update has set what it did)
 
     @Slot(str)
     def updateRepo(self, repo_id):
@@ -173,7 +185,7 @@ class Updating:
         self.detailsChanged.emit(repo_id)
 
         def done(result, error):
-            self._updating.discard(repo_id)
+            self._done_updating(repo_id)
             repo = self._config.find(repo_id)
             if repo and error:
                 self._update_notes[repo_id] = ("error", self._error_text(error))
@@ -223,7 +235,7 @@ class Updating:
             return folder, updater.git_out(str(folder), "rev-parse", "HEAD"), updater.install_scripts(str(folder))
 
         def done(result, error):
-            self._updating.discard(repo_id)
+            self._done_updating(repo_id)
             repo = self._config.find(repo_id)
             if repo and error:
                 self._update_notes[repo_id] = ("error", self._error_text(error))
@@ -330,7 +342,7 @@ class Updating:
                 f"Updated to {tag}." if old else f"Installed {tag} as {updater.shown(new)}, with a menu entry.")
 
         def done(result, error):
-            self._updating.discard(repo_id)
+            self._done_updating(repo_id)
             self._progress.pop(repo_id, None)
             self._phases.pop(repo_id, None)
             repo = self._config.find(repo_id)
@@ -466,7 +478,7 @@ class Updating:
             run.process = process
 
         def done(code, error):
-            self._updating.discard(repo_id)
+            self._done_updating(repo_id)
             run.process, run.running = None, False
             if error:
                 run.result, run.output = "failed", [*run.output, str(error)]

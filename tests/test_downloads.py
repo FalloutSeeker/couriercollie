@@ -647,3 +647,46 @@ class ChecksumFileTest(unittest.TestCase):
         self.assertEqual(self.found({"SHA256SUMS": sums}), self.B)
         self.assertEqual(self.found({"SHA256SUMS": sums}, "my app-1.0-x86_64.AppImage"), self.A)
         self.assertEqual(self.found({"SHA256SUMS": f"SHA256 (app-1.0-x86_64.AppImage) = {self.B}\n"}), self.B)
+
+
+class UpdatedWhilePageLoadsTest(AppImageCase):
+    """A page load (or Refresh) that read the disk before an update finished comes back after it: it's loaded again,
+    rather than putting back the version from before (and the file the update replaced)."""
+
+    def test_the_update_stands(self):
+        from couriercollie import backend as backend_module
+        from couriercollie.backend import Backend
+
+        old = updater.apps_dir() / "App-1.0-x86_64.AppImage"
+        old.parent.mkdir(parents=True)
+        old.write_bytes(APP)
+        path, rid = Path(self.dir.name) / "repos.toml", "github.com/a/app"
+        config.save(config.Config(repos=[config.TrackedRepo(
+            id=rid, name="App", url="", host="github", asset_pattern="App-*-x86_64.AppImage", kind="AppImage",
+            installed="v1.0", source="scanned", local_path=str(old), homepage="-")]), path)
+        release = Release("v2.0", "v2.0", None, False, "", "", [self.asset()])
+        for module, name, value in ((sources, "releases", lambda *a, **k: [release]),
+                                    (sources, "newest_releases", lambda *a, **k: [release]),
+                                    (backend_module, "_fetch_branches", lambda ref: ("main", [], "")),
+                                    (backend_module, "_managed_elsewhere", lambda *a, **k: ("", "", ""))):
+            self.addCleanup(setattr, module, name, getattr(module, name))
+            setattr(module, name, value)
+        b = Backend(path)
+        self.addCleanup(b.shutdown)
+        answers = []  # each piece of work runs at once; its answer waits here
+
+        def run(work, done):
+            try:
+                answers.append((done, (work(), None)))
+            except Exception as e:  # noqa: BLE001
+                answers.append((done, (None, e)))
+        b._run = run
+        b.loadDetails(rid, True)  # the page reads the disk: v1.0
+        b.updateRepo(rid)
+        done, result = answers.pop(1)
+        done(*result)  # the update finishes first
+        done, result = answers.pop(0)
+        done(*result)  # then the page's answer arrives
+        repo = b._config.find(rid)
+        self.assertEqual((repo.installed, Path(repo.local_path).name), ("v2.0", NAME))
+        self.assertEqual(config.load(path).repos[0].installed, "v2.0")
