@@ -1,6 +1,7 @@
-"""After Updating, for real: a clone running as containers (podman-compose), its step approved, an update pushed, and
-Update clicked. Checks the step rebuilds and restarts the containers, that they then run the new version, and that a
-change to the compose file stops the step until it's approved again.
+"""After Updating, for real: a clone running as containers (podman-compose), whose own install.sh rebuilds and
+restarts them. Checks the first Update shows install.sh and runs it once approved, that the containers then run the
+new version, that the next Update does it all in one click, and that a change to install.sh stops it until it's
+approved again.
 
 Podman uses a storage folder of its own here (CONTAINERS_STORAGE_CONF), so your images and containers are never
 seen or touched; it's deleted at the end. Downloads busybox (about 2 MB) into it. No window.
@@ -50,7 +51,8 @@ try:
     (other / "Dockerfile").write_text("FROM docker.io/library/busybox:latest\nCOPY version /version\n")
     (other / "version").write_text("1\n")
     (other / "docker-compose.yml").write_text('services:\n  web:\n    build: .\n    command: ["sleep", "3600"]\n')
-    (other / "README.md").write_text("# Board\n\nTo update: pull, then rebuild the containers.\n")
+    (other / "install.sh").write_text("#!/bin/sh\nset -e\npodman-compose up -d --build --force-recreate\n")
+    (other / "README.md").write_text("# Board\n\nTo update: pull, then run install.sh.\n")
     run("git", "add", ".", cwd=other)
     run("git", "commit", "-q", "-m", "version 1", cwd=other)
     run("git", "push", "-q", "origin", "HEAD:main", cwd=other)
@@ -83,44 +85,50 @@ try:
     b._run = at_once  # one thing at a time, so each check follows the last step
     b.loadDetails(ID, True)
     d = b.details(ID)
-    suggested = {s["label"]: s["command"] for s in d["stepChoices"]}
-    check("the running containers are found, and rebuilding them offered",
-          "Rebuild and restart its containers" in suggested, str(d["stepChoices"]))
-    command = suggested.get("Rebuild and restart its containers", "")
-    check("…with its own project, compose file and service", command.startswith("podman-compose -p board -f ")
-          and command.endswith("docker-compose.yml up -d --build --force-recreate web"), command)
-    check("reading it shows the compose file", "docker-compose.yml ----" in b.reviewStep(ID, command))
+    check("only install.sh is offered", [c["label"] for c in d["stepChoices"]] == ["Run install.sh"],
+          str(d["stepChoices"]))
+    command = d["stepChoices"][0]["command"] if d["stepChoices"] else ""
+    check("reading it shows install.sh", "install.sh ----" in b.reviewStep(ID, command))
 
-    # An update: version 2. Update pulls it, then rebuilds and restarts the containers: they already run from these
-    # compose files, so even the first time it doesn't ask.
-    (other / "version").write_text("2\n")
-    run("git", "commit", "-q", "-am", "version 2", cwd=other)
-    run("git", "push", "-q", "origin", "HEAD:main", cwd=other)
+    def push(version, script=None):
+        (other / "version").write_text(f"{version}\n")
+        if script:
+            (other / "install.sh").write_text(script)
+        run("git", "commit", "-q", "-am", f"version {version}", cwd=other)
+        run("git", "push", "-q", "origin", "HEAD:main", cwd=other)
+
+    # Version 2. The first Update asks first, showing what will run; nothing is done yet.
+    push(2)
     asks = []
     b.askStep.connect(lambda repo_id, why: asks.append(why))
-    print("Update: pull, then rebuild…")
     b.updateRepo(ID)
+    check("the first Update asks, and waits", asks == ["update"] and b.details(ID)["updateNote"] == "",
+          f"{asks} {b.details(ID)['updateNote']}")
+    print("approved: pull, then install.sh…")
+    b.updateWithStep(ID, command)  # (the window's Update)
     d = b.details(ID)
-    check("the first Update doesn't ask", asks == [], str(asks))
     check("Update pulled", d["updateNote"] == "Pulled 1 new commit.", d["updateNote"])
     check("…then the step ran and applied it", d["stepResult"] == "applied", d["stepResult"] + d["stepOutput"][-500:])
     check("…its output shown", "web" in d["stepOutput"], d["stepOutput"][-300:])
     check("the containers now run version 2", serving(clone) == "2", serving(clone))
 
-    # An update that changes the compose file: not run until approved again.
-    (other / "docker-compose.yml").write_text('services:\n  web:\n    build: .\n    command: ["sleep", "7200"]\n')
-    (other / "version").write_text("3\n")
-    run("git", "commit", "-q", "-am", "version 3, new compose file", cwd=other)
-    run("git", "push", "-q", "origin", "HEAD:main", cwd=other)
+    # Version 3: one click does it all.
+    push(3)
+    b.updateRepo(ID)
+    check("the next Update doesn't ask: version 3", asks == ["update"] and b.details(ID)["stepResult"] == "applied"
+          and serving(clone) == "3", f"{asks} {serving(clone)}")
+
+    # Version 4 changes install.sh: not run until it's read and approved again.
+    push(4, "#!/bin/sh\nset -e\necho rebuilding\npodman-compose up -d --build --force-recreate\n")
     b.updateRepo(ID)
     d = b.details(ID)
-    # (The last run's "Applied" was for version 2: it goes with the new update.)
-    check("a changed compose file stops the step", d["stepChanged"] and d["stepResult"] == ""
-          and serving(clone) == "2", f"{d['stepChanged']} {d['stepResult']} {serving(clone)}")
-    check("…and the page is asked to show it again", asks == ["changed"], str(asks))
+    # (The last run's "Applied" was for version 3: it goes with the new update.)
+    check("a changed install.sh stops the step", d["stepChanged"] and d["stepResult"] == ""
+          and serving(clone) == "3", f"{d['stepChanged']} {d['stepResult']} {serving(clone)}")
+    check("…and the page is asked to show it again", asks == ["update", "changed"], str(asks))
     b.approveStep(ID, d["step"])  # looked at again
     b.runStep(ID)
-    check("approved again, it runs: version 3", b.details(ID)["stepResult"] == "applied" and serving(clone) == "3",
+    check("approved again, it runs: version 4", b.details(ID)["stepResult"] == "applied" and serving(clone) == "4",
           serving(clone))
     b.shutdown()
 finally:

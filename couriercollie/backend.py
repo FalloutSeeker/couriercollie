@@ -69,8 +69,6 @@ class Details:
     branch_on_disk: str = ""
     # A scanned clone's install scripts (updater.install_scripts), offered to run by hand.
     install_scripts: list[str] = field(default_factory=list)
-    # Applying a clone's update (applying.py): its README's update steps, and its running containers.
-    compose: applying.Compose | None = None
     builds: list[applying.Build] = field(default_factory=list)  # a scanned clone's build folders (CMake, Meson)
     # The project is also installed from a repository the package manager or Flatpak updates (_managed_elsewhere):
     # the page's note, and that installed version.
@@ -1275,7 +1273,6 @@ class Backend(QObject, Updating, Account):
                 if follow == FOLLOW_BRANCH else None
             clone = scanned and (Path(local_path) / ".git").exists()
             scripts = updater.install_scripts(local_path) if clone else []
-            compose = applying.running_compose(local_path) if clone else None
             built = applying.builds(local_path) if clone else []
             website = homepage or _homepage_of(ref, host)  # once
             note, managed_by, managed_version = _managed_elsewhere(addresses, website)
@@ -1283,7 +1280,7 @@ class Backend(QObject, Updating, Account):
                 state="ready", releases=rels, more_releases=len(rels) == PAGE_RELEASES, default_branch=default,
                 branches=branches, branch_error=branch_error, comparison=comparison, commits_base=yours,
                 commits_head=head, local_missing=bool(on_disk) and not on_disk[1], branch_on_disk=branch_on_disk,
-                install_scripts=scripts, compose=compose, builds=built)
+                install_scripts=scripts, builds=built)
 
         def done(result, error):
             if not self._config.find(repo_id):
@@ -1524,12 +1521,11 @@ class Backend(QObject, Updating, Account):
         approved before if it's none of them. Read from the clone if its page hasn't loaded."""
         if d is None or d.state != "ready":
             path = repo.local_path
-            scripts, compose, built = updater.install_scripts(path), applying.running_compose(path), \
-                applying.builds(path)
+            scripts, built = updater.install_scripts(path), applying.builds(path)
         else:
-            scripts, compose, built = d.install_scripts, d.compose, d.builds
+            scripts, built = d.install_scripts, d.builds
         choices = [{"label": s.label, "command": s.command, "what": s.what}
-                   for s in applying.suggestions(repo.local_path, scripts, compose, built)]
+                   for s in applying.suggestions(repo.local_path, scripts, built)]
         if repo.apply_command and all(c["command"] != repo.apply_command for c in choices):
             choices.append({"label": repo.apply_command, "command": repo.apply_command, "what": "the step"})
         return choices

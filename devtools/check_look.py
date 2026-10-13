@@ -141,12 +141,6 @@ sources.compare = lambda ref, host, yours, head: sources.Comparison(sources.BEHI
     sources.Commit("7" * 40, "Update translations"),
     sources.Commit("6" * 40, "Make the start menu open faster")])
 account.password_store = lambda: "KDE Wallet"
-# Its containers, as if running (applying.py asks podman or docker on a real computer).
-from couriercollie import applying  # noqa: E402
-
-applying.running_compose = lambda path: applying.Compose(["podman-compose"], "aerothemeplasma",
-                                                         [f"{path}/docker-compose.yml"], ["app"]) \
-    if Path(path).name == "aerothemeplasma" else None
 # Not this computer's package manager: only Dolphin is "installed with dnf".
 backend_module._managed_elsewhere = lambda ids, website="": (("Your package manager keeps this up to date.", "dnf", "26.08.1")
                                                  if "github.com/KDE/dolphin" in ids else ("", "", ""))
@@ -212,7 +206,7 @@ h.run([
     (0, lambda: h.click("updateNow")),
     (600, shot("5b-update-asks")),
     (0, lambda: h.press("stepDialog", "Cancel")),
-    # Chosen from Tracking instead (Change…), then run: the fake project has no compose file, so it fails, with its
+    # Chosen from Tracking instead (Change…), then run: the fake project has nothing to copy, so it fails, with its
     # output shown.
     (600, lambda: h.click("changeStep")),  # (once the closing dialog has gone)
     (500, lambda: h.press("stepDialog", "Use This")),

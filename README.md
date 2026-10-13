@@ -76,7 +76,7 @@ sign-in.
 - couriercollie never sees your password: your desktop's own password window asks for it. If an install script
   needs `sudo` and your desktop has no password helper for it, you get the command to run in a terminal instead.
 - Git clones: the first Update shows you the install script it will run after downloading, and if an update changes
-  it, waits for you to look again. Running containers are rebuilt with each update.
+  it, waits for you to look again.
 - Anything your package manager installed (from your distro's repositories, or from Flathub) is never updated here.
   couriercollie only shows its version; your package manager keeps it up to date.
 

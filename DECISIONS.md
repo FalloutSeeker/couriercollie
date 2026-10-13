@@ -22,7 +22,7 @@ The choices behind couriercollie, and why. Numbered so the code can point to the
 
 - Updates only happen when you click Update, so no password prompt appears that you didn't ask for.
 - After a clone is pulled, only what you approved runs (its install script, or a rebuild), never typed in. If it
-  changes, it waits until you've read it again. Running containers are rebuilt without asking.
+  changes, it waits until you've read it again.
 
 ## D5. One check schedule, quiet notifications
 

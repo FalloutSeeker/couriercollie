@@ -56,7 +56,6 @@ Downloading only changes a clone's files, so Update also runs its step:
 - **Asked once, the first time** (or once Install has cloned it): its install script, or a rebuild in its CMake or
   Meson build folder. The window shows what will run: Update, Only Download, or Cancel. Nothing is typed in.
   Change… (under Tracking) changes it.
-- **Running containers** (from its compose files) are rebuilt and restarted without asking.
 - **Asked again** if an update changes what was approved.
 - **Runs inside the app,** output shown live. `sudo` asks in the desktop's own password window (`sudo -A`), so
   couriercollie never sees the password; without one, it stops and offers the command for a terminal.

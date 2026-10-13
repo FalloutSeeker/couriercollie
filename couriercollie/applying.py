@@ -3,9 +3,9 @@ and how is up to each project. So Update does the whole job: it downloads, then 
 (TrackedRepo.apply_command), a command you approve the first time (or choose Only Download), run in the clone's
 folder, inside the app.
 
-- Chosen from what's certain: rebuilding the containers running from the clone's compose files, running one of its
-  install, setup or update scripts, or building and installing again in its build folder. Nothing is typed in.
-- Approval covers the command and the files it names (a script, a compose file): if an update changes them, the step
+- Chosen from what's certain: running one of the clone's install, setup or update scripts, or building and
+  installing again in its build folder. Nothing is typed in.
+- Approval covers the command and the files it names (a script): if an update changes them, the step
   isn't run until you've looked again (fingerprint). So a pulled change can't slip new commands past you (D6).
 - A step that asks for a password (sudo) gets the desktop's own password window (password_window): couriercollie
   never sees the password. If there's no such window (or the step uses doas, or a sudo named by its full path), it
@@ -23,84 +23,6 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-
-@dataclass
-class Compose:
-    """Containers running from a clone's compose files (Docker Compose or podman-compose)."""
-    tool: list[str]  # ["podman-compose"], ["podman", "compose"] or ["docker", "compose"]
-    project: str
-    files: list[str]  # the compose files they were started with, e.g. with deploy/compose.gpu.yml
-    services: list[str]  # the ones running: only these are rebuilt, so a profile that's off stays off
-
-
-def parse_labels(output: str) -> list[dict[str, str]]:
-    """`ps --format '{{json .Labels}}'`, one container a line: podman gives an object, docker "a=1,b=2" (a string).
-    That format works on every version of both; `--format json` is only in Docker 23 and later."""
-    labels = []
-    for line in output.splitlines():
-        try:
-            found = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(found, str):
-            found = dict(pair.split("=", 1) for pair in found.split(",") if "=" in pair)
-        if isinstance(found, dict):
-            labels.append({str(k): str(v) for k, v in found.items()})
-    return labels
-
-
-def _containers(engine: str) -> list[dict[str, str]]:
-    """The running containers' labels, from podman or docker. None if it can't be asked: not installed, or (docker)
-    you aren't allowed to use it without sudo."""
-    exe = shutil.which(engine)
-    if not exe:
-        return []
-    try:
-        out = subprocess.run([exe, "ps", "--format", "{{json .Labels}}"], capture_output=True, text=True, timeout=15)
-    except (OSError, subprocess.TimeoutExpired):
-        return []
-    return parse_labels(out.stdout) if out.returncode == 0 else []
-
-
-def _docker_compose() -> list[str]:
-    """Docker's compose: the plugin (`docker compose`), or the older standalone `docker-compose`."""
-    try:
-        if subprocess.run(["docker", "compose", "version"], capture_output=True, timeout=15).returncode == 0:
-            return ["docker", "compose"]
-    except (OSError, subprocess.TimeoutExpired):
-        pass
-    return ["docker-compose"] if shutil.which("docker-compose") else ["docker", "compose"]
-
-
-def running_compose(path: str, containers=_containers) -> Compose | None:
-    """The compose project running from this folder, if any: told by the labels Compose puts on its containers."""
-    folder = os.path.realpath(path)
-    for engine in ("podman", "docker"):
-        mine = [c for c in containers(engine)
-                if os.path.realpath(c.get("com.docker.compose.project.working_dir") or "/nonexistent") == folder]
-        if not mine:
-            continue
-        files = [f for f in mine[0].get("com.docker.compose.project.config_files", "").split(",") if f]
-        services = sorted({c["com.docker.compose.service"] for c in mine if c.get("com.docker.compose.service")})
-        if engine == "podman":
-            tool = ["podman-compose"] if shutil.which("podman-compose") else ["podman", "compose"]
-        else:
-            tool = _docker_compose()
-        return Compose(tool, mine[0].get("com.docker.compose.project", ""), files, services)
-    return None
-
-
-def compose_command(c: Compose) -> list[str]:
-    """Rebuild the running services from the updated files and restart them, with the same project and files.
-    --force-recreate: podman-compose keeps a container whose compose file is unchanged, even when its image was just
-    rebuilt, so it would go on running the old version."""
-    project = ["-p", c.project] if c.project else []
-    files = [arg for f in c.files for arg in ("-f", f)]
-    return [*c.tool, *project, *files, "up", "-d", "--build", "--force-recreate", *c.services]
-
-
-# ---------------------------------------------------------------------------------------------------------------------
-# The step
 
 
 @dataclass
@@ -169,14 +91,12 @@ def scripts_name(path: str, addresses: list[str]) -> bool:
     return False
 
 
-def suggestions(path: str, scripts: list[str], compose: Compose | None,
-                built: list[Build] | None = None) -> list[Suggestion]:
-    """Steps to choose from: rebuilding the running containers, each install, setup or update script, or else
-    building and installing again (as the clone's build folders were set up)."""
+def suggestions(path: str, scripts: list[str], built: list[Build] | None = None) -> list[Suggestion]:
+    """Steps to choose from: each install, setup or update script, or else building and installing again (as the
+    clone's build folders were set up)."""
     from .updater import _interpreter
 
-    found = [Suggestion("Rebuild and restart its containers", shlex.join(compose_command(compose)),
-                        "the container rebuild")] if compose else []
+    found = []
     for name in scripts:
         found.append(Suggestion(f"Run {name}", shlex.join(_interpreter(Path(path) / name, name)), name))
     if built and not scripts:  # (a project's own install script is its way: it may build more than this folder)
@@ -189,19 +109,16 @@ FILE_MAX_BYTES = 1024 * 1024
 
 
 # Files a tool reads without being told their names: "make install" runs what the Makefile says, so a change to the
-# Makefile is a change to the step. (A compose file given with -f is named, so it's covered anyway.)
+# Makefile is a change to the step.
 _IMPLIED = {
     "make": ("GNUmakefile", "makefile", "Makefile"), "gmake": ("GNUmakefile", "makefile", "Makefile"),
-    "compose": ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml", "Dockerfile",
-                "Containerfile"),
     "npm": ("package.json",), "pnpm": ("package.json",), "yarn": ("package.json",), "cargo": ("Cargo.toml",),
     "just": ("justfile", "Justfile"), "cmake": ("CMakeLists.txt",), "meson": ("meson.build",),
 }
-_IMPLIED["podman-compose"] = _IMPLIED["docker-compose"] = _IMPLIED["compose"]
 
 
 def named_files(path: str, command: str) -> list[Path]:
-    """The clone's files the command names (a script, a compose file), and those the tools it runs read without
+    """The clone's files the command names (a script), and those the tools it runs read without
     being told (make's Makefile): what approving it covers."""
     try:
         words = shlex.split(command)

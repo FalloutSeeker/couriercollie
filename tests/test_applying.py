@@ -6,60 +6,6 @@ from pathlib import Path
 from couriercollie import applying
 
 
-class ComposeTest(unittest.TestCase):
-    """Containers running from a clone's compose files, told by the labels Compose puts on them."""
-
-    def labels(self, working_dir, service, files="/c/docker-compose.yml,/c/deploy/compose.gpu.yml"):
-        return {"com.docker.compose.project": "board", "com.docker.compose.project.working_dir": working_dir,
-                "com.docker.compose.project.config_files": files, "com.docker.compose.service": service}
-
-    def test_found_with_its_files_and_running_services(self):
-        with tempfile.TemporaryDirectory() as folder:
-            running = {"podman": [self.labels(folder, "nginx"), self.labels(folder, "app"),
-                                  self.labels("/elsewhere", "db")], "docker": []}
-            c = applying.running_compose(folder, containers=lambda engine: running[engine])
-            self.assertEqual((c.project, c.files, c.services),
-                             ("board", ["/c/docker-compose.yml", "/c/deploy/compose.gpu.yml"], ["app", "nginx"]))
-            command = applying.compose_command(c)
-            # Only the running services are rebuilt, with the same files: a profile that's off stays off.
-            self.assertIn("/c/deploy/compose.gpu.yml", command)
-            self.assertEqual(command[command.index("up"):], ["up", "-d", "--build", "--force-recreate", "app", "nginx"])
-            self.assertEqual(command[command.index("-p"):command.index("-p") + 2], ["-p", "board"])
-
-    def test_docker_when_podman_has_none(self):
-        with tempfile.TemporaryDirectory() as folder:
-            running = {"podman": [], "docker": [self.labels(folder, "web")]}
-            c = applying.running_compose(folder, containers=lambda engine: running[engine])
-            self.assertEqual((c.tool, c.services), (["docker", "compose"], ["web"]))
-
-    def test_labels_from_any_docker_or_podman(self):
-        # podman: an object; docker (any version): "a=1,b=2", as a string; anything else is skipped.
-        output = ('{"com.docker.compose.service":"app"}\n"com.docker.compose.service=web,x=1"\n'
-                  'json\n\n')
-        self.assertEqual(applying.parse_labels(output),
-                         [{"com.docker.compose.service": "app"}, {"com.docker.compose.service": "web", "x": "1"}])
-
-    def test_the_older_standalone_docker_compose(self):
-        import os
-
-        with tempfile.TemporaryDirectory() as bin_dir:
-            # A docker without the compose plugin, and the standalone docker-compose.
-            (Path(bin_dir) / "docker").write_text("#!/bin/sh\nexit 1\n")
-            (Path(bin_dir) / "docker-compose").write_text("#!/bin/sh\n")
-            for name in ("docker", "docker-compose"):
-                (Path(bin_dir) / name).chmod(0o755)
-            saved = os.environ["PATH"]
-            os.environ["PATH"] = bin_dir
-            try:
-                self.assertEqual(applying._docker_compose(), ["docker-compose"])
-            finally:
-                os.environ["PATH"] = saved
-
-    def test_nothing_running_from_here(self):
-        with tempfile.TemporaryDirectory() as folder:
-            self.assertIsNone(applying.running_compose(folder, containers=lambda engine: [self.labels("/x", "a")]))
-
-
 class RunTest(unittest.TestCase):
     def run_step(self, command, folder="."):
         output = []
@@ -156,11 +102,11 @@ class BuildFolderTest(unittest.TestCase):
             self.assertEqual([applying.build_command(b) for b in built],
                              ["meson compile -C _build && meson install -C _build",
                               "cmake --build build && sudo cmake --install build"])
-            [s] = applying.suggestions(d, [], None, built)
+            [s] = applying.suggestions(d, [], built)
             self.assertEqual(s.label, "Rebuild and install it")
             # A project with its own install script: that's its way (it may build more than this folder).
             (root / "install.sh").write_text("#!/bin/sh\n")
-            self.assertEqual([x.label for x in applying.suggestions(d, ["install.sh"], None, built)], ["Run install.sh"])
+            self.assertEqual([x.label for x in applying.suggestions(d, ["install.sh"], built)], ["Run install.sh"])
             # Approving it covers what CMake and Meson read without being named.
             self.assertIn("CMakeLists.txt", applying._IMPLIED["cmake"])
 
