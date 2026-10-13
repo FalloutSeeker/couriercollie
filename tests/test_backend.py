@@ -675,6 +675,34 @@ class EditedByHandTest(unittest.TestCase):
         self.backend._reload_settings()
         self.assertEqual((self.backend.configError, [r.name for r in self.backend._config.repos]), ("", ["LocalSend"]))
 
+    def test_noticed_whether_written_in_place_or_replaced(self):
+        # As the app runs: the file is watched (an editor may write it in place, or replace it), and read again a
+        # moment later. Each time, the app's next save keeps the edit.
+        import os
+        import time
+
+        from PySide6.QtCore import QCoreApplication
+
+        app = QCoreApplication.instance() or QCoreApplication([])
+
+        def pump(seconds):
+            end = time.monotonic() + seconds
+            while time.monotonic() < end:
+                app.processEvents()
+                time.sleep(0.02)
+
+        for i, replaced in enumerate((False, True, False)):
+            text = self.path.read_text() + f'\n[[repos]]\nid = "github.com/x/p{i}"\nname = "p{i}"\nurl = ""\nhost = "github"\n'
+            if replaced:
+                (tmp := self.path.with_name("edit.tmp")).write_text(text)
+                os.replace(tmp, self.path)
+            else:
+                self.path.write_text(text)
+            pump(1)
+            self.backend.renameRepo(LOCALSEND, f"LocalSend {i}")
+            self.assertEqual([r.name for r in config.load(self.path).repos],
+                             [f"LocalSend {i}", *(f"p{n}" for n in range(i + 1))])
+
     def test_our_own_save_isnt_read_again(self):
         repo = self.backend._config.repos[0]
         self.backend.renameRepo(LOCALSEND, "Phone")

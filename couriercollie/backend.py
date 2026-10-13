@@ -386,14 +386,17 @@ class Backend(QObject, Updating, Account):
         self._watcher.addPath(str(self._state_path.parent))
         self._watcher.directoryChanged.connect(self._reload_checks)
         # The settings file edited by hand while the app is open: read again, rather than overwritten by the next save.
-        # A moment after it changes, as an editor may write it in more than one go.
-        settings_folder = (config_path or config.default_path()).parent
-        settings_folder.mkdir(parents=True, exist_ok=True)
-        self._watcher.addPath(str(settings_folder))
+        # A moment after it changes, as an editor may write it in more than one go. Both the file (written in place)
+        # and its folder (replaced, as most editors and our own saves do, which ends the file's watch) are watched.
+        settings_file = config_path or config.default_path()
+        settings_file.parent.mkdir(parents=True, exist_ok=True)
+        self._watcher.addPath(str(settings_file.parent))
         self._settings_timer = QTimer(self, singleShot=True, interval=300)
         self._settings_timer.timeout.connect(self._reload_settings)
         self._watcher.directoryChanged.connect(lambda folder: self._settings_timer.start()
-                                               if Path(folder) == settings_folder else None)
+                                               if Path(folder) == settings_file.parent else None)
+        self._watcher.fileChanged.connect(lambda file: self._settings_timer.start())
+        self._watch_settings_file()
         if self._desktop and not self._config_error:
             # What an update cut short left behind (the app killed, the computer turned off), off the main thread.
             self._run(updater.clean_leftovers, lambda _done, _error: None)
@@ -692,9 +695,16 @@ class Backend(QObject, Updating, Account):
         except (OSError, UnicodeDecodeError):
             return None
 
+    def _watch_settings_file(self):
+        """Watch the settings file itself, if it's there and not watched yet (a file replaced is watched no more)."""
+        path = str(self._path or config.default_path())
+        if path not in self._watcher.files() and os.path.exists(path):
+            self._watcher.addPath(path)
+
     def _reload_settings(self):
         """The settings file was changed by something else (edited by hand): it's read again. If it's broken now,
         nothing is saved until it's fixed, so the edit isn't lost."""
+        self._watch_settings_file()
         text = self._settings_text()
         if text is None or text == self._saved_text:
             return  # our own save, or the file is gone (being replaced: it's read once it's back)
