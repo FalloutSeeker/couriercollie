@@ -223,7 +223,8 @@ def check_repo(repo: TrackedRepo, github_limited: threading.Event | None = None)
         if repo.host == "github" and github_limited is not None:
             github_limited.set()
         until = f" (until {e.reset_at.astimezone():%H:%M})" if e.reset_at else ""
-        return Result(RATE_LIMITED, f"Not checked: {ref.domain}’s hourly limit was reached{until}",
+        site = "GitHub" if repo.host == "github" else ref.domain
+        return Result(RATE_LIMITED, f"Not checked: {site}’s hourly limit was reached{until}",
                       retry_after=e.reset_at.isoformat() if e.reset_at else "", checked_at=stamp())
     except sources.Unreachable as e:
         return Result(UNREACHABLE, f"Couldn’t check: {e}", checked_at=stamp())
