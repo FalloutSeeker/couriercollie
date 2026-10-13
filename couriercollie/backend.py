@@ -591,6 +591,7 @@ class Backend(QObject, Updating, Account):
             return
         repos = [dataclasses.replace(r) for r in self._config.repos]
         previous = self._checks
+        at_start = dict(previous.results)
         self._checking, self._check_error = True, ""
         self.checksChanged.emit()
 
@@ -600,6 +601,20 @@ class Backend(QObject, Updating, Account):
                 self._check_error = self._error_text(error)
             else:
                 self._checks, fresh = result
+                # While it ran, a repo may have been updated, or its page found a newer result: the check's result is
+                # for the version it had then. The page's is kept; an update's is redone for the version it has now
+                # (no request), and isn't announced.
+                yours = {r.id: r.installed for r in repos}
+                for r in self._config.repos:
+                    new, now = self._checks.results.get(r.id), previous.results.get(r.id)
+                    if new and r.id in yours and r.installed != yours[r.id] and new.newest:
+                        self._checks.results[r.id] = checker.recheck_against(
+                            new, r.installed, by_branch=r.follow == FOLLOW_BRANCH, branch=r.branch)
+                    elif now is not at_start.get(r.id) and now is not None:
+                        self._checks.results[r.id] = now
+                    else:
+                        continue
+                    fresh = [i for i in fresh if i != r.id]
                 self._save_checks()
                 # What the package manager or Flatpak installed, as the check found (checker.find_managed).
                 managed = {r.id: r.managed_by for r in repos}
