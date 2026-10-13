@@ -54,6 +54,7 @@ Kirigami.ScrollablePage {
         }
 
         QQC2.Label {
+            Layout.fillWidth: true
             Layout.maximumWidth: Kirigami.Units.gridUnit * 24
             text: page.s.autoCheck
                 ? "With notifications off, updates still show in the app and as a number on its taskbar icon."
@@ -88,6 +89,7 @@ Kirigami.ScrollablePage {
         }
 
         QQC2.Label {
+            Layout.fillWidth: true
             Layout.maximumWidth: Kirigami.Units.gridUnit * 24
             text: !page.s.trayAvailable
                 ? "Your desktop doesn’t show tray icons. On GNOME, the AppIndicator extension adds them."
@@ -106,6 +108,9 @@ Kirigami.ScrollablePage {
         }
 
         GitHubSignIn {
+            Kirigami.FormData.label: "Account:"
+            Kirigami.FormData.labelAlignment: Qt.AlignTop
+            Layout.fillWidth: true
             Layout.maximumWidth: Kirigami.Units.gridUnit * 24
         }
 
@@ -124,6 +129,7 @@ Kirigami.ScrollablePage {
         }
 
         QQC2.Label {
+            Layout.fillWidth: true
             Layout.maximumWidth: Kirigami.Units.gridUnit * 24
             text: page.s.scanning
                 ? "Looks for git clones, downloaded apps and packages installed from downloaded files, and lets you choose which to track (Scan, in the main window). Only what your package manager can\u2019t update is listed; anything it or Flatpak updates is left out. Repos added by hand that a scan later finds switch to the version found."
@@ -135,6 +141,7 @@ Kirigami.ScrollablePage {
         ColumnLayout {
             Kirigami.FormData.label: "Folders to scan:"
             Kirigami.FormData.labelAlignment: Qt.AlignTop
+            Layout.fillWidth: true
             Layout.maximumWidth: Kirigami.Units.gridUnit * 24
             enabled: page.s.scanning
             spacing: 0
@@ -216,6 +223,7 @@ Kirigami.ScrollablePage {
         }
 
         QQC2.Label {
+            Layout.fillWidth: true
             Layout.maximumWidth: Kirigami.Units.gridUnit * 24
             text: "Folders marked Default are scanned unless removed: they’re where software installed by hand usually lives. Subfolders are included, except hidden ones."
             wrapMode: Text.Wrap
