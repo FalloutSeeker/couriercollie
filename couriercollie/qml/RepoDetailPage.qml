@@ -359,6 +359,16 @@ Kirigami.ScrollablePage {
             text: Labels.plain(`This clone belongs to ${page.details.theirs}, so updating it is up to them. What\u2019s new is still shown here.`)
         }
 
+        // Part of another tracked clone: that one's install script updates, builds and installs this one.
+        Kirigami.InlineMessage {
+            objectName: "partOf"
+            Layout.fillWidth: true
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 34
+            visible: page.ready && (page.details.partOf || "") !== ""
+            type: Kirigami.MessageType.Information
+            text: Labels.plain(`Part of ${page.details.partOf}: its install script updates, builds and installs this one, so updating ${page.details.partOf} takes care of it. What\u2019s new is still shown here.`)
+        }
+
         // Built only for other systems (Android, Windows, etc.): nothing here can install it.
         Kirigami.InlineMessage {
             objectName: "otherSystems"
@@ -748,7 +758,8 @@ Kirigami.ScrollablePage {
                 ]
             }
 
-            // Choosing the step: suggestions fill in the command, which can be changed before approving it.
+            // Choosing the step: each choice opens what it runs, to read before approving it. (The section is only here
+            // when there's something to choose: nothing to type.)
             QQC2.Label {
                 Layout.fillWidth: true
                 visible: !afterUpdating.hasStep || afterUpdating.editing
@@ -759,7 +770,7 @@ Kirigami.ScrollablePage {
 
             Flow {
                 Layout.fillWidth: true
-                visible: (!afterUpdating.hasStep || afterUpdating.editing) && (page.details.stepSuggestions || []).length > 0
+                visible: !afterUpdating.hasStep || afterUpdating.editing
                 spacing: Kirigami.Units.smallSpacing
 
                 Repeater {
@@ -769,31 +780,9 @@ Kirigami.ScrollablePage {
                         required property var modelData
 
                         objectName: "suggestion:" + modelData.label
-                        text: modelData.label
-                        onClicked: stepField.text = modelData.command
+                        text: modelData.label + "\u2026"
+                        onClicked: stepDialog.review(modelData.command)
                     }
-                }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                visible: !afterUpdating.hasStep || afterUpdating.editing
-
-                QQC2.TextField {
-                    id: stepField
-
-                    objectName: "stepField"
-                    Layout.fillWidth: true
-                    placeholderText: "A command, run in the clone\u2019s folder"
-                    font: Kirigami.Theme.fixedWidthFont
-                }
-
-                QQC2.Button {
-                    objectName: "reviewStep"
-                    enabled: stepField.text.trim() !== ""
-                    text: "Review and Approve\u2026"
-                    icon.name: "document-preview"
-                    onClicked: stepDialog.review(stepField.text)
                 }
 
                 QQC2.Button {
@@ -854,7 +843,6 @@ Kirigami.ScrollablePage {
                     text: "Change\u2026"
                     icon.name: "document-edit"
                     onClicked: {
-                        stepField.text = page.details.step;
                         afterUpdating.editing = true;
                     }
                 }

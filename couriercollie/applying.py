@@ -181,13 +181,76 @@ class Suggestion:
     command: str
 
 
-def suggestions(path: str, scripts: list[str], compose: Compose | None) -> list[Suggestion]:
-    """Steps to choose from: rebuilding the running containers, and each install, setup or update script."""
+@dataclass
+class Build:
+    """A build folder in the clone, set up by an earlier build (CMake or Meson): it knows how the project was built
+    and where it installs to, so rebuilding and installing it again guesses nothing."""
+    tool: str  # "cmake" or "meson"
+    folder: str  # in the clone, e.g. "build"
+    prefix: str  # where it installs to, e.g. "/usr"
+
+
+def builds(path: str) -> list[Build]:
+    """The clone's build folders (directly in it): CMake's (a CMakeCache.txt for this very clone) and Meson's."""
+    found = []
+    root = Path(path).resolve()
+    try:
+        folders = sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith("."))
+    except OSError:
+        return []
+    for folder in folders:
+        cache, meson = folder / "CMakeCache.txt", folder / "meson-info" / "intro-buildoptions.json"
+        if cache.is_file():
+            text = cache.read_text(errors="replace")
+            home = re.search(r"^CMAKE_HOME_DIRECTORY:INTERNAL=(.*)$", text, re.M)
+            prefix = re.search(r"^CMAKE_INSTALL_PREFIX:PATH=(.*)$", text, re.M)
+            if home and Path(home.group(1)).resolve() == root:  # (not a build of another project kept here)
+                found.append(Build("cmake", folder.name, prefix.group(1) if prefix else "/usr/local"))
+        elif meson.is_file():
+            try:
+                options = json.loads(meson.read_text())
+            except ValueError:
+                continue
+            prefix = next((o.get("value") for o in options if o.get("name") == "prefix"), "/usr/local")
+            found.append(Build("meson", folder.name, str(prefix)))
+    return found
+
+
+def build_command(b: Build) -> str:
+    """Build again in the same folder, then install as it was set up to: with sudo where only root can write."""
+    sudo = "" if os.access(b.prefix, os.W_OK) else "sudo "
+    folder = shlex.quote(b.folder)
+    if b.tool == "cmake":
+        return f"cmake --build {folder} && {sudo}cmake --install {folder}"
+    return f"meson compile -C {folder} && {sudo}meson install -C {folder}"
+
+
+def scripts_name(path: str, addresses: list[str]) -> bool:
+    """Whether the clone's install scripts name one of these projects (as "gitgud.io/aeroshell/smod"): it sets that
+    project up as part of itself."""
+    from .updater import install_scripts
+
+    for name in install_scripts(path):
+        try:
+            text = (Path(path) / name).read_text(errors="replace").lower()
+        except OSError:
+            continue
+        if any(address.lower() in text for address in addresses):
+            return True
+    return False
+
+
+def suggestions(path: str, scripts: list[str], compose: Compose | None,
+                built: list[Build] | None = None) -> list[Suggestion]:
+    """Steps to choose from: rebuilding the running containers, each install, setup or update script, or else
+    building and installing again (as the clone's build folders were set up)."""
     from .updater import _interpreter
 
     found = [Suggestion("Rebuild and restart its containers", shlex.join(compose_command(compose)))] if compose else []
     for name in scripts:
         found.append(Suggestion(f"Run {name}", shlex.join(_interpreter(Path(path) / name, name))))
+    if built and not scripts:  # (a project's own install script is its way: it may build more than this folder)
+        found.append(Suggestion("Rebuild and install it", " && ".join(build_command(b) for b in built)))
     return found
 
 
@@ -202,7 +265,7 @@ _IMPLIED = {
     "compose": ("compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml", "Dockerfile",
                 "Containerfile"),
     "npm": ("package.json",), "pnpm": ("package.json",), "yarn": ("package.json",), "cargo": ("Cargo.toml",),
-    "just": ("justfile", "Justfile"),
+    "just": ("justfile", "Justfile"), "cmake": ("CMakeLists.txt",), "meson": ("meson.build",),
 }
 _IMPLIED["podman-compose"] = _IMPLIED["docker-compose"] = _IMPLIED["compose"]
 

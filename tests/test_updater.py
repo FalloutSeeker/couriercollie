@@ -479,8 +479,17 @@ class UpdateClickedTest(UpstreamCase):
         self.assertEqual(self.backend._checks.results[self.id].status, self.checker.UP_TO_DATE)
         self.assertFalse(self.backend.repo(self.id)["updateAvailable"])
 
+    def test_nothing_known_to_run_no_after_updating(self):
+        # No script, containers or build folder, and no step chosen: nothing to offer, so no section (nor a box).
+        self.assertFalse(self.backend.details(self.id)["afterUpdating"])
+        self.backend.updateRepo(self.id)
+        self.assertFalse(self.backend.details(self.id)["afterUpdating"])
+
     def test_mark_as_applied(self):
-        # No step chosen: after an update, a reminder that a running program doesn't use it yet.
+        # A step that didn't run (changed since it was approved): after an update, a reminder that a running program
+        # doesn't use it yet.
+        repo = self.backend._config.find(self.id)
+        repo.apply_command, repo.apply_approved = "true", "approved before it changed"
         self.assertEqual(self.backend.details(self.id)["applyReminder"], "")
         self.backend.updateRepo(self.id)
         self.assertTrue(self.backend.details(self.id)["applyReminder"].startswith(

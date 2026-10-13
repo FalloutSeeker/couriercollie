@@ -185,3 +185,41 @@ class PasswordWindowTest(unittest.TestCase):
             self.assertEqual(out.getvalue(), printed)
         self.assertIn("The step after updating SMOD asks for your password.", seen[0])
         self.assertIn("[sudo] password for you:", seen[0])
+
+
+class BuildFolderTest(unittest.TestCase):
+    """A clone already built with CMake or Meson: "Rebuild and install it", as its build folder was set up."""
+
+    def test_cmake_and_meson_folders(self):
+        import json
+
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "build").mkdir()
+            (root / "build/CMakeCache.txt").write_text(f"CMAKE_HOME_DIRECTORY:INTERNAL={root}\n"
+                                                       "CMAKE_INSTALL_PREFIX:PATH=/usr\n")
+            (root / "other-build").mkdir()  # a build of another project, kept here: not this one's
+            (root / "other-build/CMakeCache.txt").write_text("CMAKE_HOME_DIRECTORY:INTERNAL=/elsewhere\n")
+            (root / "_build/meson-info").mkdir(parents=True)
+            (root / "_build/meson-info/intro-buildoptions.json").write_text(json.dumps(
+                [{"name": "prefix", "value": str(root / "local")}]))
+            (root / "local").mkdir()
+            built = applying.builds(d)
+            self.assertEqual([(b.tool, b.folder) for b in built], [("meson", "_build"), ("cmake", "build")])
+            # /usr only root can write: sudo (which asks in the password window); your own prefix: no sudo.
+            self.assertEqual([applying.build_command(b) for b in built],
+                             ["meson compile -C _build && meson install -C _build",
+                              "cmake --build build && sudo cmake --install build"])
+            [s] = applying.suggestions(d, [], None, built)
+            self.assertEqual(s.label, "Rebuild and install it")
+            # A project with its own install script: that's its way (it may build more than this folder).
+            (root / "install.sh").write_text("#!/bin/sh\n")
+            self.assertEqual([x.label for x in applying.suggestions(d, ["install.sh"], None, built)], ["Run install.sh"])
+            # Approving it covers what CMake and Meson read without being named.
+            self.assertIn("CMakeLists.txt", applying._IMPLIED["cmake"])
+
+    def test_install_scripts_naming_a_project(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "install.sh").write_text("git clone https://gitgud.io/aeroshell/smod.git smod\n")
+            self.assertTrue(applying.scripts_name(d, ["gitgud.io/aeroshell/smod"]))
+            self.assertFalse(applying.scripts_name(d, ["github.com/someone/else"]))

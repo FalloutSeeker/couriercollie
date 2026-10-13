@@ -1174,3 +1174,31 @@ class RestartTest(unittest.TestCase):
         import os
 
         self.assertEqual(started[0][3], str(os.getpid()))
+
+
+class PartOfTest(unittest.TestCase):
+    """A clone inside another tracked clone's folder, which that one's install script names: updating that one takes
+    care of it (AeroThemePlasma's install.sh clones SMOD into its repos/ folder, then builds and installs it)."""
+
+    def test_shown_not_updated_on_its_own(self):
+        import os
+
+        with tempfile.TemporaryDirectory() as d:
+            aero, smod = Path(d) / "aero", Path(d) / "aero/repos/smod"
+            for folder in (aero, smod):
+                (folder / ".git").mkdir(parents=True)
+            (aero / "install.sh").write_text("git clone https://gitgud.io/aeroshell/smod.git smod\n")
+            b = Backend(Path(d) / "repos.toml")
+            self.addCleanup(b.shutdown)
+            for repo_id, name, path in (("github.com/x/aerothemeplasma", "AeroThemePlasma", aero),
+                                        ("gitgud.io/aeroshell/smod", "SMOD", smod)):
+                b._config.repos.append(TrackedRepo(id=repo_id, name=name, url="", host="github", follow="branch",
+                                                   kind="git", source="scanned", local_path=str(path)))
+            d_smod = b.details("gitgud.io/aeroshell/smod")
+            self.assertEqual((d_smod["partOf"], d_smod["canUpdate"], d_smod["afterUpdating"]),
+                             ("AeroThemePlasma", False, False))
+            self.assertFalse(b.repo("gitgud.io/aeroshell/smod")["canUpdate"])
+            self.assertEqual(b.details("github.com/x/aerothemeplasma")["partOf"], "")
+            # Only when the script says so: a clone that just happens to be inside another's folder is its own.
+            (aero / "install.sh").write_text("echo hello\n")
+            self.assertEqual(b.details("gitgud.io/aeroshell/smod")["partOf"], "")

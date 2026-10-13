@@ -208,9 +208,8 @@ h.run([
     *page("github.com/neovim/neovim", "3b-new-copy"),
     *page("github.com/zed-industries/zed", "4-not-installed"),
     *page("gitgud.io/aeroshell/atp/aerothemeplasma", "5-clone-behind"),
-    # After Updating: a suggestion fills in the step; it's reviewed, then approved.
+    # After Updating: a choice opens what it runs, to read, then approve.
     (0, lambda: h.click("suggestion:Rebuild and restart its containers")),
-    (300, lambda: h.click("reviewStep")),
     (600, shot("5b-approve")),
     (0, lambda: b.approveStep("gitgud.io/aeroshell/atp/aerothemeplasma",
                               h.win.findChild(QObject, "stepDialog").property("command"))),

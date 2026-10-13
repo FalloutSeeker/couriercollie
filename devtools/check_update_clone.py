@@ -113,8 +113,7 @@ h.run([
     (0, lambda: h.check("…showing the new version, up to date", details()["versionText"] == f"commit {newest[:7]}"
                         and details()["statusKind"] == "current", details()["versionText"])),
     # After Updating: choose its install script, read it, approve it; Run Now applies the update, here.
-    (0, lambda: h.click("suggestion:Run install.sh")),
-    (300, lambda: h.click("reviewStep")),
+    (0, lambda: h.click("suggestion:Run install.sh")),  # opens what it runs, to read
     (500, lambda: h.check("the step is shown before it's approved", h.visible("stepDialog"))),
     (0, lambda: h.check("…with the script itself", "echo installed" in (h.win.findChild(QObject, "reviewText")
                                                                        .property("text") or ""))),

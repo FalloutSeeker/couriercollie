@@ -138,7 +138,7 @@ class Updating:
         """Update (or Install) clicked: a clone is pulled or moved to the newest release (updater.pull,
         checkout_release); anything else is downloaded (_update_download)."""
         repo = self._config.find(repo_id)
-        if not repo or repo_id in self._updating or not _can_update(repo):
+        if not repo or repo_id in self._updating or not _can_update(repo) or self._part_of(repo):
             return
         if _can_clone(repo):
             self._install_clone(repo)

@@ -72,6 +72,7 @@ class Details:
     # Applying a clone's update (applying.py): its README's update steps, and its running containers.
     readme_steps: str = ""
     compose: applying.Compose | None = None
+    builds: list[applying.Build] = field(default_factory=list)  # a scanned clone's build folders (CMake, Meson)
     # The project is also installed from a repository the package manager or Flatpak updates (_managed_elsewhere):
     # the page's note, and that installed version.
     managed_elsewhere: str = ""
@@ -499,7 +500,7 @@ class Backend(QObject, Updating, Account):
             "scanned": r.source == config.SOURCE_SCANNED,
             "shownPath": updater.shown(r.local_path),  # as shown: ~ for your home folder
             # Not for a copy of yours added by hand: one click in the list shouldn't quietly install a second copy.
-            "canUpdate": _can_update(r) and not _new_copy(r),
+            "canUpdate": _can_update(r) and not _new_copy(r) and not self._part_of(r),
             "updateNeedsPassword": _needs_password(r),
             "updating": r.id in self._updating,
             "category": r.category,
@@ -1267,13 +1268,14 @@ class Backend(QObject, Updating, Account):
             scripts = updater.install_scripts(local_path) if clone else []
             steps = _without_images(applying.readme_steps(local_path)) if clone else ""
             compose = applying.running_compose(local_path) if clone else None
+            built = applying.builds(local_path) if clone else []
             website = homepage or _homepage_of(ref, host)  # once
             note, managed_by, managed_version = _managed_elsewhere(addresses, website)
             return on_disk, managed_by, website, Details(managed_elsewhere=note, managed_version=managed_version,
                 state="ready", releases=rels, more_releases=len(rels) == PAGE_RELEASES, default_branch=default,
                 branches=branches, branch_error=branch_error, comparison=comparison, commits_base=yours,
                 commits_head=head, local_missing=bool(on_disk) and not on_disk[1], branch_on_disk=branch_on_disk,
-                install_scripts=scripts, readme_steps=steps, compose=compose)
+                install_scripts=scripts, readme_steps=steps, compose=compose, builds=built)
 
         def done(result, error):
             if not self._config.find(repo_id):
@@ -1388,6 +1390,7 @@ class Backend(QObject, Updating, Account):
         # Only files that run on this computer can be chosen.
         choices = [f for f in latest["assets"] if f["suits"]] if latest else []
         version = self._version_info(repo, d, shown) if repo and d.state == "ready" else {}
+        part_of = self._part_of(repo) if repo else None
         # A file was picked, but the newest release doesn't have it (renamed or dropped by the project): nothing to
         # update to, whatever the versions say. The page says to choose it again.
         file_missing = bool(pattern) and latest is not None and not latest["hasSelected"]
@@ -1422,11 +1425,13 @@ class Backend(QObject, Updating, Account):
             "versionOnly": latest is not None and not choices,
             "yourFileMissing": file_missing,
             "branchError": d.branch_error,
-            "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing and not follow_disk,
+            "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing and not follow_disk and not part_of,
             "followDiskBranch": follow_disk,
             "isClone": bool(repo) and _is_clone(repo),
             # Another person's clone: shown, but its updates are theirs.
             "theirs": updater.someone_elses(repo.local_path) if repo and _is_clone(repo) else "",
+            # Part of another tracked clone (its install script updates this one): shown, not updated on its own.
+            "partOf": part_of.name if part_of else "",
             # Install, for an AppImage or program you have but couriercollie doesn't know where (added by hand).
             "newCopy": bool(repo) and _new_copy(repo),
             # Install clones the project into clonesFolder.
@@ -1472,8 +1477,12 @@ class Backend(QObject, Updating, Account):
     def _applying(self, repo: TrackedRepo | None, d: Details) -> dict:
         """The page's "After Updating" section, for a clone (applying.py): its step and how it last ran,
         suggestions, the README's update steps, and a reminder while an update made here isn't applied."""
-        if not repo or repo.managed_by or not _is_clone(repo):
+        if not repo or repo.managed_by or not _is_clone(repo) or self._part_of(repo):
             return {"afterUpdating": False}
+        suggested = [{"label": s.label, "command": s.command}
+                     for s in applying.suggestions(repo.local_path, d.install_scripts, d.compose, d.builds)]
+        if not suggested and not repo.apply_command:
+            return {"afterUpdating": False}  # nothing known to run: nothing to choose (nor a box to type in)
         run = self._steps.get(repo.id)
         changed = bool(repo.apply_command) and applying.fingerprint(repo.local_path, repo.apply_command) \
             != repo.apply_approved
@@ -1486,8 +1495,7 @@ class Backend(QObject, Updating, Account):
             "afterUpdating": True,
             "step": repo.apply_command,
             "stepChanged": changed,
-            "stepSuggestions": [{"label": s.label, "command": s.command}
-                                for s in applying.suggestions(repo.local_path, d.install_scripts, d.compose)],
+            "stepSuggestions": suggested,
             "stepRunning": bool(run and run.running),
             "stepResult": run.result if run else "",
             "stepCode": run.code if run else 0,
@@ -1499,6 +1507,21 @@ class Backend(QObject, Updating, Account):
             "applySteps": d.readme_steps,
             "readmeUrl": readme.as_uri() if readme else "",
         }
+
+    def _part_of(self, repo: TrackedRepo) -> TrackedRepo | None:
+        """The tracked clone this one is part of: it's inside that one's folder, and that one's install script names
+        it (AeroThemePlasma's install.sh clones SMOD into its repos/ folder, then builds and installs it). Updating
+        that one takes care of this one, so this one is only shown. Only when the script says so: never guessed."""
+        if not _is_clone(repo) or not repo.local_path:
+            return None
+        here = Path(repo.local_path).resolve()
+        for other in self._config.repos:
+            if other is repo or not _is_clone(other) or not other.local_path:
+                continue
+            there = Path(other.local_path).resolve()
+            if there in here.parents and applying.scripts_name(str(there), [repo.id, *repo.aliases]):
+                return other
+        return None
 
     @staticmethod
     def _current_comparison(repo: TrackedRepo, d: Details) -> sources.Comparison | None:
