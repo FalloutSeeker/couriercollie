@@ -1385,7 +1385,7 @@ class Backend(QObject, Updating, Account):
                 "url": rel.url,
                 "assets": files,
                 "hasSelected": any(f["selected"] for f in files),
-                "isInstalled": bool(repo) and assets.same_version(rel.tag, repo.installed),
+                "isInstalled": bool(repo) and assets.same_version(rel.tag, repo.installed) and not d.local_missing,
             })
         current_branch = (repo.branch if repo else "") or d.default_branch
         # The one place to choose which file to follow: the newest release's files, those for this PC first.
