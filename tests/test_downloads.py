@@ -599,3 +599,28 @@ class SecureAddressesTest(unittest.TestCase):
         sums = Asset("SHA256SUMS", "http://example.com/SHA256SUMS", 100)
         found = updater.expected_sha256(asset, [asset, sums], lambda url: asked.append(url) or updater.fetch_text(url))
         self.assertEqual((found, asked), ("", ["http://example.com/SHA256SUMS"]))
+
+
+class ChecksumFileTest(unittest.TestCase):
+    """Which line of a release's checksum file is a file's."""
+
+    A, B = "a" * 64, "b" * 64
+
+    def found(self, files: dict, name="app-1.0-x86_64.AppImage"):
+        others = [Asset(n, f"https://x/{n}", len(t), "") for n, t in files.items()]
+        return updater.expected_sha256(Asset(name, f"https://x/{name}", 1, ""), others,
+                                       lambda url: files[url.rsplit("/", 1)[1]])
+
+    def test_another_files_own_checksum_is_never_used(self):
+        # The tarball's .sha256 holds just its hash: not the AppImage's (it would fail as tampered with).
+        self.assertEqual(self.found({"app-1.0-x86_64.tar.gz.sha256": f"{self.A}\n"}), "")
+        self.assertEqual(self.found({"app-1.0-x86_64.tar.gz.sha256": f"{self.A}  app-1.0-x86_64.tar.gz\n"}), "")
+
+    def test_its_own_holding_just_the_hash(self):
+        self.assertEqual(self.found({"app-1.0-x86_64.AppImage.sha256": f"{self.A}\n"}), self.A)
+
+    def test_the_line_naming_it_exactly(self):
+        sums = f"{self.A}  my app-1.0-x86_64.AppImage\n{self.B} *./dist/app-1.0-x86_64.AppImage\n"
+        self.assertEqual(self.found({"SHA256SUMS": sums}), self.B)
+        self.assertEqual(self.found({"SHA256SUMS": sums}, "my app-1.0-x86_64.AppImage"), self.A)
+        self.assertEqual(self.found({"SHA256SUMS": f"SHA256 (app-1.0-x86_64.AppImage) = {self.B}\n"}), self.B)

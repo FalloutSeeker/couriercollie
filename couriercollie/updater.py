@@ -355,14 +355,26 @@ def _checksum_files(asset_name: str, others: list) -> list:
     return own + shared
 
 
-def _find_sha256(text: str, asset_name: str) -> str:
-    """The SHA-256 for `asset_name` in a checksum file: "<hex>  <name>" lines, or a file holding just the hex."""
+# "<hex>  <name>" (sha256sum; "*" before the name in binary mode), or BSD's "SHA256 (<name>) = <hex>".
+_SUM_LINE = re.compile(r"^([0-9a-fA-F]{64})\s+\*?(.+)$")
+_BSD_LINE = re.compile(r"^SHA256 \((.+)\) = ([0-9a-fA-F]{64})$")
+
+
+def _find_sha256(text: str, asset_name: str, own: bool = False) -> str:
+    """The SHA-256 for `asset_name` in a checksum file: the line naming it exactly (a folder before the name is
+    allowed, as in "dist/app.AppImage"). In its own "<file>.sha256", a file holding just the hex counts too; in a
+    file shared by the release, never: it would be another file's."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     for line in lines:
-        parts = line.replace("*", " ").split()
-        if len(parts) >= 2 and parts[-1].lstrip("./") == asset_name and _is_sha256(parts[0]):
-            return parts[0].lower()
-    if len(lines) == 1 and _is_sha256(lines[0].split()[0]):
+        if m := _SUM_LINE.match(line):
+            digest, name = m.group(1), m.group(2).strip()
+        elif m := _BSD_LINE.match(line):
+            name, digest = m.group(1), m.group(2)
+        else:
+            continue
+        if name.removeprefix("./") == asset_name or name.rsplit("/", 1)[-1] == asset_name:
+            return digest.lower()
+    if own and len(lines) == 1 and _is_sha256(lines[0].split()[0]):
         return lines[0].split()[0].lower()
     return ""
 
@@ -376,9 +388,10 @@ def expected_sha256(asset, others: list, get_text) -> str:
     else from a checksum file in the release (one small download). "" if there's none."""
     if asset.digest.startswith("sha256:") and _is_sha256(asset.digest[7:]):
         return asset.digest[7:].lower()
+    own = (asset.name.lower() + ".sha256", asset.name.lower() + ".sha256sum")
     for f in _checksum_files(asset.name, others):
         try:
-            if found := _find_sha256(get_text(f.url), asset.name):
+            if found := _find_sha256(get_text(f.url), asset.name, f.name.lower() in own):
                 return found
         except (OSError, ValueError, sources.SourceError):
             continue
