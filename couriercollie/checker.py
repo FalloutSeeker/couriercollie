@@ -69,11 +69,23 @@ def load_state(path: Path | None = None) -> State:
         data = json.loads(path.read_text(encoding="utf-8"))
         return State(
             last_run=str(data.get("last_run", "")),
-            results={k: Result(**v) for k, v in data.get("results", {}).items()},
+            results={k: r for k, v in data.get("results", {}).items() if (r := _result(v))},
             notified={str(k): str(v) for k, v in data.get("notified", {}).items()},
         )
     except (OSError, ValueError, TypeError, AttributeError):
         return State()
+
+
+def _result(saved) -> Result | None:
+    """A saved result, if it's laid out as one (the file may have been edited, or written by a newer version). One
+    that isn't is left out: that repo is simply checked again."""
+    if not isinstance(saved, dict):
+        return None
+    kinds = {f.name: bool if f.type in (bool, "bool") else str for f in dataclasses.fields(Result)}
+    values = {k: v for k, v in saved.items() if k in kinds}
+    if not all(type(v) is kinds[k] for k, v in values.items()) or "status" not in values or "text" not in values:
+        return None
+    return Result(**values)
 
 
 def save_state(state: State, path: Path | None = None) -> None:

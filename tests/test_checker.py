@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -311,3 +312,19 @@ class NewerOrMissingTest(unittest.TestCase):
         r = checker.releases_result(shown, "v1.0", pattern="tool-*.deb")
         self.assertEqual((r.status, r.text), (checker.OTHER, "Your file isn’t in v2.0"))
         self.assertEqual(checker.releases_result(shown, "v1.0", pattern="tool-*.rpm").status, checker.UPDATE)
+
+
+class SavedResultsTest(unittest.TestCase):
+    """The results file, edited or broken: a result that isn't laid out as one is left out (checked again)."""
+
+    def test_wrong_kinds_are_left_out(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "checks.json"
+            path.write_text(json.dumps({"results": {
+                "good": {"status": "update", "text": "Update available: v2", "newest": "v2", "extra": 1},
+                "null text": {"status": "failed", "text": None},
+                "number": {"status": "update", "text": "x", "newest": 5},
+                "not a dict": [1, 2]}}))
+            state = checker.load_state(path)
+        self.assertEqual(list(state.results), ["good"])
+        self.assertEqual(state.results["good"].newest, "v2")
