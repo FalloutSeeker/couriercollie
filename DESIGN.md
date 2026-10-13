@@ -74,17 +74,21 @@ Details:
   - **Found on every check**, and on opening the page, so a repo never opened is covered too.
   - **Matched by homepage, never by name.** KDE's and GNOME's GitHub mirrors count as the same project as their own
     sites (github.com/KDE/dolphin is invent.kde.org/system/dolphin).
-- **After Updating** (a clone): Update only changes the clone's files; a running program uses them once it's rebuilt,
-  reinstalled or restarted. So a clone can have one step, a command run in its folder after each Update:
-  - **Chosen once:** suggestions (rebuilding the containers running from its compose files, or one of its install,
-    setup or update scripts) fill in the command, which can be edited. The README's update steps are quoted beside
-    it, to help choose; never followed.
-  - **Approved once,** and run straight away: the command and the clone's files it names are shown first. If an
-    update changes them, the step doesn't run until approved again.
-  - **Run inside the app,** its output shown live, ending in Applied or Failed (with the exit code). Nothing can be
-    typed in: a step that needs elevation stops, and gives its command to run in your own terminal (Copy Command).
-    A password is never typed into couriercollie.
-  - **A reminder** while an update made here isn't applied (no step, or it failed); Mark as Applied clears it.
+- **Update does the whole job** (a clone): downloading only changes the clone's files; a running program uses them
+  once it's rebuilt, reinstalled or restarted. So Update also runs the clone's step after downloading:
+  - **Asked the first time** Update is clicked (or once Install has cloned it), when there's something to run: one of
+    its install, setup or update scripts, rebuilding the containers running from its compose files, or building and
+    installing again in its CMake or Meson build folder. The window shows what will run, the command and the files
+    it names, to read: Update, Only Download, or Cancel. Nothing is typed in. Remembered; Change… (under Tracking)
+    changes it.
+  - **Asked again** if an update changes what was approved: it doesn't run until you've read it.
+  - **Run inside the app,** its output shown live, ending in finished or failed (with the exit code). Nothing can be
+    typed in, but sudo in it asks for your password in couriercollie's own window (sudo -A). Cancelled, or where no
+    window can be shown (doas), it stops, with Run Again and its command to run in a terminal (Copy Command).
+  - **Nothing to run** (no script, containers or build folder): Update only downloads, and doesn't ask.
+- **Part of another clone:** a clone inside another tracked clone's folder that its install script names (SMOD, in
+  AeroThemePlasma's) is shown, but not updated on its own: updating that one takes care of it.
+- **Another person's clone** (a shared folder): shown, but not updated here: its updates are theirs.
 - **A clone on another branch than the one followed:** the page explains it, and offers to follow the clone's branch
   instead of an Update that would refuse.
 

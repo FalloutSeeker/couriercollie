@@ -1195,8 +1195,8 @@ class PartOfTest(unittest.TestCase):
                 b._config.repos.append(TrackedRepo(id=repo_id, name=name, url="", host="github", follow="branch",
                                                    kind="git", source="scanned", local_path=str(path)))
             d_smod = b.details("gitgud.io/aeroshell/smod")
-            self.assertEqual((d_smod["partOf"], d_smod["canUpdate"], d_smod["afterUpdating"]),
-                             ("AeroThemePlasma", False, False))
+            self.assertEqual((d_smod["partOf"], d_smod["canUpdate"], d_smod["stepChoices"]),
+                             ("AeroThemePlasma", False, []))
             self.assertFalse(b.repo("gitgud.io/aeroshell/smod")["canUpdate"])
             self.assertEqual(b.details("github.com/x/aerothemeplasma")["partOf"], "")
             # Only when the script says so: a clone that just happens to be inside another's folder is its own.

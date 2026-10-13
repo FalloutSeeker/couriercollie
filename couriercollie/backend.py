@@ -70,7 +70,6 @@ class Details:
     # A scanned clone's install scripts (updater.install_scripts), offered to run by hand.
     install_scripts: list[str] = field(default_factory=list)
     # Applying a clone's update (applying.py): its README's update steps, and its running containers.
-    readme_steps: str = ""
     compose: applying.Compose | None = None
     builds: list[applying.Build] = field(default_factory=list)  # a scanned clone's build folders (CMake, Meson)
     # The project is also installed from a repository the package manager or Flatpak updates (_managed_elsewhere):
@@ -323,6 +322,9 @@ class Backend(QObject, Updating, Account):
     addFinished = Signal(str)  # repo id
     addFailed = Signal(str)  # message for the user
     updateFailed = Signal(str)  # repo id; why is in its details ("updateNote")
+    # A clone's page should ask what runs after Update downloads: (repo id, why: "update" before the first Update,
+    # "installed" once it's cloned, "changed" when an update changed what was approved).
+    askStep = Signal(str, str)
     detailsChanged = Signal(str)  # repo id
     settingsChanged = Signal()
     scanChanged = Signal()
@@ -1266,7 +1268,6 @@ class Backend(QObject, Updating, Account):
                 if follow == FOLLOW_BRANCH else None
             clone = scanned and (Path(local_path) / ".git").exists()
             scripts = updater.install_scripts(local_path) if clone else []
-            steps = _without_images(applying.readme_steps(local_path)) if clone else ""
             compose = applying.running_compose(local_path) if clone else None
             built = applying.builds(local_path) if clone else []
             website = homepage or _homepage_of(ref, host)  # once
@@ -1275,7 +1276,7 @@ class Backend(QObject, Updating, Account):
                 state="ready", releases=rels, more_releases=len(rels) == PAGE_RELEASES, default_branch=default,
                 branches=branches, branch_error=branch_error, comparison=comparison, commits_base=yours,
                 commits_head=head, local_missing=bool(on_disk) and not on_disk[1], branch_on_disk=branch_on_disk,
-                install_scripts=scripts, readme_steps=steps, compose=compose, builds=built)
+                install_scripts=scripts, compose=compose, builds=built)
 
         def done(result, error):
             if not self._config.find(repo_id):
@@ -1475,38 +1476,44 @@ class Backend(QObject, Updating, Account):
         }
 
     def _applying(self, repo: TrackedRepo | None, d: Details) -> dict:
-        """The page's "After Updating" section, for a clone (applying.py): its step and how it last ran,
-        suggestions, the README's update steps, and a reminder while an update made here isn't applied."""
+        """A clone's step (applying.py): what can run after Update downloads, whether Update asks first (the first
+        time, unless Only Download was chosen), and how the step last ran."""
         if not repo or repo.managed_by or not _is_clone(repo) or self._part_of(repo):
-            return {"afterUpdating": False}
-        suggested = [{"label": s.label, "command": s.command}
-                     for s in applying.suggestions(repo.local_path, d.install_scripts, d.compose, d.builds)]
-        if not suggested and not repo.apply_command:
-            return {"afterUpdating": False}  # nothing known to run: nothing to choose (nor a box to type in)
+            return {"stepChoices": [], "step": "", "updateAsks": False}
+        choices = self._step_choices(repo, d)
         run = self._steps.get(repo.id)
-        changed = bool(repo.apply_command) and applying.fingerprint(repo.local_path, repo.apply_command) \
-            != repo.apply_approved
-        reminder = ""
-        if repo.updated_to and repo.updated_to == repo.installed and repo.script_run_at != repo.installed \
-                and not (run and run.running):
-            reminder = f"Updated to {_version_text(repo.installed)}, but not in use yet."
-        readme = applying.readme_path(repo.local_path) if d.readme_steps else None
+        mine = next((c for c in choices if c["command"] == repo.apply_command), None)
         return {
-            "afterUpdating": True,
+            "stepChoices": choices,
             "step": repo.apply_command,
-            "stepChanged": changed,
-            "stepSuggestions": suggested,
+            "stepWhat": mine["what"] if mine else "",
+            "stepSkip": repo.apply_skip,
+            "stepChanged": bool(repo.apply_command) and not self._step_still_approved(repo),
+            # Update asks first what to run (or Only Download): there's something to choose, and it hasn't been.
+            "updateAsks": bool(choices) and not repo.apply_command and not repo.apply_skip,
             "stepRunning": bool(run and run.running),
             "stepResult": run.result if run else "",
             "stepCode": run.code if run else 0,
             "stepOutput": "\n".join(run.output) if run else "",
-            # For a step that asks for a password: to paste into a terminal, where it can be typed.
+            # For a step that asks for a password the window couldn't take: to run in a terminal instead.
             "stepTerminalLine": (applying.terminal_line(repo.local_path, repo.apply_command)
                                  if repo.apply_command else ""),
-            "applyReminder": reminder,
-            "applySteps": d.readme_steps,
-            "readmeUrl": readme.as_uri() if readme else "",
         }
+
+    def _step_choices(self, repo: TrackedRepo, d: Details | None = None) -> list[dict]:
+        """What can run after Update downloads, to choose from: the suggestions (applying.suggestions), and the step
+        approved before if it's none of them. Read from the clone if its page hasn't loaded."""
+        if d is None or d.state != "ready":
+            path = repo.local_path
+            scripts, compose, built = updater.install_scripts(path), applying.running_compose(path), \
+                applying.builds(path)
+        else:
+            scripts, compose, built = d.install_scripts, d.compose, d.builds
+        choices = [{"label": s.label, "command": s.command, "what": s.what}
+                   for s in applying.suggestions(repo.local_path, scripts, compose, built)]
+        if repo.apply_command and all(c["command"] != repo.apply_command for c in choices):
+            choices.append({"label": repo.apply_command, "command": repo.apply_command, "what": "the step"})
+        return choices
 
     def _part_of(self, repo: TrackedRepo) -> TrackedRepo | None:
         """The tracked clone this one is part of: it's inside that one's folder, and that one's install script names

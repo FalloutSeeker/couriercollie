@@ -27,6 +27,11 @@ QtObject {
         return /^https?:\/\//i.test(link);
     }
 
+    // "install.sh finished", "The container rebuild finished": a name used to start a sentence.
+    function capitalized(text) {
+        return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
+    }
+
     function interval(hours) {
         return {
             "24": "Daily",

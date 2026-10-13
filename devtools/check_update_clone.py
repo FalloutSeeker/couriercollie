@@ -1,5 +1,6 @@
 """Updating a git clone, with a simulated mouse: the Update button on the repo page and in the list, the result,
-showing then running an install script, and a clone that follows releases moving to the newest. Uses a temporary
+the first Update asking what runs after it downloads (its install script), then doing the whole job, and a clone that
+follows releases moving to the newest. Uses a temporary
 project repo and clone, and no network: the site's answers are faked, and the "terminal" is a plain shell that leaves a file behind, so nothing on this computer is touched.
 
     python3 -I devtools/check_update_clone.py
@@ -95,37 +96,32 @@ h.run([
     h.until(lambda: details()["state"] == "ready"),
     (500, lambda: h.check("page: Update offered when behind", h.find("updateNow") is not None)),
     (0, lambda: h.shot("update-clone-0-behind")),
+    # The first Update asks what runs after it downloads: the install script, shown to read.
     (0, lambda: h.click("updateNow")),
-    h.until(lambda: not details()["updating"], 30000),
+    (500, lambda: h.check("the first Update asks first, showing the script", h.visible("stepDialog")
+                          and "echo installed" in (h.win.findChild(QObject, "reviewText").property("text") or ""))),
+    (0, lambda: h.check("…and nothing is done yet", git("rev-parse", "HEAD", cwd=clone) == start)),
+    (0, lambda: h.shot("update-clone-1-asks")),
+    (0, lambda: h.press("stepDialog", "Update")),
+    h.until(lambda: not details()["updating"] and details()["stepResult"] != "", 30000),
     (500, lambda: h.check("pulled to the newest commit", git("rev-parse", "HEAD", cwd=clone) == newest)),
     (0, lambda: h.check("your version follows", b._config.find(ID).installed == newest)),
     (0, lambda: h.check("says what it did", details()["updateNote"] == "Pulled 2 new commits.", details()["updateNote"])),
-    (0, lambda: h.check("…and that a running program needs it applied", h.find("applyReminder") is not None)),
-    (0, lambda: h.check("…with its install script suggested", h.find("suggestion:Run install.sh") is not None)),
+    (0, lambda: h.check("…then ran the install script, in the clone's folder: the whole job",
+                        (clone / "installed.txt").exists() and details()["stepResult"] == "applied",
+                        details()["stepResult"])),
+    (0, lambda: h.check("…remembered for next time", details()["step"] == "/bin/sh ./install.sh"
+                        and h.find("stepSummary") is not None)),
     (0, lambda: h.check("now up to date", details()["statusKind"] == "current")),
     (0, lambda: h.check("Update gone from page and list", h.find("updateNow") is None
                         and h.find("updateButton:" + ID) is None)),
-    (0, lambda: h.shot("update-clone-1-pulled")),
+    (0, lambda: h.shot("update-clone-2-done")),
     # Refresh: back to the page as it is now, with the new version and no note.
     (0, lambda: h.click("text:Refresh")),
     h.until(lambda: details()["state"] == "ready"),
     (500, lambda: h.check("Refresh clears the note", h.find("updateNote") is None and details()["updateNote"] == "")),
     (0, lambda: h.check("…showing the new version, up to date", details()["versionText"] == f"commit {newest[:7]}"
                         and details()["statusKind"] == "current", details()["versionText"])),
-    # After Updating: choose its install script, read it, approve it; Run Now applies the update, here.
-    (0, lambda: h.click("suggestion:Run install.sh")),  # opens what it runs, to read
-    (500, lambda: h.check("the step is shown before it's approved", h.visible("stepDialog"))),
-    (0, lambda: h.check("…with the script itself", "echo installed" in (h.win.findChild(QObject, "reviewText")
-                                                                       .property("text") or ""))),
-    (0, lambda: h.shot("update-clone-2-approve")),
-    (0, lambda: h.click("text:Approve and Run")),
-    h.until(lambda: details()["stepResult"] != "", 10000),
-    (300, lambda: h.check("approving runs it straight away, in the clone's folder", (clone / "installed.txt").exists()
-                          and details()["step"] == "/bin/sh ./install.sh" and details()["stepResult"] == "applied",
-                          details()["stepResult"])),
-    (0, lambda: h.check("…and then the update counts as applied", h.find("applyReminder") is None
-                        and details()["applyReminder"] == "")),
-    (0, lambda: h.shot("update-clone-2b-applied")),
     # From the list, an update that's refused (the clone was switched to another branch) opens the page to say why.
     (0, lambda: (git("switch", "-q", "-c", "mine", cwd=clone), git("reset", "-q", "--hard", start, cwd=clone))),
     (0, lambda: (setattr(b._config.find(ID), "installed", start), checked_once(), h.win.closeRepo())),

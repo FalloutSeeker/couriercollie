@@ -140,6 +140,9 @@ class Updating:
         repo = self._config.find(repo_id)
         if not repo or repo_id in self._updating or not _can_update(repo) or self._part_of(repo):
             return
+        if self._asks_first(repo):
+            self.askStep.emit(repo_id, "update")  # the first time: what runs after it downloads (updateWithStep)
+            return
         if _can_clone(repo):
             self._install_clone(repo)
             return
@@ -232,12 +235,13 @@ class Updating:
                 self._changed(repo_id)
                 where = updater.shown(folder)
                 what = f"Cloned {ref} into {where}." if by_branch else f"Cloned {project.name} at {ref} into {where}."
-                self._update_notes[repo_id] = ("done", what + (" To install it, choose its step under After "
-                                                               "Updating, then Run Now." if scripts else ""))
+                self._update_notes[repo_id] = ("done", what)
             self.reposChanged.emit()
             self.detailsChanged.emit(repo_id)
             if repo and error:
                 self.updateFailed.emit(repo_id)
+            elif repo and self._asks_first(repo):
+                self.askStep.emit(repo_id, "installed")  # cloned: what installs it, now and after each update
 
         self._run(work, done)
 
@@ -342,16 +346,23 @@ class Updating:
         self._run(work, done)
 
     def _updated_here(self, repo: TrackedRepo):
-        """The clone was just updated here. A running program doesn't use the new files yet: its approved step (if
-        any) runs now; if what it runs has changed since it was approved, it waits to be looked at again."""
-        repo.updated_to = repo.installed
+        """The clone was just updated here. A running program doesn't use the new files yet: its approved step runs
+        now, finishing the job. If the update changed what it runs, the page asks first."""
         self._steps.pop(repo.id, None)  # the last run was for the version before: it says nothing about this one
         self._changed(repo.id)
         if repo.apply_command and self._step_still_approved(repo):
             self.runStep(repo.id)
+        elif repo.apply_command:
+            self.askStep.emit(repo.id, "changed")
 
     def _step_still_approved(self, repo: TrackedRepo) -> bool:
         return applying.fingerprint(repo.local_path, repo.apply_command) == repo.apply_approved
+
+    def _asks_first(self, repo: TrackedRepo) -> bool:
+        """Whether Update first asks what runs after it downloads: a clone, with something to run, and neither a
+        step approved nor Only Download chosen."""
+        return (_is_clone(repo) and not repo.apply_command and not repo.apply_skip
+                and bool(self._step_choices(repo, self._details.get(repo.id))))
 
     def _pulled(self, repo: TrackedRepo, branch: str, head: str):
         """After a pull, the clone is at the branch's newest commit (as just fetched): your version, the page and the
@@ -390,17 +401,35 @@ class Updating:
 
     @Slot(str, str)
     def approveStep(self, repo_id, command):
-        """Run this after each update, as it is now: what it names is remembered, so a change is noticed."""
-        if (repo := self._config.find(repo_id)) and _is_clone(repo) and (command := command.strip()):
-            repo.apply_command, repo.apply_approved = command, applying.fingerprint(repo.local_path, command)
-            self._changed(repo_id)
+        """Run this after each update, as it is now: what it names is remembered, so a change is noticed. Only one
+        of the choices (_step_choices): nothing typed in."""
+        repo = self._config.find(repo_id)
+        if not repo or not _is_clone(repo) or not (command := command.strip()) \
+                or command not in (c["command"] for c in self._step_choices(repo, self._details.get(repo_id))):
+            return
+        repo.apply_command, repo.apply_approved = command, applying.fingerprint(repo.local_path, command)
+        repo.apply_skip = False
+        self._changed(repo_id)
 
     @Slot(str)
-    def removeStep(self, repo_id):
+    def skipStep(self, repo_id):
+        """Only Download: Update only downloads, and doesn't ask again."""
         if repo := self._config.find(repo_id):
-            repo.apply_command, repo.apply_approved = "", ""
+            repo.apply_command, repo.apply_approved, repo.apply_skip = "", "", True
             self._steps.pop(repo_id, None)
             self._changed(repo_id)
+
+    @Slot(str, str)
+    def updateWithStep(self, repo_id, command):
+        """Update, the first time (the page asked): download, then run this, now and after each update."""
+        self.approveStep(repo_id, command)
+        self.updateRepo(repo_id)
+
+    @Slot(str)
+    def updateOnly(self, repo_id):
+        """Update, the first time, choosing Only Download."""
+        self.skipStep(repo_id)
+        self.updateRepo(repo_id)
 
     @Slot(str)
     def runStep(self, repo_id):
@@ -436,9 +465,6 @@ class Updating:
                 run.result = "stopped"
             elif code == 0:
                 run.result = "applied"
-                if (repo := self._config.find(repo_id)) and repo.installed == run.version:
-                    repo.script_run_at = run.version
-                    self._changed(repo_id)
             else:
                 run.result, run.code = ("password" if applying.asked_for_password(run.output) else "failed"), code
             self.reposChanged.emit()
@@ -454,10 +480,3 @@ class Updating:
         if (run := self._steps.get(repo_id)) and run.process:
             run.stopped = True
             applying.stop(run.process)
-
-    @Slot(str)
-    def markApplied(self, repo_id):
-        """The update is applied (by hand, or by the project's own updater): the reminder goes."""
-        if (repo := self._config.find(repo_id)) and repo.script_run_at != repo.installed:
-            repo.script_run_at = repo.installed
-            self._changed(repo_id)

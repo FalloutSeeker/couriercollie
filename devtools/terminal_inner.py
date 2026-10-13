@@ -2,9 +2,9 @@
 as an ordinary user ("tester", password "pw", with sudo), with real clones of real projects (one each: clones of the
 same project would be one tracked repo).
 What the app says to run in a terminal is run in one (a pseudo-terminal, the password typed as a person would), then
-the app is used as it would be next: Mark as Applied, Refresh, Update again.
+the app is used as it would be next: Refresh, Update again.
 
-- A step after updating that asks for a password: copied to a terminal, then Mark as Applied.
+- A step after updating that asks for a password: typed in the password window, or (cancelled) run in a terminal.
 - A clone that belongs to another user: pulled as that user, in a terminal; then Refresh.
 - A clone with commits of its own: combined by hand (git pull --rebase); then Refresh.
 - Files you changed that the update changes too: stashed in a terminal; then Update again.
@@ -122,13 +122,18 @@ if rid:
     helper.chmod(0o755)
     integration.LAUNCHER = helper
     answers.write_text("pw\n")
-    b.approveStep(rid, "sudo touch /srv/applied")
+    from couriercollie import applying
+
+    # A step approved before that uses sudo (as an earlier version let one be typed, or a project's script would).
+    repo = b._config.find(rid)
+    repo.apply_command = "sudo sh -c 'date +%s%N > /srv/applied'"
+    repo.apply_approved = applying.fingerprint(repo.local_path, repo.apply_command)
     d = update(rid)
     print(f"  update: {d['updateNote']} / step: {d['stepResult']}", flush=True)
     check("the step ran after the update, and sudo asked in the password window",
           (HOME / "asked-for").read_text().strip() == b._config.find(rid).name, (HOME / "asked-for").exists())
-    check("…typed there, the step did its work, and the update is applied", d["stepResult"] == "applied"
-          and Path("/srv/applied").exists() and d["applyReminder"] == "", (d["stepResult"], d["stepOutput"][-200:]))
+    check("…typed there, the step did its work", d["stepResult"] == "applied" and Path("/srv/applied").exists(),
+          (d["stepResult"], d["stepOutput"][-200:]))
     # Cancelled: the window gives no password, the step stops, and the terminal is there instead.
     answers.write_text("")
     subprocess.run(["sudo", "-k"])  # (sudo forgets the password it just had)
@@ -137,9 +142,9 @@ if rid:
     d = b.details(rid)
     check("cancelled, the step stops, and says to run it again or in a terminal", d["stepResult"] == "password",
           (d["stepResult"], d["stepOutput"][-200:]))
+    before = Path("/srv/applied").read_text()
     in_terminal(d["stepTerminalLine"], password=True)
-    b.markApplied(rid)
-    check("…run in a terminal, then Mark as Applied", b.details(rid)["applyReminder"] == "")
+    check("…and its command can be run in a terminal instead", Path("/srv/applied").read_text() != before)
 
 # ---- 2. A clone that belongs to another user -------------------------------------------------------------------------
 print("=== a clone that belongs to another user", flush=True)

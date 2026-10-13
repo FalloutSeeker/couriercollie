@@ -64,11 +64,16 @@ h.run([
     (0, lambda: h.click("updateNow")),
     h.until(lambda: not details()["updating"], 30000),
     (500, lambda: h.check("cloned", git("rev-parse", "HEAD", cwd=clones / "project") == newest)),
+    (0, lambda: h.check("…then asks whether to run its install script, showing it", h.visible("stepDialog")
+                        and "Run install.sh" in str(details()["stepChoices"]))),
+    (0, lambda: h.shot("install-clone-0b-asks")),
+    (0, lambda: h.press("stepDialog", "Not Now")),
     (0, lambda: h.check("says where", details()["updateNote"].startswith(f"Cloned main into {clones / 'project'}."),
                         details()["updateNote"])),
     (0, lambda: h.check("up to date, found on this computer", details()["statusKind"] == "current"
                         and h.find("text:Found on this computer") is not None)),
-    (0, lambda: h.check("its install script is suggested", h.find("suggestion:Run install.sh") is not None)),
+    (0, lambda: h.check("Not Now: asked again at the next update", h.find("stepSummary") is not None
+                        and details()["updateAsks"])),
     (0, lambda: h.check("no Install any more", h.find("updateNow") is None)),
     (0, lambda: h.shot("install-clone-1")),
 ])

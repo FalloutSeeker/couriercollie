@@ -38,10 +38,11 @@ run() {  # distro, image, install command
 
 failed=""
 version=$(python3 -c 'import couriercollie; print(couriercollie.__version__)')
+# (Fedora without its suggested extras: they include its own bat, which this checks updating from GitHub.)
 for distro in ${*:-fedora opensuse ubuntu debian arch}; do
     case $distro in
         fedora) run fedora registry.fedoraproject.org/fedora:44 \
-            "dnf install -y /work/couriercollie-$version-1.fc*.noarch.rpm git" ;;
+            "dnf install -y --setopt=install_weak_deps=False /work/couriercollie-$version-1.fc*.noarch.rpm git" ;;
         opensuse) run opensuse registry.opensuse.org/opensuse/tumbleweed:latest \
             "zypper --non-interactive install --allow-unsigned-rpm /work/couriercollie-$version-1.noarch.rpm git" ;;
         ubuntu) run ubuntu docker.io/library/ubuntu:26.04 \

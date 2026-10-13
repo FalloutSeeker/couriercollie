@@ -208,15 +208,16 @@ h.run([
     *page("github.com/neovim/neovim", "3b-new-copy"),
     *page("github.com/zed-industries/zed", "4-not-installed"),
     *page("gitgud.io/aeroshell/atp/aerothemeplasma", "5-clone-behind"),
-    # After Updating: a choice opens what it runs, to read, then approve.
-    (0, lambda: h.click("suggestion:Rebuild and restart its containers")),
-    (600, shot("5b-approve")),
-    (0, lambda: b.approveStep("gitgud.io/aeroshell/atp/aerothemeplasma",
-                              h.win.findChild(QObject, "stepDialog").property("command"))),
-    (0, lambda: h.call("stepDialog", "close")),
-    (500, shot("5c-step")),
-    # Run: the fake project has no compose file, so it fails, with its output shown.
-    (0, lambda: h.click("runStep")),
+    # The first Update asks what runs after it downloads, showing it to read.
+    (0, lambda: h.click("updateNow")),
+    (600, shot("5b-update-asks")),
+    (0, lambda: h.press("stepDialog", "Cancel")),
+    # Chosen from Tracking instead (Change…), then run: the fake project has no compose file, so it fails, with its
+    # output shown.
+    (600, lambda: h.click("changeStep")),  # (once the closing dialog has gone)
+    (500, lambda: h.press("stepDialog", "Use This")),
+    (500, shot("5c-step-chosen")),
+    (0, lambda: b.runStep("gitgud.io/aeroshell/atp/aerothemeplasma")),
     h.until(lambda: b.details("gitgud.io/aeroshell/atp/aerothemeplasma")["stepResult"] != "", 30000),
     (500, shot("5d-step-failed")),
     *page("github.com/ImranR98/Obtainium", "6-versions-only"),

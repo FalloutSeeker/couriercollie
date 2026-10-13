@@ -178,6 +178,29 @@ class Harness:
             return None
         return self._box.call([self.engine.newQObject(window.contentItem()), QJSValue(name)]).toVariant()
 
+    def press(self, dialog_name, text):
+        """A dialog's footer button, by its text, as clicking it would (its action is triggered). Footer buttons are
+        made from the dialog's actions and have no names of their own, and their text may match others on the page."""
+        from PySide6.QtCore import QObject
+        from PySide6.QtQml import QJSValue
+
+        dialog = self.win.findChild(QObject, dialog_name)
+        pressed = self.engine.evaluate("""(function (dialog, text) {
+            for (let i = 0; i < dialog.customFooterActions.length; i++) {
+                const action = dialog.customFooterActions[i];
+                if (action.text === text && action.visible) { action.trigger(); return true; }
+            }
+            return false;
+        })""").call([self.engine.newQObject(dialog), QJSValue(text)]).toBool() if dialog else False
+        if not pressed:
+            there = self.engine.evaluate("""(function (dialog) {
+                const all = [];
+                for (let i = 0; i < dialog.customFooterActions.length; i++)
+                    all.push(dialog.customFooterActions[i].text + (dialog.customFooterActions[i].visible ? "" : " (hidden)"));
+                return all.join(", ") + (dialog.opened ? "" : "; not open");
+            })""").call([self.engine.newQObject(dialog)]).toString() if dialog else "no such dialog"
+            self.fail(f"no button {text!r} in {dialog_name} ({there})")
+
     def call(self, object_name, method):
         from PySide6.QtCore import QMetaObject, QObject
 

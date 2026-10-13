@@ -26,7 +26,7 @@ os.environ.update(HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"), XDG_DAT
                   COURIERCOLLIE_CLONES=str(home / "src"), GIT_CONFIG_GLOBAL="/dev/null")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from couriercollie import assets, checker, config, sources, updater  # noqa: E402
+from couriercollie import applying, assets, checker, config, sources, updater  # noqa: E402
 from couriercollie.backend import Backend, Details, _fit_files  # noqa: E402
 from couriercollie.config import NOT_INSTALLED, TrackedRepo  # noqa: E402
 
@@ -217,8 +217,14 @@ repo = TrackedRepo(id=PLUG, name="vim-plug", url="", host="github", follow="bran
                    source="scanned", local_path=str(plug), installed=out("git", "rev-parse", "HEAD", cwd=plug))
 b = backend_with(repo)
 b._details[PLUG] = Details(state="ready", default_branch=default, branches=branches)
+def approved(b, repo_id, command):
+    """A step approved before (as kept in the settings): any command, as earlier versions let one be typed."""
+    repo = b._config.find(repo_id)
+    repo.apply_command, repo.apply_approved = command, applying.fingerprint(repo.local_path, command)
+
+
 # Its step after updating: names no file of the clone, so updates don't change it.
-b.approveStep(PLUG, "git rev-parse HEAD > /tmp/applied-at")
+approved(b, PLUG, "git rev-parse HEAD > /tmp/applied-at")
 b.updateRepo(PLUG)
 d = b.details(PLUG)
 check("branch: Update pulls the 3 commits", out("git", "rev-parse", "HEAD", cwd=plug) == head
@@ -229,12 +235,11 @@ check("…then its step runs, in the clone", d["stepResult"] == "applied"
 named = next((f for f in changed if (plug / f).is_file()), "")
 out("git", "reset", "-q", "--hard", "HEAD~3", cwd=plug)
 b._config.find(PLUG).installed = out("git", "rev-parse", "HEAD", cwd=plug)
-b._config.find(PLUG).script_run_at = ""  # (set back: that version wasn't applied, as far as the app knows)
-b.approveStep(PLUG, f"cat {named} > /dev/null")
+approved(b, PLUG, f"cat {named} > /dev/null")
 b.updateRepo(PLUG)
 d = b.details(PLUG)
 check(f"…a step naming a file the update changed ({named}) waits to be looked at again",
-      d["stepChanged"] and d["applyReminder"] != "", f"{d['stepChanged']} {d['stepResult']}")
+      d["stepChanged"] and d["stepResult"] == "", f"{d['stepChanged']} {d['stepResult']}")
 b.shutdown()
 
 # Following releases: a clone at the previous tag moves to the newest.

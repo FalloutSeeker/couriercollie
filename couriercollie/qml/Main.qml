@@ -79,6 +79,15 @@ Kirigami.ApplicationWindow {
             root.requestActivate();
         }
 
+        // Update first asks what runs after it downloads (a clone's step): on the repo's page, open or opened now.
+        function onAskStep(repoId, why) {
+            if (root.currentRepoId !== repoId)
+                root.openRepo(repoId);
+            const page = pageStack.lastItem;
+            if (page && page.askStep)
+                page.askStep(why);
+        }
+
         // An update clicked in the list didn't work: open the repo's page, where it says why.
         function onUpdateFailed(repoId) {
             if (root.currentRepoId !== repoId)

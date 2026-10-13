@@ -83,29 +83,30 @@ try:
     b._run = at_once  # one thing at a time, so each check follows the last step
     b.loadDetails(ID, True)
     d = b.details(ID)
-    suggested = {s["label"]: s["command"] for s in d["stepSuggestions"]}
-    check("the running containers are found, and rebuilding them suggested",
-          "Rebuild and restart its containers" in suggested, str(d["stepSuggestions"]))
-    check("the README's steps are quoted", d["applySteps"] == "To update: pull, then rebuild the containers.",
-          d["applySteps"])
+    suggested = {s["label"]: s["command"] for s in d["stepChoices"]}
+    check("the running containers are found, and rebuilding them offered",
+          "Rebuild and restart its containers" in suggested, str(d["stepChoices"]))
     command = suggested.get("Rebuild and restart its containers", "")
     check("…with its own project, compose file and service", command.startswith("podman-compose -p board -f ")
           and command.endswith("docker-compose.yml up -d --build --force-recreate web"), command)
-    check("approving covers the compose file", "docker-compose.yml ----" in b.reviewStep(ID, command))
-    b.approveStep(ID, command)
+    check("reading it shows the compose file", "docker-compose.yml ----" in b.reviewStep(ID, command))
 
-    # An update: version 2. Update pulls it, then the step rebuilds and restarts the containers.
+    # An update: version 2. The first Update asks what runs after it downloads; chosen, it pulls, then rebuilds and
+    # restarts the containers.
     (other / "version").write_text("2\n")
     run("git", "commit", "-q", "-am", "version 2", cwd=other)
     run("git", "push", "-q", "origin", "HEAD:main", cwd=other)
-    print("Update: pull, then rebuild…")
+    asks = []
+    b.askStep.connect(lambda repo_id, why: asks.append(why))
     b.updateRepo(ID)
+    check("the first Update asks first", asks == ["update"] and serving(clone) == "1", str(asks))
+    print("Update: pull, then rebuild…")
+    b.updateWithStep(ID, command)
     d = b.details(ID)
     check("Update pulled", d["updateNote"] == "Pulled 1 new commit.", d["updateNote"])
     check("…then the step ran and applied it", d["stepResult"] == "applied", d["stepResult"] + d["stepOutput"][-500:])
     check("…its output shown", "web" in d["stepOutput"], d["stepOutput"][-300:])
     check("the containers now run version 2", serving(clone) == "2", serving(clone))
-    check("no reminder: it's applied", d["applyReminder"] == "")
 
     # An update that changes the compose file: not run until approved again.
     (other / "docker-compose.yml").write_text('services:\n  web:\n    build: .\n    command: ["sleep", "7200"]\n')
@@ -117,7 +118,7 @@ try:
     # (The last run's "Applied" was for version 2: it goes with the new update.)
     check("a changed compose file stops the step", d["stepChanged"] and d["stepResult"] == ""
           and serving(clone) == "2", f"{d['stepChanged']} {d['stepResult']} {serving(clone)}")
-    check("…and the update is still to apply", d["applyReminder"] != "")
+    check("…and the page is asked to show it again", asks == ["update", "changed"], str(asks))
     b.approveStep(ID, d["step"])  # looked at again
     b.runStep(ID)
     check("approved again, it runs: version 3", b.details(ID)["stepResult"] == "applied" and serving(clone) == "3",
