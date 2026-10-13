@@ -214,7 +214,8 @@ def reset(path: Path | None = None) -> Path | None:
     return backup
 
 
-def save(config: Config, path: Path | None = None) -> None:
+def save(config: Config, path: Path | None = None) -> str:
+    """Write the settings file; returns what was written."""
     path = path or default_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     text = tomlwrite.dumps({"categories": config.categories, "settings": asdict(config.settings),
@@ -223,3 +224,4 @@ def save(config: Config, path: Path | None = None) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, path)
+    return text

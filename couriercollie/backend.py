@@ -329,6 +329,7 @@ class Backend(QObject, Updating, Account):
     checksChanged = Signal()
     activateRequested = Signal()  # bring the window to the front (a second launch, or a notification was clicked)
     saveErrorChanged = Signal()
+    configErrorChanged = Signal()
     githubChanged = Signal()
     _deliver = Signal(object)
 
@@ -350,6 +351,7 @@ class Backend(QObject, Updating, Account):
         self._path = config_path
         self._config_error = ""
         self._save_error = ""
+        self._saved_text = self._settings_text()  # the file as last read or written here (_reload_settings)
         try:
             self._config = config.load(config_path)
         except ConfigError as e:
@@ -383,6 +385,15 @@ class Backend(QObject, Updating, Account):
         self._state_path.parent.mkdir(parents=True, exist_ok=True)
         self._watcher.addPath(str(self._state_path.parent))
         self._watcher.directoryChanged.connect(self._reload_checks)
+        # The settings file edited by hand while the app is open: read again, rather than overwritten by the next save.
+        # A moment after it changes, as an editor may write it in more than one go.
+        settings_folder = (config_path or config.default_path()).parent
+        settings_folder.mkdir(parents=True, exist_ok=True)
+        self._watcher.addPath(str(settings_folder))
+        self._settings_timer = QTimer(self, singleShot=True, interval=300)
+        self._settings_timer.timeout.connect(self._reload_settings)
+        self._watcher.directoryChanged.connect(lambda folder: self._settings_timer.start()
+                                               if Path(folder) == settings_folder else None)
         if self._desktop and not self._config_error:
             # What an update cut short left behind (the app killed, the computer turned off), off the main thread.
             self._run(updater.clean_leftovers, lambda _done, _error: None)
@@ -449,7 +460,7 @@ class Backend(QObject, Updating, Account):
         if self._config_error:
             return
         try:
-            config.save(self._config, self._path)
+            self._saved_text = config.save(self._config, self._path)
             error = ""
         except OSError as e:
             path = self._path or config.default_path()
@@ -674,6 +685,32 @@ class Backend(QObject, Updating, Account):
         elif message == "check":
             self.checkNow()
 
+    def _settings_text(self) -> str | None:
+        """The settings file as it is now, or None if there's none (or it can't be read)."""
+        try:
+            return (self._path or config.default_path()).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return None
+
+    def _reload_settings(self):
+        """The settings file was changed by something else (edited by hand): it's read again. If it's broken now,
+        nothing is saved until it's fixed, so the edit isn't lost."""
+        text = self._settings_text()
+        if text is None or text == self._saved_text:
+            return  # our own save, or the file is gone (being replaced: it's read once it's back)
+        self._saved_text = text
+        try:
+            self._config = config.load(self._path)
+            error = ""
+        except ConfigError as e:
+            error = str(e)
+        if error != self._config_error:
+            self._config_error = error
+            self.configErrorChanged.emit()
+        self.settingsChanged.emit()
+        self.reposChanged.emit()
+        self._update_badge()
+
     def _reload_checks(self, *_):
         """The results folder changed. Reloaded only if the results did: our own saves land here too."""
         if not self._checking and (state := checker.load_state(self._state_path)) != self._checks:
@@ -878,7 +915,7 @@ class Backend(QObject, Updating, Account):
             self._config.categories = rest
             self._changed()
 
-    @Property(str, constant=True)
+    @Property(str, notify=configErrorChanged)
     def configError(self):
         return self._config_error
 

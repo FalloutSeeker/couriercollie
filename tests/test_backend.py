@@ -645,6 +645,43 @@ class BackendTest(unittest.TestCase):
 
 
 
+class EditedByHandTest(unittest.TestCase):
+    """The settings file edited by hand while the app is open."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.path = Path(self.dir.name) / "repos.toml"
+        config.save(config.Config(repos=[TrackedRepo(id=LOCALSEND, name="LocalSend", url="", host="github")]),
+                    self.path)
+        self.backend = Backend(self.path)
+        self.addCleanup(self.backend.shutdown)
+
+    def test_read_again_so_the_next_save_keeps_it(self):
+        self.path.write_text(self.path.read_text() + '\n[[repos]]\nid = "github.com/junegunn/fzf"\nname = "fzf"\n'
+                             'url = ""\nhost = "github"\n')
+        self.backend._reload_settings()
+        self.backend.renameRepo(LOCALSEND, "LocalSend (phone)")  # the app saves
+        self.assertEqual([r.name for r in config.load(self.path).repos], ["LocalSend (phone)", "fzf"])
+
+    def test_broken_by_hand_nothing_is_saved_until_fixed(self):
+        broken = self.path.read_text() + "\n[[repos]\n"
+        self.path.write_text(broken)
+        self.backend._reload_settings()
+        self.assertIn("Couldn\u2019t read", self.backend.configError)
+        self.backend.renameRepo(LOCALSEND, "Phone")
+        self.assertEqual(self.path.read_text(), broken)  # not overwritten
+        self.path.write_text(broken.replace("[[repos]\n", ""))  # fixed
+        self.backend._reload_settings()
+        self.assertEqual((self.backend.configError, [r.name for r in self.backend._config.repos]), ("", ["LocalSend"]))
+
+    def test_our_own_save_isnt_read_again(self):
+        repo = self.backend._config.repos[0]
+        self.backend.renameRepo(LOCALSEND, "Phone")
+        self.backend._reload_settings()
+        self.assertIs(self.backend._config.repos[0], repo)
+
+
 class ScannedClonePageTest(unittest.TestCase):
     """Opening a scanned clone's page: its version comes from disk, and what's new is listed."""
 
