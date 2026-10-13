@@ -113,7 +113,8 @@ def _yours(repo: TrackedRepo) -> tuple[str, bool]:
     """Your version, and whether it's still there: read from disk for one on this computer (it may have been updated,
     or removed, outside the app)."""
     if repo.source == SOURCE_SCANNED and repo.local_path:
-        version, present = scan.version_on_disk(repo.local_path, releases=repo.follow != FOLLOW_BRANCH)
+        here = scan.locate(repo.local_path, repo.asset_pattern)  # (replaced by hand with a newer one, say)
+        version, present = scan.version_on_disk(here, releases=repo.follow != FOLLOW_BRANCH)
         return version or repo.installed, present
     return repo.installed, True
 

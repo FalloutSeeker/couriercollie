@@ -299,6 +299,21 @@ def find_all(folders: Iterable[str] = DEFAULT_SCAN_FOLDERS, system_packages: Cal
     return list(by_id.values())
 
 
+def locate(path: str, pattern: str = "") -> str:
+    """Where a tracked AppImage is now: where it was; or, if that's gone and its folder has the same project's file (as
+    followed: `pattern`, e.g. a newer one downloaded by hand), that one, the newest if several. Many AppImages don't
+    say which project they're from, so this is how one replaced by hand is still known."""
+    p = Path(path)
+    if not path or not pattern or p.suffix.lower() != ".appimage" or p.exists():
+        return path
+    try:
+        names = [f.name for f in p.parent.iterdir() if f.is_file()]
+    except OSError:
+        return path
+    found = assets.pick(pattern, names)
+    return str(p.parent / found) if found else path
+
+
 def version_on_disk(path: str, releases: bool = False) -> tuple[str, bool]:
     """What's on this computer now for a scanned repo, read from where the scan found it: (version, still there).
     A clone's commit (or, when it follows releases, the release tag it's at), an AppImage's version from its file

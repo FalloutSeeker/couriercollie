@@ -952,8 +952,9 @@ class ScanFlowTest(unittest.TestCase):
         self.assertEqual(cfg.find("gitgud.io/aeroshell/smod").source, "scanned")
         # Tracked finds leave the results; problems stay so the user can read why.
         self.assertEqual([i["address"] for i in self.backend.scanItems], ["github.com/me/private"])
-        # And they're checked straight away, so the list says what's out of date.
-        self.assertEqual(self.checks, ["checked"])
+        # And they're checked straight away, so the list says what's out of date (as the scan did when it updated
+        # LocalSend, found on this computer).
+        self.assertEqual(self.checks, ["checked", "checked"])
 
     def test_couriercollie_itself_is_shown_as_added_by_default(self):
         b = self.backend

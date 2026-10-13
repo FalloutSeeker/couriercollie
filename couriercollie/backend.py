@@ -1210,6 +1210,8 @@ class Backend(QObject, Updating, Account):
             for r in result.updated:
                 self._details.pop(r.id, None)  # reload with the version found on disk
             self._changed()
+            if result.updated:
+                self.checkNow()  # what they say now (found moved, say): cheap, as unchanged release lists cost nothing
         self.scanChanged.emit()
 
     @Slot("QVariantList")
@@ -1258,12 +1260,13 @@ class Backend(QObject, Updating, Account):
         ref, host = RepoRef.from_id(repo_id), repo.host
         scanned, local_path = repo.source == config.SOURCE_SCANNED, repo.local_path
         follow, branch, installed, prereleases = repo.follow, repo.branch, repo.installed, repo.prereleases
-        addresses, homepage = [repo.id, *repo.aliases], repo.homepage
+        addresses, homepage, pattern = [repo.id, *repo.aliases], repo.homepage, repo.asset_pattern
 
         # One API request for the releases, and one for what's new on a branch you're behind on. Branches and the
         # version on disk come from git, which doesn't count against API limits.
         def work():
-            on_disk, branch_on_disk = _on_disk(scanned, local_path, follow == FOLLOW_RELEASES)
+            here = scan.locate(local_path, pattern) if scanned else local_path  # (replaced by hand, say)
+            on_disk, branch_on_disk = _on_disk(scanned, here, follow == FOLLOW_RELEASES)
             rels = sources.newest_releases(ref, host, PAGE_RELEASES, prereleases)
             default, branches, branch_error = _fetch_branches(ref)
             yours = on_disk[0] if on_disk and on_disk[0] else installed
@@ -1276,7 +1279,7 @@ class Backend(QObject, Updating, Account):
             built = applying.builds(local_path) if clone else []
             website = homepage or _homepage_of(ref, host)  # once
             note, managed_by, managed_version = _managed_elsewhere(addresses, website)
-            return on_disk, managed_by, website, Details(managed_elsewhere=note, managed_version=managed_version,
+            return here, on_disk, managed_by, website, Details(managed_elsewhere=note, managed_version=managed_version,
                 state="ready", releases=rels, more_releases=len(rels) == PAGE_RELEASES, default_branch=default,
                 branches=branches, branch_error=branch_error, comparison=comparison, commits_base=yours,
                 commits_head=head, local_missing=bool(on_disk) and not on_disk[1], branch_on_disk=branch_on_disk,
@@ -1288,9 +1291,11 @@ class Backend(QObject, Updating, Account):
             if error:
                 self._details[repo_id] = Details(state="error", error=self._error_text(error))
             else:
-                on_disk, managed_by, website, self._details[repo_id] = result
+                here, on_disk, managed_by, website, self._details[repo_id] = result
                 if repo := self._config.find(repo_id):
                     managed_changed = managed_by != repo.managed_by or website != repo.homepage
+                    if here != repo.local_path:  # found beside where it was: followed there from now on
+                        repo.local_path, managed_changed = here, True
                     repo.managed_by, repo.homepage = managed_by, website
                     # A scanned repo's version is whatever's on disk now (e.g. after a `git pull` outside the app).
                     from_disk = bool(on_disk and on_disk[0] and on_disk[0] != repo.installed)
@@ -1481,7 +1486,7 @@ class Backend(QObject, Updating, Account):
             "restartNeeded": self._restart_needed(repo),
             "othersUpdating": bool(self._updating - {repo_id}),
             **self._applying(repo, d),
-            "managedElsewhere": d.managed_elsewhere,
+            "managedElsewhere": d.managed_elsewhere + self._own_copy_left(repo) if d.managed_elsewhere else "",
             "branches": [
                 {"name": b.name, "sha": b.sha[:7], "isDefault": b.name == d.default_branch,
                  "selected": b.name == current_branch}
@@ -1528,6 +1533,15 @@ class Backend(QObject, Updating, Account):
         if repo.apply_command and all(c["command"] != repo.apply_command for c in choices):
             choices.append({"label": repo.apply_command, "command": repo.apply_command, "what": "the step"})
         return choices
+
+    @staticmethod
+    def _own_copy_left(repo: TrackedRepo | None) -> str:
+        """For something your package manager now installed too: couriercollie's own copy (an AppImage, or a program
+        in ~/.local/bin), still there but no longer updated, and often found first when you run it."""
+        if repo and (_is_program(repo) or _is_appimage(repo)) and repo.local_path and Path(repo.local_path).exists():
+            return (f" couriercollie\u2019s own copy, {updater.shown(repo.local_path)}, isn\u2019t updated any more: "
+                    "delete it to use your package manager\u2019s.")
+        return ""
 
     def _part_of(self, repo: TrackedRepo) -> TrackedRepo | None:
         """The tracked clone this one is part of: it's inside that one's folder, and that one's install script names

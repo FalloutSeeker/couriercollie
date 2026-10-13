@@ -1,5 +1,6 @@
 #!/bin/sh
-# What couriercollie makes of changes made outside it (devtools/outside_inner.py), in a container per distro with
+# What couriercollie makes of changes made outside it (devtools/outside_inner.py, then outside2_inner.py), in a
+# container per distro with
 # its package installed, through the real window (off-screen): real projects installed through it, then removed,
 # downgraded or updated from the command line. Screenshots go to .uicheck/outside/<distro>. GitHub is asked through
 # devtools/github_relay.py, with your gh login, which stays here.
@@ -12,7 +13,7 @@ port=18773
 python3 -I devtools/github_relay.py "$work/allow" $port > "$work/relay.log" 2>&1 &
 relay=$!
 trap 'kill $relay; podman unshare rm -rf "$work"' EXIT
-printf "neovim/neovim\njesseduffield/lazygit\ncharmbracelet/skate\ntmux-plugins/tpm\nFalloutSeeker/couriercollie\n" \
+printf "neovim/neovim\njesseduffield/lazygit\ncharmbracelet/skate\ntmux-plugins/tpm\nFalloutSeeker/couriercollie\nlocalsend/localsend\njunegunn/fzf\n" \
     > "$work/allow"
 git ls-files -z | xargs -0 tar -cf "$work/app.tar"
 distros=${*:-fedora opensuse ubuntu debian arch}
@@ -31,7 +32,9 @@ run() {  # distro, image, install command, extras
         mkdir -p /app && tar -xf /work/app.tar -C /app
         export HOME=/root XDG_RUNTIME_DIR=/tmp/rt GIT_CONFIG_GLOBAL=/dev/null QT_QUICK_BACKEND=software QSG_RHI_BACKEND=
         mkdir -p /tmp/rt && chmod 700 /tmp/rt
-        cd /root && python3 /app/devtools/outside_inner.py $1" > "$work/$1.log" 2>&1 || echo "exit $?" >> "$work/$1.log"
+        cd /root && python3 /app/devtools/outside_inner.py $1 && rm -rf /root/.config/couriercollie /root/Applications \
+            /root/.local/share/couriercollie /root/src && python3 /app/devtools/outside2_inner.py $1" \
+        > "$work/$1.log" 2>&1 || echo "exit $?" >> "$work/$1.log"
 }
 # Side by side: shared (:z) rather than private (:Z) labels on /work, or each container would lock the others out.
 
