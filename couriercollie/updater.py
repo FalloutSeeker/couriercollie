@@ -27,10 +27,12 @@ import re
 import platform
 import pwd
 import shlex
+import secrets
 import shutil
 import subprocess
 import tarfile
 import threading
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -264,15 +266,26 @@ def clone(url: str, ref: str, name: str) -> Path:
     parent = clones_dir()
     parent.mkdir(parents=True, exist_ok=True)
     base = _folder_name(name)
-    dest = next(parent / n for n in (base, *(f"{base}-{i}" for i in range(2, 100))) if not (parent / n).exists())
-    part = parent / f".{dest.name}.part"
-    shutil.rmtree(part, ignore_errors=True)
+    # Its own hidden name (two projects of the same name may be cloned at once), then the first free name.
+    part = parent / f".{base}.{secrets.token_hex(4)}.part"
     try:
         result = _git(str(parent), "-c", "advice.detachedHead=false", "clone", "--quiet", "--branch", ref, "--",
                       url, part.name, timeout=CLONE_TIMEOUT)
         if result.returncode != 0:
             raise UpdateError(f"Couldn\u2019t clone the project: {_last_line(result)}")
-        part.rename(dest)
+        for dest in (parent / n for n in (base, *(f"{base}-{i}" for i in range(2, 100)))):
+            try:
+                dest.mkdir()  # taken, or ours: a rename onto an empty folder replaces it
+            except FileExistsError:
+                continue
+            try:
+                part.rename(dest)
+            except OSError:
+                dest.rmdir()
+                raise
+            break
+        else:
+            raise UpdateError(f"Couldn\u2019t find a free folder name for {base} in {shown(parent)}.")
     finally:
         shutil.rmtree(part, ignore_errors=True)
     return dest
@@ -471,16 +484,17 @@ def is_appimage(path: Path) -> bool:
     return head[:4] == b"\x7fELF" and head[8:10] == b"AI" and head[10:11] in (b"\x01", b"\x02")
 
 
-def _download_checked(asset, part: Path, others: list, progress, get_text) -> bool:
+def _download_checked(asset, part: Path, others: list, progress, get_text) -> tuple[bool, str]:
     """Downloads `asset` to `part` and checks it against the checksum the project published. Returns whether there
-    was one to check against. A download that doesn't match is deleted, and that's the end of it."""
+    was one to check against, and the SHA-256 of what was downloaded. A download that doesn't match is deleted, and
+    that's the end of it."""
     got = download(asset.url, part, asset.size, progress)
     expected = expected_sha256(asset, others, get_text)
     if expected and got != expected:
         part.unlink(missing_ok=True)
         raise UpdateError("The download doesn\u2019t match the checksum the project published, so it was thrown away. "
                           "Try again later; if it keeps happening, the file on the site may have been tampered with.")
-    return bool(expected)
+    return bool(expected), got
 
 
 def install_appimage(asset, others: list, folder: Path, old: Path | None,
@@ -492,9 +506,9 @@ def install_appimage(asset, others: list, folder: Path, old: Path | None,
         raise UpdateError(f"{shown(folder)} belongs to another user (often the system), so the new version "
                           "can\u2019t be put there from here.")
     name = Path(asset.name).name  # never a path from the site
-    part = folder / f".{name}.part"
+    part = folder / f".{name}.{secrets.token_hex(4)}.part"
     try:
-        verified = _download_checked(asset, part, others, progress, get_text)
+        verified, _ = _download_checked(asset, part, others, progress, get_text)
         if not is_appimage(part):
             raise UpdateError(f"{name} isn\u2019t an AppImage, so it wasn\u2019t installed.")
         part.chmod(0o755)
@@ -677,7 +691,7 @@ def install_program(repo_id: str, tag: str, asset, others: list, wanted: str = "
     unpacking = home / f".{_folder_name(tag)}.unpacking"
     shutil.rmtree(unpacking, ignore_errors=True)
     try:
-        verified = _download_checked(asset, part, others, progress, get_text)
+        verified, _ = _download_checked(asset, part, others, progress, get_text)
         # A program on its own is named for the project ("yq", not "yq_linux_amd64").
         _unpack(part, unpacking, _folder_name(next((h for h in hints if h), "")) or _folder_name(asset.name))
         program = choose_program(unpacking, wanted, list(hints))
@@ -790,19 +804,19 @@ def downloads_dir() -> Path:
 
 @contextlib.contextmanager
 def _downloaded(asset, others: list, progress, get_text):
-    """The release's file, downloaded into downloads_dir() and checked: (its path, whether it was checked against a
-    published checksum). Deleted afterwards, whatever happens."""
-    folder = downloads_dir()
-    folder.mkdir(parents=True, exist_ok=True)
+    """The release's file, downloaded into a folder of its own in downloads_dir() and checked: (its path, whether it
+    was checked against a published checksum, the SHA-256 of what was downloaded). Deleted afterwards, whatever
+    happens."""
+    downloads_dir().mkdir(parents=True, exist_ok=True)
+    folder = Path(tempfile.mkdtemp(prefix=".", suffix=".part", dir=downloads_dir()))  # (two at once don't meet)
     name = Path(asset.name).name  # never a path from the site
     part, file = folder / f".{name}.part", folder / name
     try:
-        verified = _download_checked(asset, part, others, progress, get_text)
+        verified, digest = _download_checked(asset, part, others, progress, get_text)
         os.replace(part, file)  # installers go by the file's name
-        yield file, verified
+        yield file, verified, digest
     finally:
-        part.unlink(missing_ok=True)
-        file.unlink(missing_ok=True)
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 # Run as root: copy the package ($1, named $2) into a new folder only root can write to, check it's still the file
@@ -837,7 +851,7 @@ def install_package(asset, others: list, kind: str, package: str = "", progress=
     if not tool:
         raise UpdateError(f"There\u2019s no package manager here for {packages.A_LABEL[kind]}, so it wasn\u2019t "
                           "installed.")
-    with _downloaded(asset, others, progress, get_text) as (file, verified):
+    with _downloaded(asset, others, progress, get_text) as (file, verified, checked):
         with file.open("rb") as f:
             if not f.read(8).startswith(packages.MAGIC[kind]):
                 raise UpdateError(f"{file.name} isn\u2019t {packages.A_LABEL[kind]}, so it wasn\u2019t installed.")
@@ -851,9 +865,8 @@ def install_package(asset, others: list, kind: str, package: str = "", progress=
         if not packages.suits(arch):
             raise UpdateError(f"The new file is for {arch} computers, not this one, so it wasn\u2019t installed.")
         # The checked file is in a folder you can write to, so as root it's first copied where only root can, and
-        # checked again there: nothing can swap it between the checks above and the package manager installing it.
-        with file.open("rb") as f:
-            checked = hashlib.file_digest(f, "sha256").hexdigest()
+        # checked there against what was downloaded (and checked): nothing can swap it between the download and the
+        # package manager installing it.
         with _PACKAGE_MANAGER:
             if installing:
                 installing()
@@ -883,7 +896,7 @@ def install_flatpak(asset, others: list, app_id: str = "", progress=None, get_te
     """Downloads a release's Flatpak bundle, checks it, and installs it for you (flatpaks.py). `app_id`: the app you
     have, which the bundle must hold. Returns (the app's ID, whether the download was checked against a published
     checksum). The download is deleted afterwards."""
-    with _downloaded(asset, others, progress, get_text) as (file, verified):
+    with _downloaded(asset, others, progress, get_text) as (file, verified, _):
         found, arch = flatpaks.bundle_app(file)
         if not found:
             raise UpdateError(f"{file.name} isn\u2019t a Flatpak bundle, so it wasn\u2019t installed.")
