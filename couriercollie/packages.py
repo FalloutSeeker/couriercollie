@@ -23,7 +23,9 @@ INSTALL = {
     # would refuse it. It was already checked against the project's published checksum, as dnf relies on (dnf doesn't
     # check signatures on files at all); packages from your repositories are still checked against their signed lists.
     "zypper": ["/usr/bin/zypper", "--non-interactive", "--no-gpg-checks", "install", "--allow-unsigned-rpm"],
-    "apt": ["/usr/bin/apt-get", "install", "-y"],
+    # -y would also remove whatever the package conflicts with, unasked: --no-remove stops instead. (dnf, zypper and
+    # pacman stop by themselves.)
+    "apt": ["/usr/bin/apt-get", "install", "-y", "--no-remove"],
     "pacman": ["/usr/bin/pacman", "-U", "--noconfirm"],
 }
 # What each kind of file starts with: an RPM's lead, a Debian package's "ar" archive, an Arch package's zstd or xz.

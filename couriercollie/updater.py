@@ -872,6 +872,8 @@ def install_package(asset, others: list, kind: str, package: str = "", progress=
     if result.returncode != 0 and _BUSY.search(result.stderr + result.stdout):
         raise UpdateError(f"Your package manager ({tool}) is busy with something else: another program is "
                           "installing or updating software. Try again once it\u2019s done.")
+    if result.returncode != 0 and "remove is disabled" in result.stderr + result.stdout:  # (apt's --no-remove)
+        raise UpdateError("Installing it would remove other packages it conflicts with, so it wasn\u2019t installed.")
     if result.returncode != 0:
         raise UpdateError(f"{tool} couldn\u2019t install it: {_last_line(result, tool)}")
     return found, version, verified, tool
