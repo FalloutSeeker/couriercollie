@@ -77,10 +77,11 @@ Details:
 - **Update does the whole job** (a clone): downloading only changes the clone's files; a running program uses them
   once it's rebuilt, reinstalled or restarted. So Update also runs the clone's step after downloading:
   - **Asked the first time** Update is clicked (or once Install has cloned it), when there's something to run: one of
-    its install, setup or update scripts, rebuilding the containers running from its compose files, or building and
-    installing again in its CMake or Meson build folder. The window shows what will run, the command and the files
-    it names, to read: Update, Only Download, or Cancel. Nothing is typed in. Remembered; Change… (under Tracking)
-    changes it.
+    its install, setup or update scripts, or building and installing again in its CMake or Meson build folder. The
+    window shows what will run, the command and the files it names, to read: Update, Only Download, or Cancel.
+    Nothing is typed in. Remembered; Change… (under Tracking) changes it.
+  - **Containers running from its compose files** are rebuilt and restarted without asking, when that's all there is
+    to run: you started them from these files, and rebuilding them is what keeping them up to date means.
   - **Asked again** if an update changes what was approved: it doesn't run until you've read it.
   - **Run inside the app,** its output shown live, ending in finished or failed (with the exit code). Nothing can be
     typed in, but sudo in it asks for your password in the desktop's own password window (sudo -A), so couriercollie

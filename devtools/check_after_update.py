@@ -91,18 +91,17 @@ try:
           and command.endswith("docker-compose.yml up -d --build --force-recreate web"), command)
     check("reading it shows the compose file", "docker-compose.yml ----" in b.reviewStep(ID, command))
 
-    # An update: version 2. The first Update asks what runs after it downloads; chosen, it pulls, then rebuilds and
-    # restarts the containers.
+    # An update: version 2. Update pulls it, then rebuilds and restarts the containers: they already run from these
+    # compose files, so even the first time it doesn't ask.
     (other / "version").write_text("2\n")
     run("git", "commit", "-q", "-am", "version 2", cwd=other)
     run("git", "push", "-q", "origin", "HEAD:main", cwd=other)
     asks = []
     b.askStep.connect(lambda repo_id, why: asks.append(why))
-    b.updateRepo(ID)
-    check("the first Update asks first", asks == ["update"] and serving(clone) == "1", str(asks))
     print("Update: pull, then rebuild…")
-    b.updateWithStep(ID, command)
+    b.updateRepo(ID)
     d = b.details(ID)
+    check("the first Update doesn't ask", asks == [], str(asks))
     check("Update pulled", d["updateNote"] == "Pulled 1 new commit.", d["updateNote"])
     check("…then the step ran and applied it", d["stepResult"] == "applied", d["stepResult"] + d["stepOutput"][-500:])
     check("…its output shown", "web" in d["stepOutput"], d["stepOutput"][-300:])
@@ -118,7 +117,7 @@ try:
     # (The last run's "Applied" was for version 2: it goes with the new update.)
     check("a changed compose file stops the step", d["stepChanged"] and d["stepResult"] == ""
           and serving(clone) == "2", f"{d['stepChanged']} {d['stepResult']} {serving(clone)}")
-    check("…and the page is asked to show it again", asks == ["update", "changed"], str(asks))
+    check("…and the page is asked to show it again", asks == ["changed"], str(asks))
     b.approveStep(ID, d["step"])  # looked at again
     b.runStep(ID)
     check("approved again, it runs: version 3", b.details(ID)["stepResult"] == "applied" and serving(clone) == "3",

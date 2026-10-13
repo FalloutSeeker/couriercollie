@@ -123,6 +123,21 @@ class AfterUpdatingTest(UpstreamCase):
         self.assertEqual(asks, ["update"])
         self.assertTrue((self.clone / "deployed.txt").exists())
 
+    def test_running_containers_are_rebuilt_without_asking(self):
+        # The clone's containers are running (started from its compose file): rebuilding them is the whole job, so the
+        # first Update doesn't ask. A changed compose file still waits to be looked at.
+        from couriercollie import applying
+
+        (self.clone / "deploy.sh").unlink()  # (only the containers to rebuild)
+        (self.clone / "docker-compose.yml").write_text("services:\n  web:\n    build: .\n")
+        self.backend._details[self.id].install_scripts = []
+        self.backend._details[self.id].compose = applying.Compose(["true"], "board", [], ["web"])
+        asks = self.asked()
+        self.update()
+        d = self.details()
+        self.assertEqual((asks, d["stepWhat"], d["stepResult"]), ([], "the container rebuild", "applied"))
+        self.assertNotEqual(self.repo().installed, self.start)
+
     def test_only_download(self):
         asks = self.asked()
         self.update()

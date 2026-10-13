@@ -141,8 +141,15 @@ class Updating:
         if not repo or repo_id in self._updating or not _can_update(repo) or self._part_of(repo):
             return
         if self._asks_first(repo):
-            self.askStep.emit(repo_id, "update")  # the first time: what runs after it downloads (updateWithStep)
-            return
+            choices = self._step_choices(repo, self._details.get(repo_id))
+            if [c["what"] for c in choices] == ["the container rebuild"]:
+                # Its containers already run from this clone's compose files, which you started: rebuilding them with
+                # the update is what keeping them up to date means, so it isn't asked. (An update that changes the
+                # compose files still waits to be looked at: they say what the containers may reach.)
+                self.approveStep(repo_id, choices[0]["command"])
+            else:
+                self.askStep.emit(repo_id, "update")  # the first time: what runs after it downloads (updateWithStep)
+                return
         if _can_clone(repo):
             self._install_clone(repo)
             return

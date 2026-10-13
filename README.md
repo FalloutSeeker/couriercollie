@@ -76,8 +76,9 @@ sign-in.
 - couriercollie never asks for or sees your password. Installing a package, updating a git clone owned by the
   system (one in `/opt`, say), or a project's install script that needs `sudo`, all use your desktop's own password
   window. Without one, you get the command to run in your own terminal instead.
-- For a git clone with an install script (or containers to rebuild), the first Update shows you what it will run
-  after downloading. If an update changes it, it waits for you to look again.
+- For a git clone with an install script, the first Update shows you what it will run after downloading. Containers
+  running from a clone are rebuilt and restarted with each update. If an update changes what runs (the script, or
+  the compose file), it waits for you to look again.
 - Anything your package manager installed (from your distro's repositories, or from Flathub) is never updated here.
   couriercollie only shows its version; your package manager keeps it up to date.
 
