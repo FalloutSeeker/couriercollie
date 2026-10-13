@@ -204,7 +204,11 @@ def fingerprint(path: str, command: str) -> str:
     """What was approved: the command, and the content of the files it names."""
     digest, root = hashlib.sha256(command.encode()), Path(path).resolve()
     for file in named_files(path, command):
-        digest.update(b"\0" + str(file.relative_to(root)).encode() + b"\0" + file.read_bytes())
+        try:
+            content = file.read_bytes()
+        except OSError:
+            content = b"\0unreadable"  # (so it becoming readable again is a change too)
+        digest.update(b"\0" + str(file.relative_to(root)).encode() + b"\0" + content)
     return digest.hexdigest()
 
 
@@ -213,7 +217,11 @@ def review_text(path: str, command: str) -> str:
     root = Path(path).resolve()
     parts = [command]
     for file in named_files(path, command):
-        parts.append(f"\n# ---- {file.relative_to(root)} ----\n" + file.read_text(encoding="utf-8", errors="replace"))
+        try:
+            text = file.read_text(encoding="utf-8", errors="replace")
+        except OSError as e:
+            text = f"# (couldn\u2019t be read: {e.strerror or e})\n"
+        parts.append(f"\n# ---- {file.relative_to(root)} ----\n" + text)
     return "\n".join(parts).rstrip() + "\n"
 
 

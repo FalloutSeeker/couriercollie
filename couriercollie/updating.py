@@ -461,6 +461,12 @@ class Updating:
         if not self._step_still_approved(repo):
             self.detailsChanged.emit(repo_id)  # the page asks for it to be looked at again
             return
+        # sudo in the step asks for the password in the desktop's own window (couriercollie never sees it). Without
+        # one (it couldn't be set up), sudo stops, and the page offers the command for a terminal.
+        try:
+            asking = applying.password_window(integration.runtime_dir() / "sudo")
+        except OSError:
+            asking = {}
         run = self._steps[repo_id] = StepRun(version=repo.installed)
         self._updating.add(repo_id)
         self.reposChanged.emit()
@@ -491,8 +497,6 @@ class Updating:
             self.reposChanged.emit()
             self.detailsChanged.emit(repo_id)
 
-        # sudo in the step asks for the password in the desktop's own window (couriercollie never sees it).
-        asking = applying.password_window(integration.runtime_dir() / "sudo")
         self._run(lambda: applying.run(path, command, line, started, asking), done)
 
     @Slot(str)
