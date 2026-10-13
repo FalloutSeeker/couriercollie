@@ -171,7 +171,16 @@ def load(path: Path | None = None) -> Config:
     if not path.exists():
         return Config()
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise ConfigError(f"Couldn’t read {path}: {e}") from e
+    return loads(text, path)
+
+
+def loads(text: str, path: Path | None = None) -> Config:
+    """The settings from the file's text (load); `path` is for the message if it's broken."""
+    try:
+        data = tomllib.loads(text)
         settings_data, repos_data = data.get("settings", {}), data.get("repos", [])
         if not isinstance(settings_data, dict) or not isinstance(repos_data, list) \
                 or not all(isinstance(r, dict) for r in repos_data):
@@ -179,8 +188,8 @@ def load(path: Path | None = None) -> Config:
         settings = _from_dict(Settings, settings_data)
         settings.check_interval_hours = _nearest_interval(settings.check_interval_hours)
         repos = [_from_dict(TrackedRepo, r) for r in repos_data]
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, TypeError) as e:
-        raise ConfigError(f"Couldn’t read {path}: {e}") from e
+    except (tomllib.TOMLDecodeError, TypeError) as e:
+        raise ConfigError(f"Couldn’t read {path or default_path()}: {e}") from e
     # A hand-edited file may list a repo twice: the first is kept (two rows for one address would act as one).
     seen: set[str] = set()
     repos = [r for r in repos if not (r.id.lower() in seen or seen.add(r.id.lower()))]
@@ -189,6 +198,37 @@ def load(path: Path | None = None) -> Config:
         # here on.
         repos.sort(key=lambda r: r.name.lower())
     return Config(settings=settings, categories=_categories(data.get("categories"), repos), repos=repos)
+
+
+def merge(base: Config, mine: Config, theirs: Config) -> Config:
+    """The settings file was changed by hand while the app had changes of its own: both are kept. `base` is the file
+    as the app last read or wrote it, `mine` the app's settings now, `theirs` the file now. Each setting, each repo's
+    each field, and the categories: whichever side changed it; where both did, the hand edit. A repo added on either
+    side is kept; one removed on either side goes, unless the other side changed it."""
+    def pick(b, m, t):
+        if m == b:
+            return t
+        if t == b:
+            return m
+        if isinstance(b, dict) and isinstance(m, dict) and isinstance(t, dict):
+            return {k: pick(b.get(k), m.get(k), t.get(k)) for k in {**m, **t}}
+        return t
+
+    by_id = [{r.id.lower(): asdict(r) for r in c.repos} for c in (base, mine, theirs)]
+    b_repos, m_repos, t_repos = by_id
+    repos = []
+    for key, t in t_repos.items():
+        if key in b_repos and key not in m_repos and t == b_repos[key]:
+            continue  # stopped tracking in the app
+        b = b_repos.get(key, {})  # (added by hand: nothing before)
+        repos.append(pick(b, m_repos.get(key, b or t), t))  # (removed in the app but changed by hand: kept)
+    for key, m in m_repos.items():
+        if key not in t_repos and (key not in b_repos or m != b_repos[key]):
+            repos.append(m)  # added in the app (or changed there while removed by hand: kept)
+    tracked = [_from_dict(TrackedRepo, r) for r in repos]
+    settings = _from_dict(Settings, pick(asdict(base.settings), asdict(mine.settings), asdict(theirs.settings)))
+    return Config(settings=settings, repos=tracked,
+                  categories=_categories(pick(base.categories, mine.categories, theirs.categories), tracked))
 
 
 def _categories(saved, repos: list[TrackedRepo]) -> list[str]:
@@ -214,12 +254,17 @@ def reset(path: Path | None = None) -> Path | None:
     return backup
 
 
+def dumps(config: Config) -> str:
+    """The settings file's text."""
+    return tomlwrite.dumps({"categories": config.categories, "settings": asdict(config.settings),
+                            "repos": [asdict(r) for r in config.repos]})
+
+
 def save(config: Config, path: Path | None = None) -> str:
     """Write the settings file; returns what was written."""
     path = path or default_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    text = tomlwrite.dumps({"categories": config.categories, "settings": asdict(config.settings),
-                            "repos": [asdict(r) for r in config.repos]})
+    text = dumps(config)
     # Write to a temporary file and rename, so a crash mid-write can't leave a half-written settings file.
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(text, encoding="utf-8")

@@ -654,6 +654,10 @@ class EditedByHandTest(unittest.TestCase):
         self.path = Path(self.dir.name) / "repos.toml"
         config.save(config.Config(repos=[TrackedRepo(id=LOCALSEND, name="LocalSend", url="", host="github")]),
                     self.path)
+        from PySide6.QtCore import QCoreApplication
+
+        # Before the backend, as in the app: a file watcher made without one never hears of changes.
+        self.app = QCoreApplication.instance() or QCoreApplication([])
         self.backend = Backend(self.path)
         self.addCleanup(self.backend.shutdown)
 
@@ -673,7 +677,17 @@ class EditedByHandTest(unittest.TestCase):
         self.assertEqual(self.path.read_text(), broken)  # not overwritten
         self.path.write_text(broken.replace("[[repos]\n", ""))  # fixed
         self.backend._reload_settings()
-        self.assertEqual((self.backend.configError, [r.name for r in self.backend._config.repos]), ("", ["LocalSend"]))
+        # What was done in the app meanwhile (renamed here; an update, say) is merged in, and saved.
+        self.assertEqual((self.backend.configError, [r.name for r in self.backend._config.repos]), ("", ["Phone"]))
+        self.assertEqual([r.name for r in config.load(self.path).repos], ["Phone"])
+
+    def test_a_save_before_the_edit_is_read_merges_it(self):
+        # The app saves (a check's result, a rename) a moment after the edit, before reading the file again.
+        self.path.write_text('categories = ["Tools"]\n' + self.path.read_text().replace('categories = []\n', '')
+                             .replace('name = "LocalSend"', 'name = "My LocalSend"'))
+        self.backend.updateSettings({"toasts": False})  # the app saves
+        saved = config.load(self.path)
+        self.assertEqual((saved.repos[0].name, saved.categories, saved.settings.toasts), ("My LocalSend", ["Tools"], False))
 
     def test_noticed_whether_written_in_place_or_replaced(self):
         # As the app runs: the file is watched (an editor may write it in place, or replace it), and read again a
@@ -681,14 +695,10 @@ class EditedByHandTest(unittest.TestCase):
         import os
         import time
 
-        from PySide6.QtCore import QCoreApplication
-
-        app = QCoreApplication.instance() or QCoreApplication([])
-
         def pump(seconds):
             end = time.monotonic() + seconds
             while time.monotonic() < end:
-                app.processEvents()
+                self.app.processEvents()
                 time.sleep(0.02)
 
         for i, replaced in enumerate((False, True, False)):

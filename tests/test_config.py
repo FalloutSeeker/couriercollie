@@ -147,3 +147,35 @@ class ConfigTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MergeTest(unittest.TestCase):
+    """The settings file changed by hand while the app had changes of its own (config.merge): both kept."""
+
+    def repo(self, rid, **kw):
+        return config.TrackedRepo(**{"id": rid, "name": rid, "url": "", "host": "github", **kw})
+
+    def test_each_side_keeps_its_own_changes(self):
+        base = config.Config(repos=[self.repo("a"), self.repo("b"), self.repo("c")])
+        mine = config.Config(repos=[self.repo("a", installed="v2"), self.repo("b"), self.repo("d")])  # updated a,
+        # stopped tracking c, added d
+        mine.settings.toasts = False
+        theirs = config.Config(repos=[self.repo("a", category="Tools"), self.repo("c"), self.repo("e")],
+                               categories=["Tools"])  # by hand: a's category, removed b, added e
+        theirs.settings.check_interval_hours = 168
+        merged = config.merge(base, mine, theirs)
+        self.assertEqual([(r.id, r.installed, r.category) for r in merged.repos],
+                         [("a", "v2", "Tools"), ("e", "", ""), ("d", "", "")])
+        self.assertEqual((merged.settings.toasts, merged.settings.check_interval_hours, merged.categories),
+                         (False, 168, ["Tools"]))
+
+    def test_both_changed_it_the_hand_edit_wins(self):
+        base = config.Config(repos=[self.repo("a")])
+        merged = config.merge(base, config.Config(repos=[self.repo("a", name="App's")]),
+                              config.Config(repos=[self.repo("a", name="Mine")]))
+        self.assertEqual(merged.repos[0].name, "Mine")
+
+    def test_removed_by_hand_but_changed_in_the_app_is_kept(self):
+        base = config.Config(repos=[self.repo("a")])
+        merged = config.merge(base, config.Config(repos=[self.repo("a", installed="v2")]), config.Config())
+        self.assertEqual([(r.id, r.installed) for r in merged.repos], [("a", "v2")])

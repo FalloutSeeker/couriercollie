@@ -4,6 +4,7 @@ The window calls the slots here and shows the properties. Anything that touches 
 so the window never freezes; results are handed back to the main thread through `_deliver`.
 """
 
+import copy
 import dataclasses
 import hashlib
 import os
@@ -351,13 +352,16 @@ class Backend(QObject, Updating, Account):
         self._path = config_path
         self._config_error = ""
         self._save_error = ""
-        self._saved_text = self._settings_text()  # the file as last read or written here (_reload_settings)
+        # The file as last read or written here, and the settings it held: what a change by hand is told from, and
+        # merged against (_sync_from_disk).
+        self._saved_text = self._settings_text()
         try:
             self._config = config.load(config_path)
         except ConfigError as e:
             # Start empty, and don't save, so the broken file isn't overwritten.
             self._config = Config()
             self._config_error = str(e)
+        self._synced = copy.deepcopy(self._config)
         if self._config.settings.icon_lookup < ICON_LOOKUP and not self._config_error:
             # Looked up an older way (which guessed): look them up again.
             for r in self._config.repos:
@@ -397,7 +401,14 @@ class Backend(QObject, Updating, Account):
                                                if Path(folder) == settings_file.parent else None)
         self._watcher.fileChanged.connect(lambda file: self._settings_timer.start())
         self._watch_settings_file()
-        if self._desktop and not self._config_error:
+        self._started = False
+        if not self._config_error:
+            self._start()
+
+    def _start(self):
+        """Once the settings are read (at start, or once a broken settings file is fixed)."""
+        self._started = True
+        if self._desktop:
             # What an update cut short left behind (the app killed, the computer turned off), off the main thread.
             self._run(updater.clean_leftovers, lambda _done, _error: None)
             self._track_myself()
@@ -462,8 +473,13 @@ class Backend(QObject, Updating, Account):
     def _save(self):
         if self._config_error:
             return
+        # Changed by hand since it was last read or written here, and not read again yet: merged first, so the
+        # edit isn't overwritten.
+        if (text := self._settings_text()) is not None and text != self._saved_text and not self._sync_from_disk(text):
+            return
         try:
             self._saved_text = config.save(self._config, self._path)
+            self._synced = copy.deepcopy(self._config)
             error = ""
         except OSError as e:
             path = self._path or config.default_path()
@@ -716,25 +732,50 @@ class Backend(QObject, Updating, Account):
         if path not in self._watcher.files() and os.path.exists(path):
             self._watcher.addPath(path)
 
+    def _sync_from_disk(self, text: str) -> bool:
+        """The settings file holds `text`, written by something else (edited by hand): merged with the app's own
+        changes since it last read or wrote it (config.merge), so neither is lost. If it's broken, nothing is saved
+        until it's fixed (the window says so); then what the app did meanwhile is merged in. False if it's broken."""
+        self._saved_text = text
+        try:
+            theirs = config.loads(text, self._path)
+            error = ""
+        except ConfigError as e:
+            theirs, error = None, str(e)
+        if error != self._config_error:
+            self._config_error = error
+            self.configErrorChanged.emit()
+        if theirs is None:
+            return False
+        before = self._config.settings
+        self._config = config.merge(self._synced, self._config, theirs)
+        self._synced = theirs
+        s = self._config.settings
+        if not self._started:
+            self._start()  # broken since the app started: what it does at start, now
+        elif self._desktop:
+            # Turned on or off by hand: the timer and the login entry follow.
+            if s.auto_check != before.auto_check:
+                integration.set_background_checks(s.auto_check)
+            if s.start_at_login != before.start_at_login:
+                integration.set_start_at_login(s.start_at_login)
+        self.settingsChanged.emit()
+        self.reposChanged.emit()
+        self.checksChanged.emit()  # (the next check's time)
+        for r in self._config.repos:
+            self.detailsChanged.emit(r.id)
+        self._update_badge()
+        return True
+
     def _reload_settings(self):
-        """The settings file was changed by something else (edited by hand): it's read again. If it's broken now,
-        nothing is saved until it's fixed, so the edit isn't lost."""
+        """The settings file changed: if not by the app (edited by hand), merged with the app's own settings, and
+        saved if the app had changes of its own that the file doesn't have yet."""
         self._watch_settings_file()
         text = self._settings_text()
         if text is None or text == self._saved_text:
             return  # our own save, or the file is gone (being replaced: it's read once it's back)
-        self._saved_text = text
-        try:
-            self._config = config.load(self._path)
-            error = ""
-        except ConfigError as e:
-            error = str(e)
-        if error != self._config_error:
-            self._config_error = error
-            self.configErrorChanged.emit()
-        self.settingsChanged.emit()
-        self.reposChanged.emit()
-        self._update_badge()
+        if self._sync_from_disk(text) and config.dumps(self._config) != text:
+            self._save()
 
     def _reload_checks(self, *_):
         """The results folder changed. Reloaded only if the results did: our own saves land here too."""
