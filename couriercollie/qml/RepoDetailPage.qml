@@ -435,14 +435,6 @@ Kirigami.ScrollablePage {
             text: Labels.plain(page.details.otherSystems)
         }
 
-        Kirigami.InlineMessage {
-            Layout.fillWidth: true
-            Layout.maximumWidth: Kirigami.Units.gridUnit * 34
-            visible: page.ready && page.details.localMissing === true
-            type: Kirigami.MessageType.Warning
-            text: Labels.plain(`It\u2019s no longer at ${page.repo.shownPath}. If it moved, scan again; if it was removed, stop tracking it.`)
-        }
-
         // ---- Status: your version next to the newest, coloured by how they compare ------------------------------
 
         Rectangle {

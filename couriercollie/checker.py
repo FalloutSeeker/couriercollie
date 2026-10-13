@@ -109,13 +109,17 @@ def due(settings: Settings, state: State, at: datetime | None = None) -> bool:
 # One repo
 
 
-def _yours(repo: TrackedRepo) -> str:
-    """Your version: read from disk for a scanned repo (it may have been updated outside the app)."""
+def _yours(repo: TrackedRepo) -> tuple[str, bool]:
+    """Your version, and whether it's still there: read from disk for one on this computer (it may have been updated,
+    or removed, outside the app)."""
     if repo.source == SOURCE_SCANNED and repo.local_path:
-        version, _present = scan.version_on_disk(repo.local_path, releases=repo.follow != FOLLOW_BRANCH)
-        if version:
-            return version
-    return repo.installed
+        version, present = scan.version_on_disk(repo.local_path, releases=repo.follow != FOLLOW_BRANCH)
+        return version or repo.installed, present
+    return repo.installed, True
+
+
+# What the list says when what was on this computer was removed outside the app.
+GONE = "Not found on this computer"
 
 
 # A check only needs the newest release, so it asks for a few (sources.newest_releases).
@@ -207,11 +211,13 @@ def check_repo(repo: TrackedRepo, github_limited: threading.Event | None = None)
     if github_limited is not None and github_limited.is_set() and repo.host == "github":
         return Result(RATE_LIMITED, "Not checked: GitHub’s hourly limit was reached")
     try:
-        yours = _yours(repo)
+        yours, present = _yours(repo)
         if repo.follow == FOLLOW_BRANCH:
             result = _check_branch(repo, ref, yours)
         else:
             result = _check_releases(repo, ref, yours)
+        if not present and not repo.managed_by:
+            result = Result(NOT_INSTALLED_YET, GONE, result.newest)  # removed outside the app: not up to date
     except sources.RateLimited as e:
         if repo.host == "github" and github_limited is not None:
             github_limited.set()

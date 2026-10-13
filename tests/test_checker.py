@@ -73,6 +73,12 @@ class CheckRepoTest(unittest.TestCase):
         # Pre-releases count only if they're shown.
         self.assertEqual(self.check(repo("github.com/a/app", installed="v1.19.0", prereleases=True)).newest, "v2.0-rc1")
 
+    def test_removed_outside_the_app_isnt_up_to_date(self):
+        # Installed here once (an AppImage found on this computer), then deleted by hand.
+        gone = repo("github.com/a/app", installed="v1.19.0", source="scanned", local_path="/nowhere/App-1.19.0.AppImage")
+        r = self.check(gone)
+        self.assertEqual((r.status, r.text, r.newest), (checker.NOT_INSTALLED_YET, checker.GONE, "v1.19.0"))
+
     def test_one_request_per_release_repo(self):
         self.check(repo("github.com/a/app", installed="v1.18.2"))
         self.assertEqual(self.fakes.requests, [("releases", "github.com/a/app")])

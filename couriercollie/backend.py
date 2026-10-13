@@ -645,6 +645,8 @@ class Backend(QObject, Updating, Account):
                 return
             new = checker.releases_result(shown, repo.installed, repo.managed_by,
                                           repo.source == config.SOURCE_SCANNED, repo.asset_pattern)
+        if d.local_missing and not repo.managed_by:
+            new = checker.Result(checker.NOT_INSTALLED_YET, checker.GONE, new.newest)  # removed outside the app
         old = self._checks.results.get(repo.id)
         if old and (old.status, old.text, old.newest) == (new.status, new.text, new.newest) and not old.not_rechecked:
             return
@@ -1392,6 +1394,15 @@ class Backend(QObject, Updating, Account):
         choices = [f for f in latest["assets"] if f["suits"]] if latest else []
         version = self._version_info(repo, d, shown) if repo and d.state == "ready" else {}
         part_of = self._part_of(repo) if repo else None
+        if repo and d.local_missing and version and not repo.managed_by:
+            # Removed outside the app: not "Up to date", whatever version it last had. A download can be put back
+            # (Install); a clone is left be, as it may only be on a drive that isn't plugged in.
+            clone = _is_clone(repo)
+            was = f"It was at {updater.shown(repo.local_path)}. "
+            version.update(statusKind=STATUS_NOT_INSTALLED, updateAvailable=False, headline=checker.GONE,
+                           versionText="Not found", status=was + ("If it moved, scan again; if you removed it, stop "
+                           "tracking it." if clone else f"Install puts the newest ({version.get('newestText', '')}) "
+                           "back."))
         # A file was picked, but the newest release doesn't have it (renamed or dropped by the project): nothing to
         # update to, whatever the versions say. The page says to choose it again.
         file_missing = bool(pattern) and latest is not None and not latest["hasSelected"]
@@ -1426,7 +1437,8 @@ class Backend(QObject, Updating, Account):
             "versionOnly": latest is not None and not choices,
             "yourFileMissing": file_missing,
             "branchError": d.branch_error,
-            "canUpdate": bool(repo) and _can_update(repo) and not d.local_missing and not follow_disk and not part_of,
+            "canUpdate": bool(repo) and _can_update(repo) and not (d.local_missing and _is_clone(repo))
+                         and not follow_disk and not part_of,
             "followDiskBranch": follow_disk,
             "isClone": bool(repo) and _is_clone(repo),
             # Another person's clone: shown, but its updates are theirs.
