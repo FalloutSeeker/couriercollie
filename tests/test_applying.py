@@ -1,4 +1,5 @@
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -115,3 +116,25 @@ class BuildFolderTest(unittest.TestCase):
             (Path(d) / "install.sh").write_text("git clone https://gitgud.io/aeroshell/smod.git smod\n")
             self.assertTrue(applying.scripts_name(d, ["gitgud.io/aeroshell/smod"]))
             self.assertFalse(applying.scripts_name(d, ["github.com/someone/else"]))
+
+
+class CoveredTest(unittest.TestCase):
+    """What approving a step covers: the script, and the scripts it runs or sources (however they're named)."""
+
+    def test_scripts_it_runs_are_covered(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "scripts" / "lib").mkdir(parents=True)
+            (root / "install.sh").write_text('#!/bin/sh\nDIR="$(dirname "$0")/scripts"\n. "$DIR/lib/common.sh"\n'
+                                             'sh scripts/services.sh\ncat README.md\n')
+            (root / "scripts" / "lib" / "common.sh").write_text("echo common\n")
+            (root / "scripts" / "services.sh").write_text("#!/bin/sh\n./scripts/helper\n")
+            (root / "scripts" / "helper").write_text("#!/bin/sh\necho hi\n")
+            (root / "README.md").write_text("# not a script\n")
+            subprocess.run(["git", "init", "-q", folder], check=True)
+            subprocess.run(["git", "-C", folder, "add", "."], check=True)
+            named = {str(f.relative_to(root.resolve())) for f in applying.named_files(folder, "/bin/sh ./install.sh")}
+            self.assertEqual(named, {"install.sh", "scripts/lib/common.sh", "scripts/services.sh", "scripts/helper"})
+            before = applying.fingerprint(folder, "/bin/sh ./install.sh")
+            (root / "scripts" / "helper").write_text("#!/bin/sh\nrm -rf ~\n")  # a pulled change, two scripts down
+            self.assertNotEqual(applying.fingerprint(folder, "/bin/sh ./install.sh"), before)

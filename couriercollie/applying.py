@@ -117,9 +117,69 @@ _IMPLIED = {
 }
 
 
+# A word in a script that may name another file it runs: "lib/common.sh", "./install-services.sh", or
+# "$SCRIPT_DIR/install-services.sh" (each tail of it is tried: "install-services.sh").
+_PATH_WORD = re.compile(r"[\w.+-]*(?:/[\w.+-]+)+|[\w.+-]+\.(?:sh|bash|zsh|py|pl|rb)\b")
+_SCRIPT_SUFFIXES = (".sh", ".bash", ".zsh", ".py", ".pl", ".rb")
+NAMED_MAX = 50  # files followed from one step, at most
+
+
+def _is_script(file: Path) -> bool:
+    if file.suffix in _SCRIPT_SUFFIXES:
+        return True
+    try:
+        with file.open("rb") as f:
+            return f.read(2) == b"#!"
+    except OSError:
+        return False
+
+
+def _usable(file: Path, root: Path) -> bool:
+    try:
+        return file.is_relative_to(root) and file.is_file() and file.stat().st_size <= FILE_MAX_BYTES
+    except OSError:
+        return False
+
+
+def _tracked(root: Path) -> list[str]:
+    """The clone's files, as git tracks them (relative paths)."""
+    try:
+        out = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], capture_output=True, timeout=15)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    return [p for p in out.stdout.decode(errors="replace").split("\0") if p] if out.returncode == 0 else []
+
+
+def _scripts_it_runs(file: Path, root: Path, tracked: list[str]) -> list[Path]:
+    """The clone's other scripts this file names: those it runs or sources (and whatever else it names that's a
+    script: following too many costs only a question too many, after an update that changes one). A name behind a
+    variable ("$DIR/lib/common.sh") is found by how it ends, among the clone's files."""
+    try:
+        text = file.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    found = []
+    for word in sorted(set(_PATH_WORD.findall(text))):
+        parts = word.split("/")
+        tails = [t for i in range(len(parts)) if (t := "/".join(parts[i:]))]
+        here = next((c for t in tails for b in (file.parent, root)
+                     if _usable(c := (b / t).resolve(), root) and _is_script(c)), None)
+        if here:
+            found.append(here)
+            continue
+        for tail in tails:  # the longest ending that names any of the clone's files
+            ends = [c for t in tracked if t == tail or t.endswith("/" + tail)
+                    if _usable(c := (root / t).resolve(), root) and _is_script(c)]
+            if ends:
+                found.extend(ends)
+                break
+    return found
+
+
 def named_files(path: str, command: str) -> list[Path]:
-    """The clone's files the command names (a script), and those the tools it runs read without
-    being told (make's Makefile): what approving it covers."""
+    """What approving the command covers: the clone's files it names (a script), those the tools it runs read
+    without being told (make's Makefile), and the scripts those run or source in turn. A change to any of them is
+    shown before the step runs again."""
     try:
         words = shlex.split(command)
     except ValueError:
@@ -130,12 +190,13 @@ def named_files(path: str, command: str) -> list[Path]:
         if word.startswith("-"):
             continue
         file = (root / word).resolve()
-        try:
-            if file.is_relative_to(root) and file.is_file() and file.stat().st_size <= FILE_MAX_BYTES \
-                    and file not in files:
-                files.append(file)
-        except OSError:
-            continue
+        if _usable(file, root) and file not in files:
+            files.append(file)
+    tracked = _tracked(root)
+    for file in files:  # (grows as it goes: what those run, in turn)
+        for found in _scripts_it_runs(file, root, tracked):
+            if found not in files and len(files) < NAMED_MAX:
+                files.append(found)
     return files
 
 
