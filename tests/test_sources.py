@@ -367,3 +367,21 @@ class NewestReleasesTest(unittest.TestCase):
 
     def test_a_project_that_only_publishes_under_such_a_name_keeps_it(self):
         self.assertEqual(self.newest("continuous"), ["continuous"])
+
+
+class WrongShapeTest(unittest.TestCase):
+    """An answer of the wrong shape (a proxy's, a site's bug) is one that can't be read: never "no releases" or
+    "nothing new", which would be said as if true."""
+
+    def test_not_read_as_empty(self):
+        for parse in (sources.parse_github_releases, lambda d: sources.parse_gitlab_releases("gitlab.com", "a/b", d),
+                      sources.parse_github_compare, sources.parse_gitlab_compare):
+            for answer in ({}, {"message": "Server Error"}, None, "x"):
+                with self.subTest(parse=parse, answer=answer), self.assertRaises(sources.BadAnswer):
+                    parse(answer)
+
+    def test_the_real_empty_answers_still_are(self):
+        self.assertEqual(sources.parse_github_releases([]), [])
+        self.assertEqual(sources.parse_gitlab_compare({"commits": []}), [])
+        self.assertEqual(sources.parse_github_compare({"status": "identical", "commits": [], "ahead_by": 0}).relation,
+                         sources.SAME)

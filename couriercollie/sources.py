@@ -427,6 +427,12 @@ def _parse_date(text: str | None) -> datetime | None:
         return None
 
 
+def _must_be(value, kind) -> None:
+    """For an answer of the wrong shape, which would otherwise read as empty (no releases, nothing new)."""
+    if not isinstance(value, kind):
+        raise TypeError(f"expected {kind.__name__}, got {type(value).__name__}")
+
+
 def _readable(parse):
     """For a function reading a site's answer: an answer of the wrong shape (a proxy's or captive portal's page, a
     site's bug) raises BadAnswer, which is said as is, rather than an error that would stop a whole check."""
@@ -472,6 +478,7 @@ def parse_github_project(data: dict) -> ProjectInfo:
 @_readable
 def parse_github_releases(data: list) -> list[Release]:
     """GitHub's release list, newest first, without drafts (unpublished: only the project's maintainers see them)."""
+    _must_be(data, list)  # anything else isn't "no releases": it's an answer that can't be read
     releases = []
     for r in data:
         if r.get("draft"):
@@ -522,6 +529,7 @@ def parse_gitlab_project(domain: str, data: dict) -> ProjectInfo:
 def parse_gitlab_releases(domain: str, path: str, data: list) -> list[Release]:
     """A GitLab site's release list. Its files are links the project added to each release, so they can point
     anywhere: the site's own uploads, its package registry, or another site."""
+    _must_be(data, list)
     releases = []
     for r in data:
         links = (r.get("assets") or {}).get("links") or []
@@ -618,6 +626,7 @@ def _first_line(text: str | None) -> str:
 
 @_readable
 def parse_github_compare(data: dict) -> Comparison:
+    _must_be(data.get("commits"), list)  # (not "nothing new": an answer that can't be read)
     commits = [Commit(c["sha"], _first_line(c["commit"].get("message"))) for c in data.get("commits", [])]
     # GitHub describes the branch relative to yours, so its "ahead" means you're behind.
     relation = {"identical": SAME, "ahead": BEHIND, "behind": AHEAD, "diverged": DIVERGED}.get(data.get("status"),
@@ -627,6 +636,7 @@ def parse_github_compare(data: dict) -> Comparison:
 
 @_readable
 def parse_gitlab_compare(data: dict) -> list[Commit]:
+    _must_be(data.get("commits"), list)
     return [Commit(c["id"], c.get("title") or "") for c in data.get("commits", [])][::-1]
 
 
