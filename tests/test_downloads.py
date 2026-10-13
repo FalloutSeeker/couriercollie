@@ -152,7 +152,7 @@ class InstallClickedTest(AppImageCase):
     """Install / Update clicked in the window for a repo that follows an AppImage."""
 
     def setUp(self):
-        super().setUp()
+        AppImageCase.setUp(self)
         from couriercollie.backend import Backend
 
         self.path = Path(self.dir.name) / "repos.toml"
@@ -169,7 +169,7 @@ class InstallClickedTest(AppImageCase):
     def tearDown(self):
         sources.releases = self.saved
         self.backend.shutdown()
-        super().tearDown()
+        AppImageCase.tearDown(self)
 
     @staticmethod
     def _attempt(work):
@@ -222,6 +222,29 @@ def _archive(kind: str, files: dict[str, tuple[bytes, int]]) -> bytes:
 
 
 ELF = b"\x7fELF" + b"\x00" * 60
+
+
+class TestVersionsTest(AppImageCase):
+    """Update and test versions (pre-releases): installed only when they're shown, as the check and page offer them."""
+
+    setUp, tearDown = InstallClickedTest.setUp, InstallClickedTest.tearDown
+    _attempt = staticmethod(InstallClickedTest._attempt)
+
+    def test_test_versions_only_when_shown(self):
+        beta = Release("v3.0-beta", "v3.0-beta", None, True, "", "", [self.asset()])
+        full = Release("v2.0", "v2.0", None, False, "", "", [self.asset()])
+        sources.releases = lambda ref, host, **_: [beta, full]
+        self.backend.updateRepo(self.id)
+        self.assertEqual(config.load(self.path).repos[0].installed, "v2.0")
+        self.backend.setPrereleases(self.id, True)  # Show test versions: Update installs the newest one
+        self.backend.updateRepo(self.id)
+        self.assertEqual(config.load(self.path).repos[0].installed, "v3.0-beta")
+
+    def test_only_test_versions_and_they_arent_shown(self):
+        sources.releases = lambda ref, host, **_: [Release("v3.0-beta", "v3.0-beta", None, True, "", "", [self.asset()])]
+        self.backend.updateRepo(self.id)
+        self.assertIn("Show test versions", self.backend.details(self.id)["updateNote"])
+        self.assertEqual(config.load(self.path).repos[0].installed, "-")
 
 
 class ProgramTest(AppImageCase):

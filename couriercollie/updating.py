@@ -39,11 +39,18 @@ if TYPE_CHECKING:
 
 
 def _newest_version(repo: TrackedRepo, d: Details) -> str:
-    """The newest version of what the repo follows: the newest full release, or the latest commit on the branch."""
+    """The newest version of what the repo follows: the newest release (a test version too, if they're shown), or
+    the latest commit on the branch."""
     if repo.follow == FOLLOW_BRANCH:
         return _head(repo, d)
-    release = next((r for r in d.releases if not r.prerelease), d.releases[0] if d.releases else None)
+    release = _newest_release(repo.prereleases, d.releases)
     return release.tag if release else ""
+
+
+def _newest_release(prereleases: bool, releases: list):
+    """The release Update installs: the newest, leaving out test versions unless they're shown (as the check and the
+    page do). None if there's none."""
+    return next((r for r in releases if prereleases or not r.prerelease), None)
 
 
 def _head(repo: TrackedRepo, d: Details) -> str:
@@ -257,6 +264,7 @@ class Updating:
         hints = [RepoRef.from_id(repo.id).name, repo.name, repo.asset_pattern.split("-")[0].split("*")[0]]
         ref, host, pattern, name, icon = RepoRef.from_id(repo.id), repo.host, repo.asset_pattern, repo.name, repo.icon
         known = d.releases if d and d.state == "ready" else None
+        prereleases = repo.prereleases
         here = Path(repo.local_path) if repo.source == config.SOURCE_SCANNED and repo.local_path else None
         old = here if here and here.is_file() and not (is_program or is_package or is_flatpak) else None
         folder = old.parent if old else updater.apps_dir()
@@ -279,9 +287,10 @@ class Updating:
             """Returns (the release's tag, where it now is, whether it was checked against a published checksum,
             what was done, in a sentence)."""
             rels = known if known is not None else sources.releases(ref, host)
-            release = next((r for r in rels if not r.prerelease), rels[0] if rels else None)
+            release = _newest_release(prereleases, rels)
             if not release:
-                raise updater.UpdateError("This project has no releases to install.")
+                raise updater.UpdateError("Only test versions so far: turn on Show test versions to install one."
+                                          if rels else "This project has no releases to install.")
             chosen = assets.pick(pattern, [a.name for a in release.assets])
             asset = next((a for a in release.assets if a.name == chosen), None)
             if not asset:
