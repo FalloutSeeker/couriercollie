@@ -235,7 +235,7 @@ h.run([
     (600, shot("10-new-category")),
     (0, lambda: h.call("newCategoryDialog", "close")),
     (300, lambda: h.win.openSettings()),
-    (600, lambda: settings_window().setHeight(1250)),  # all of it at once
+    (600, lambda: settings_window().setHeight(1350)),  # all of it at once
     (900, shot("11-settings", settings_window)),
     (0, signing_in),
     (0, scroll_settings("githubUserCode")),

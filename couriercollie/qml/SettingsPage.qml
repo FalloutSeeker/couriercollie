@@ -252,6 +252,22 @@ Kirigami.ScrollablePage {
             icon.name: "edit-reset"
             onClicked: restoreDialog.open()
         }
+
+        // ---- Supporting couriercollie ----
+
+        Kirigami.Separator {
+            Kirigami.FormData.isSection: true
+            Kirigami.FormData.label: "Support"
+        }
+
+        QQC2.Button {
+            objectName: "donate"
+            Kirigami.FormData.label: "Like couriercollie?"
+            text: "Donate on Ko-fi"
+            // The app's own heart: a theme without a donate icon would show its "help" icon (a question mark).
+            icon.source: Qt.resolvedUrl(`../icons/${Kirigami.ColorUtils.brightnessForColor(Kirigami.Theme.backgroundColor) === Kirigami.ColorUtils.Dark ? "dark" : "light"}/help-donate.svg`)
+            onClicked: Qt.openUrlExternally("https://ko-fi.com/couriercollie")
+        }
     }
 
     Kirigami.PromptDialog {
