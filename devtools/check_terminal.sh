@@ -4,7 +4,7 @@
 # set up as each situation needs (a few commits behind; owned by another user; a commit of its own; a file changed).
 # GitHub is asked through devtools/github_relay.py, with your gh login, which stays here.
 #
-#     devtools/check_terminal.sh [fedora|ubuntu]
+#     devtools/check_terminal.sh [fedora|opensuse|ubuntu|debian|arch …]
 set -eu
 cd "$(dirname "$0")/.."
 work=$(mktemp -d)
@@ -14,9 +14,12 @@ relay=$!
 trap 'kill $relay; podman unshare rm -rf "$work"' EXIT
 printf "tmux-plugins/tpm\nzsh-users/zsh-autosuggestions\ntpope/vim-fugitive\njunegunn/vim-plug\nFalloutSeeker/couriercollie\n" > "$work/allow"
 git ls-files -z | xargs -0 tar -cf "$work/app.tar"
-distros=${*:-fedora ubuntu}
-devtools/build_package.sh $(echo "$distros" | tr ' ' '\n' | sed 's/^ubuntu$/debian/' | sort -u) >/dev/null
-cp dist/* "$work/"
+distros=${*:-fedora opensuse ubuntu debian arch}
+# PREBUILT=folder: packages built already (say, from a clone, while another check builds here).
+if [ -n "${PREBUILT:-}" ]; then cp "$PREBUILT"/* "$work/"; else
+    devtools/build_package.sh $(echo "$distros" | tr ' ' '\n' | sed 's/^ubuntu$/debian/' | sort -u) >/dev/null
+    cp dist/* "$work/"
+fi
 chmod -R a+rX "$work"
 version=$(python3 -c 'import couriercollie; print(couriercollie.__version__)')
 
@@ -47,15 +50,24 @@ run() {  # distro, image, install command, admin group
         su tester -c 'cd ~ && env GITHUB_RELAY=http://127.0.0.1:$port XDG_RUNTIME_DIR=/tmp/rt-tester \
             GIT_COMMITTER_NAME=tester GIT_COMMITTER_EMAIL=tester@example.com GIT_AUTHOR_NAME=tester \
             GIT_AUTHOR_EMAIL=tester@example.com sh -c \"mkdir -p -m 700 /tmp/rt-tester; \
-            python3 /app/devtools/terminal_inner.py\"'"
+            python3 /app/devtools/terminal_inner.py\"'" || echo "=== $1: exit $?"
 }
 
+wheel="groupadd -f wheel && mkdir -p /etc/sudoers.d && printf '%%wheel ALL=(ALL:ALL) ALL\\nDefaults !targetpw\\n' > /etc/sudoers.d/wheel && chmod 440 /etc/sudoers.d/wheel"
 for distro in $distros; do
     case $distro in
         fedora) run fedora registry.fedoraproject.org/fedora:44 \
             "dnf install -y -q /work/couriercollie-$version-1.fc*.noarch.rpm git sudo util-linux-script passwd" wheel ;;
         ubuntu) run ubuntu docker.io/library/ubuntu:26.04 \
             "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /work/couriercollie_${version}_all.deb git sudo ca-certificates" sudo ;;
+        debian) run debian docker.io/library/debian:13 \
+            "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /work/couriercollie_${version}_all.deb git sudo ca-certificates" sudo ;;
+        # As their users set it up: Arch's sudoers ships with the wheel line commented out, and openSUSE's asks for
+        # root's password (targetpw) rather than your own.
+        opensuse) run opensuse registry.opensuse.org/opensuse/tumbleweed:latest \
+            "zypper -q --non-interactive install --allow-unsigned-rpm /work/couriercollie-$version-1.noarch.rpm git sudo util-linux shadow && $wheel" wheel ;;
+        arch) run arch docker.io/library/archlinux:latest \
+            "pacman -Sy --noconfirm && pacman -U --noconfirm /work/couriercollie-$version-1-any.pkg.tar.zst && pacman -S --noconfirm --needed git sudo util-linux && $wheel" wheel ;;
     esac
 done
 grep -v "^200 \|^304 \|relay on" "$work/relay.log" || true
