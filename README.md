@@ -1,12 +1,14 @@
 # couriercollie
 
+<p align="center">
+  <img src="docs/logo.png" alt="couriercollie logo: a collie carrying a parcel" width="170">
+</p>
+
 ⚠️ **Beta:** couriercollie still needs testing and feedback from more users. Please report problems with Send Feedback (in Settings) or as a [GitHub issue](https://github.com/FalloutSeeker/couriercollie/issues).
 
 Inspired by [Obtainium](https://github.com/ImranR98/Obtainium), keep the software you got from GitHub and GitLab up to date, in one simple window.
 
-<p align="center">
-  <img src="docs/logo.png" alt="couriercollie logo: a collie carrying a parcel" width="170">
-</p>
+
 
 ![couriercollie showing an update for LocalSend](docs/screenshot.png)
 
