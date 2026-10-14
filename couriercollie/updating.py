@@ -65,7 +65,9 @@ def _is_clone(repo: TrackedRepo) -> bool:
     if repo.source != config.SOURCE_SCANNED or repo.kind != assets.KIND_GIT or not repo.local_path:
         return False
     path = Path(repo.local_path)
-    return not path.exists() or (path / ".git").exists()
+    if not path.exists():  # (a clone, unless what's gone was a download: a file, or a package's name)
+        return path.is_absolute() and not repo.asset_pattern and path.suffix.lower() != ".appimage"
+    return (path / ".git").exists()
 
 
 def _is_appimage(repo: TrackedRepo) -> bool:

@@ -1316,6 +1316,8 @@ class IsCloneTest(unittest.TestCase):
             self.assertFalse(_is_clone(repo(program)))
             self.assertTrue(_is_clone(repo(clone)))
             self.assertTrue(_is_clone(repo(Path(d) / "gone")))  # (its page says it's gone)
+            self.assertFalse(_is_clone(repo(Path(d) / "Gone-1.0-x86_64.AppImage")))  # (a download)
+            self.assertFalse(_is_clone(repo("RPM package \u201ctool\u201d")))
 
 
 class ReleaseHoldingTest(unittest.TestCase):
@@ -1330,6 +1332,9 @@ class ReleaseHoldingTest(unittest.TestCase):
                            local_path="/x/App-1.0.0-x86_64.AppImage")
         self.assertEqual(_release_holding(repo, d), "v2.0.0")  # (yours, among those that carry it)
         repo.installed = "v0.9"
-        self.assertEqual(_release_holding(repo, d), "v2.0.0")  # (else the newest)
+        self.assertEqual(_release_holding(repo, d), "")  # (a name several carry: not which one)
+        d.releases.append(release("v0.5", "App-0.5-x86_64.AppImage"))
+        repo.local_path = "/x/App-0.5-x86_64.AppImage"
+        self.assertEqual(_release_holding(repo, d), "v0.5")  # (one release's own name)
         repo.local_path = "/x/Other.AppImage"
         self.assertEqual(_release_holding(repo, d), "")

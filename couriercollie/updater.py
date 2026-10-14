@@ -684,7 +684,7 @@ def _unpack(archive: Path, into: Path, name: str = "program", shown_as: str = ""
         shutil.copyfile(archive, into / name)
         (into / name).chmod(0o755)
         return
-    if head.lstrip()[:1] == b"<":
+    if head.lstrip()[:14].lower().startswith((b"<!doctype", b"<html", b"<?xml")) and not _is_tar(archive):
         raise UpdateError(f"The site sent a web page instead of {shown_as}, so it wasn\u2019t installed. Try again "
                           "later.")
     try:
@@ -699,11 +699,11 @@ def _unpack(archive: Path, into: Path, name: str = "program", shown_as: str = ""
                         raise UpdateError(f"The archive tries to put {m.filename} outside its folder, so it "
                                           "wasn\u2019t unpacked.")
                     z.extract(m, into)
-                    mode = (m.external_attr >> 16) & 0o755
-                    if not m.is_dir() and _starts_like_a_program(target):
-                        mode |= 0o755  # (a zip made elsewhere may keep no permissions: a program still runs)
+                    mode = (m.external_attr >> 16) & 0o755 if m.create_system == 3 else 0  # (3: made on Unix)
                     if mode and not m.is_dir():
                         target.chmod(mode)
+                    elif not m.is_dir() and _starts_like_a_program(target):
+                        target.chmod(0o755)  # (a zip made on Windows keeps no permissions: a program still runs)
             return
         if not tarfile.is_tarfile(archive) and (opener := _compressed(archive)):
             # One file compressed on its own (rust-analyzer's "…-linux-gnu.gz"): a program, if that's what it holds.
@@ -729,8 +729,14 @@ def _unpack(archive: Path, into: Path, name: str = "program", shown_as: str = ""
     except tarfile.FilterError as e:
         raise UpdateError(f"The archive has something unsafe in it ({e}), so it wasn\u2019t unpacked.") from e
     except tarfile.ReadError as e:
+        if "unexpected end" in str(e) or "truncated" in str(e):
+            raise UpdateError(damaged) from e
         raise UpdateError(f"{shown_as} isn\u2019t an archive that can be unpacked, so it wasn\u2019t "
                           "installed.") from e
+    except RuntimeError as e:  # (zipfile: "… is encrypted, password required for extraction")
+        raise UpdateError(f"{shown_as} is locked with a password, so it couldn\u2019t be unpacked.") from e
+    except NotImplementedError as e:  # (zipfile: a way of compressing it doesn't know)
+        raise UpdateError(f"{shown_as} is packed in a way that can\u2019t be unpacked here.") from e
     except OSError as e:
         if e.errno == errno.ENOSPC:
             raise UpdateError(f"The disk is full, so {shown_as} couldn\u2019t be unpacked. Free some space, then "
@@ -740,6 +746,13 @@ def _unpack(archive: Path, into: Path, name: str = "program", shown_as: str = ""
         raise UpdateError(f"{shown_as} couldn\u2019t be unpacked: {e.strerror or e}") from e
     except (tarfile.TarError, zipfile.BadZipFile, EOFError, zlib.error) as e:
         raise UpdateError(damaged) from e
+
+
+def _is_tar(path: Path) -> bool:
+    try:
+        return tarfile.is_tarfile(path)
+    except (OSError, EOFError, tarfile.TarError):
+        return False
 
 
 def _starts_like_a_program(path: Path) -> bool:
@@ -767,6 +780,19 @@ def choose_program(folder: Path, wanted: str, hints: list[str]) -> Path:
     """The program to run: the one called `wanted` (chosen before, or the command already installed); the only one;
     or the one named like the project. Otherwise SeveralPrograms."""
     found = programs_in(folder)
+    if not found:
+        # None marked runnable (an archive made without permissions): its Linux programs, all the same. The one
+        # chosen is made runnable.
+        found = sorted((p for p in folder.rglob("*") if not p.is_symlink() and p.is_file() and ".so" not in p.name
+                        and _starts_like_a_program(p)),
+                       key=lambda p: (len(p.relative_to(folder).parts), str(p)))
+        chosen = _choose(found, wanted, hints)
+        chosen.chmod(0o755)
+        return chosen
+    return _choose(found, wanted, hints)
+
+
+def _choose(found: list[Path], wanted: str, hints: list[str]) -> Path:
     if not found:
         raise UpdateError("There’s no program for Linux in the archive, so there’s nothing to run.")
     if wanted:
@@ -830,7 +856,7 @@ def install_program(repo_id: str, tag: str, asset, others: list, wanted: str = "
         new_link.symlink_to(version / program.relative_to(unpacking))
         os.replace(new_link, link)  # in one step: the command always works, old or new
         if replacing and replacing.name != link.name and replacing.is_symlink() \
-                and (was := replacing.resolve()).is_relative_to(home.resolve()):
+                and (was := replacing.resolve()).is_relative_to(home.resolve()) and was != home.resolve():
             replacing.unlink()  # (the old name's link, into the old version: both go)
             before = was
             if (folder := home / was.relative_to(home.resolve()).parts[0]) != version:

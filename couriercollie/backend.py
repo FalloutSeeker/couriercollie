@@ -214,12 +214,14 @@ def _other_systems_note(d: Details) -> str:
 def _release_holding(repo: TrackedRepo, d: Details) -> str:
     """For an AppImage on disk: the release whose file it is, by its exact name ("" if none says). Its name's version
     can be something else ("Tool-ubuntu22.04-x86_64.AppImage", or a file not renamed for the release): the tag it
-    came with is what it is. Yours, if it's among them (a release may carry a file of an earlier one)."""
+    came with is what it is. Yours, if it's among them (a release may carry a file of an earlier one); else only a
+    release that's the one with that name."""
     if d.state != "ready" or not repo.local_path.lower().endswith(".appimage"):
         return ""
     name = Path(repo.local_path).name
     holders = [r.tag for r in d.releases if any(a.name == name for a in r.assets)]
-    return repo.installed if repo.installed in holders else holders[0] if holders else ""
+    # (A name every release uses, "nvim-linux-x86_64.appimage", says nothing: only one that's one release's.)
+    return repo.installed if repo.installed in holders else holders[0] if len(holders) == 1 else ""
 
 
 def _match_tag(repo: TrackedRepo, d: Details) -> bool:
@@ -1449,7 +1451,7 @@ class Backend(QObject, Updating, Account):
                         repo.local_path, managed_changed = here, True
                     repo.managed_by, repo.homepage = managed_by, website
                     # A scanned repo's version is whatever's on disk now (e.g. after a `git pull` outside the app).
-                    if on_disk and (tag := _release_holding(repo, self._details[repo_id])):
+                    if on_disk and on_disk[1] and (tag := _release_holding(repo, self._details[repo_id])):
                         on_disk = (tag, *on_disk[1:])
                     elif on_disk and not moved and here.lower().endswith(".appimage") \
                             and repo.installed not in ("", NOT_INSTALLED):

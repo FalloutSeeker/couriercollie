@@ -820,16 +820,26 @@ class CompressedProgramUnpackTest(unittest.TestCase):
         import io
         import zipfile
 
-        data = io.BytesIO()
-        with zipfile.ZipFile(data, "w") as z:
-            for name in ("tool/tool", "tool/README"):
-                info = zipfile.ZipInfo(name)
-                info.external_attr = 0o644 << 16
-                z.writestr(info, ELF if name == "tool/tool" else b"read me")
-        (zipped := self.root / "tool.zip").write_bytes(data.getvalue())
-        updater._unpack(zipped, self.root / "out")
-        self.assertEqual([p.name for p in updater.programs_in(self.root / "out")], ["tool"])
-        self.assertFalse(os.access(self.root / "out/tool/README", os.X_OK))
+        def zipped(name, files):
+            data = io.BytesIO()
+            with zipfile.ZipFile(data, "w") as z:
+                for path, (content, mode, system) in files.items():
+                    info = zipfile.ZipInfo(path)
+                    info.create_system, info.external_attr = system, mode << 16
+                    z.writestr(info, content)
+            (file := self.root / name).write_bytes(data.getvalue())
+            return file
+        # Made on Windows (no Unix permissions): its program runs.
+        updater._unpack(zipped("win.zip", {"tool/tool": (ELF, 0, 0), "tool/README": (b"x", 0, 0)}), self.root / "win")
+        self.assertEqual([p.name for p in updater.programs_in(self.root / "win")], ["tool"])
+        self.assertFalse(os.access(self.root / "win/tool/README", os.X_OK))
+        # Made on Unix: its permissions say which is the program (not a plugin beside it, also a Linux file).
+        updater._unpack(zipped("unix.zip", {"fd/fd": (ELF, 0o755, 3), "fd/lib/helper-plugin": (ELF, 0o644, 3)}),
+                        self.root / "unix")
+        self.assertEqual(updater.choose_program(self.root / "unix", "", []).name, "fd")
+        # None marked runnable at all: its Linux program, made runnable.
+        updater._unpack(zipped("none.zip", {"t/t": (ELF, 0o644, 3)}), self.root / "none")
+        self.assertTrue(os.access(updater.choose_program(self.root / "none", "", []), os.X_OK))
 
     def test_gzip_and_xz_holding_a_program(self):
         import gzip
