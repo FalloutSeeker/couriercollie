@@ -211,6 +211,17 @@ def _other_systems_note(d: Details) -> str:
     return f"Not supported on this computer: {builds}. Only its versions are tracked."
 
 
+def _release_holding(repo: TrackedRepo, d: Details) -> str:
+    """For an AppImage on disk: the release whose file it is, by its exact name ("" if none says). Its name's version
+    can be something else ("Tool-ubuntu22.04-x86_64.AppImage", or a file not renamed for the release): the tag it
+    came with is what it is. Yours, if it's among them (a release may carry a file of an earlier one)."""
+    if d.state != "ready" or not repo.local_path.lower().endswith(".appimage"):
+        return ""
+    name = Path(repo.local_path).name
+    holders = [r.tag for r in d.releases if any(a.name == name for a in r.assets)]
+    return repo.installed if repo.installed in holders else holders[0] if holders else ""
+
+
 def _match_tag(repo: TrackedRepo, d: Details) -> bool:
     """A version found on disk ("1.18.2", from an RPM or AppImage) as the release's tag ("v1.18.2")."""
     if repo.follow != FOLLOW_RELEASES or not repo.installed or repo.installed == NOT_INSTALLED or d.state != "ready":
@@ -1425,10 +1436,16 @@ class Backend(QObject, Updating, Account):
                 here, on_disk, managed_by, website, self._details[repo_id] = result
                 if repo := self._config.find(repo_id):
                     managed_changed = managed_by != repo.managed_by or website != repo.homepage
-                    if here != repo.local_path:  # found beside where it was: followed there from now on
+                    moved = here != repo.local_path
+                    if moved:  # found beside where it was: followed there from now on
                         repo.local_path, managed_changed = here, True
                     repo.managed_by, repo.homepage = managed_by, website
                     # A scanned repo's version is whatever's on disk now (e.g. after a `git pull` outside the app).
+                    if on_disk and (tag := _release_holding(repo, self._details[repo_id])):
+                        on_disk = (tag, *on_disk[1:])
+                    elif on_disk and not moved and here.lower().endswith(".appimage") \
+                            and repo.installed not in ("", NOT_INSTALLED):
+                        on_disk = (repo.installed, *on_disk[1:])  # (the same file: the version it came with)
                     from_disk = bool(on_disk and on_disk[0] and on_disk[0] != repo.installed)
                     if from_disk:
                         repo.installed = on_disk[0]

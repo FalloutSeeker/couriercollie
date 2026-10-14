@@ -126,6 +126,10 @@ def _yours(repo: TrackedRepo) -> tuple[str, bool]:
     or removed, outside the app)."""
     if repo.source == SOURCE_SCANNED and repo.local_path:
         here = scan.locate(repo.local_path, repo.asset_pattern)  # (replaced by hand with a newer one, say)
+        if here == repo.local_path and here.lower().endswith(".appimage") and repo.installed \
+                and repo.installed != NOT_INSTALLED and os.path.isfile(here):
+            # The same AppImage: the version it came with (its name may say another: "Tool-ubuntu22.04-…").
+            return repo.installed, True
         version, present = scan.version_on_disk(here, releases=repo.follow != FOLLOW_BRANCH)
         return version or repo.installed, present
     return repo.installed, True

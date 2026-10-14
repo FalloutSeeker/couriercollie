@@ -328,3 +328,19 @@ class SavedResultsTest(unittest.TestCase):
             state = checker.load_state(path)
         self.assertEqual(list(state.results), ["good"])
         self.assertEqual(state.results["good"].newest, "v2")
+
+
+class AppImageVersionTest(unittest.TestCase):
+    def test_the_same_file_keeps_the_version_it_came_with(self):
+        # Installed from v3.0.0 as "Tool-ubuntu22.04-x86_64.AppImage": its name says 22.04, which isn't its version.
+        with tempfile.TemporaryDirectory() as d:
+            file = Path(d) / "Tool-ubuntu22.04-x86_64.AppImage"
+            file.write_text("x")
+            repo = TrackedRepo(id="github.com/a/tool", name="tool", url="", host="github", kind="AppImage",
+                               asset_pattern="Tool-ubuntu22.04-x86_64.AppImage", installed="v3.0.0",
+                               source="scanned", local_path=str(file))
+            self.assertEqual(checker._yours(repo), ("v3.0.0", True))
+            other = Path(d) / "Tool-4.0.0-x86_64.AppImage"  # replaced outside the app: read from its name
+            file.rename(other)
+            repo.asset_pattern = "Tool-*-x86_64.AppImage"
+            self.assertEqual(checker._yours(repo)[0], "4.0.0")

@@ -1316,3 +1316,20 @@ class IsCloneTest(unittest.TestCase):
             self.assertFalse(_is_clone(repo(program)))
             self.assertTrue(_is_clone(repo(clone)))
             self.assertTrue(_is_clone(repo(Path(d) / "gone")))  # (its page says it's gone)
+
+
+class ReleaseHoldingTest(unittest.TestCase):
+    def test_an_appimage_is_the_release_whose_file_it_is(self):
+        from couriercollie.backend import _release_holding
+
+        def release(tag, *names):
+            return sources.Release(tag, tag, None, False, "", "", [sources.Asset(n, "https://x/" + n) for n in names])
+        d = Details(state="ready", releases=[release("v2.0.0", "App-1.0.0-x86_64.AppImage"),
+                                             release("v1.0.0", "App-1.0.0-x86_64.AppImage")])
+        repo = TrackedRepo(id="github.com/a/app", name="app", url="", host="github", installed="v2.0.0",
+                           local_path="/x/App-1.0.0-x86_64.AppImage")
+        self.assertEqual(_release_holding(repo, d), "v2.0.0")  # (yours, among those that carry it)
+        repo.installed = "v0.9"
+        self.assertEqual(_release_holding(repo, d), "v2.0.0")  # (else the newest)
+        repo.local_path = "/x/Other.AppImage"
+        self.assertEqual(_release_holding(repo, d), "")
