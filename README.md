@@ -2,6 +2,13 @@
 
 Inspired by [Obtainium](https://github.com/ImranR98/Obtainium), keep the software you got from GitHub and GitLab up to date, in one simple window.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.png">
+    <img src="docs/logo.png" alt="couriercollie logo: a collie carrying a parcel" width="170">
+  </picture>
+</p>
+
 ![couriercollie showing an update for LocalSend](docs/screenshot.png)
 
 AppImages, programs from release archives, downloaded `.rpm` or `.deb` files and git clones never get updates from
