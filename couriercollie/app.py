@@ -175,10 +175,10 @@ def main() -> int:
     server.listen(path)
 
     code = app.exec()
-    tray.put_away()
-    # (Out of sight: what's updating finishes, and is recorded. Still listening meanwhile, so a second launch doesn't
-    # start another copy beside it, working on the same files.)
-    backend.finish_updates()
+    # No longer answering: a launch meanwhile waits for this copy to be gone (integration.claim_running), then opens
+    # its window; a check does its own.
     server.close()
+    tray.put_away()
+    backend.finish_updates()  # (out of sight: what's updating finishes, and is recorded)
     backend.shutdown()
     return code
