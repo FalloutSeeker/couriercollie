@@ -1561,7 +1561,9 @@ class Backend(QObject, Updating, Account):
             # Removed outside the app: not "Up to date", whatever version it last had. A download can be put back
             # (Install); a clone is left be, as it may only be on a drive that isn't plugged in.
             clone = _is_clone(repo)
-            was = f"It was at {updater.shown(repo.local_path)}. "
+            # (A package or Flatpak's place is its name: 'RPM package “tool”'.)
+            was = f"It was installed as {repo.local_path}. " if packages.from_place(repo.local_path) \
+                or flatpaks.from_place(repo.local_path)[0] else f"It was at {updater.shown(repo.local_path)}. "
             version.update(statusKind=STATUS_NOT_INSTALLED, updateAvailable=False, headline=checker.GONE,
                            versionText="Not found", status=was + ("If it moved, scan again; if you removed it, stop "
                            "tracking it." if clone else f"Install puts the newest ({version.get('newestText', '')}) "
