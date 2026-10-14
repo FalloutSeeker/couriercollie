@@ -443,6 +443,17 @@ def fetch_text(url: str, limit: int = 1024 * 1024) -> str:
         return resp.read(limit).decode("utf-8", "replace")
 
 
+# When the app quits, what's updating is left to finish out of sight, but a download only for this long more: then it
+# stops (nothing is installed yet, so nothing is left half done). A slow server can't keep the app running unseen.
+QUIT_DOWNLOAD_SECONDS = 120
+_quit_by: list[float] = []  # (the time.monotonic() it stops by, once quitting)
+
+
+def quitting() -> None:
+    """The app is quitting: downloads under way get QUIT_DOWNLOAD_SECONDS more."""
+    _quit_by[:] = [time.monotonic() + QUIT_DOWNLOAD_SECONDS]
+
+
 def download(url: str, dest: Path, size: int | None, progress=None) -> str:
     """Downloads `url` to `dest`, returning its SHA-256. `progress(done, total)` is called now and then."""
     if not _secure(url):
@@ -457,7 +468,9 @@ def download(url: str, dest: Path, size: int | None, progress=None) -> str:
     try:
         with urllib.request.urlopen(req, timeout=sources.TIMEOUT) as resp, dest.open("wb") as out:
             total = int(resp.headers.get("Content-Length") or size or 0)
-            while chunk := resp.read(CHUNK):
+            while chunk := resp.read1(CHUNK):  # (what has come, as it comes: a slow download still moves on)
+                if _quit_by and time.monotonic() > _quit_by[0]:
+                    raise UpdateError("The download was stopped: couriercollie was closing, and it took too long.")
                 done += len(chunk)
                 if done > DOWNLOAD_MAX_BYTES:
                     raise UpdateError("The download is too big to be an app; it was stopped.")

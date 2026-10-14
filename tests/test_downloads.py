@@ -95,6 +95,14 @@ class InstallTest(AppImageCase):
             updater.install_appimage(self.asset(NAME, "", "not-an-app.AppImage"), [], self.folder, None)
         self.assertEqual(list(self.folder.iterdir()), [])
 
+    def test_quitting_gives_a_download_only_so_long(self):
+        # (Past the time it had after Quit: stopped, rather than keeping the app running unseen.)
+        self.addCleanup(updater._quit_by.clear)
+        updater._quit_by[:] = [0.0]
+        with self.assertRaisesRegex(updater.UpdateError, "couriercollie was closing"):
+            updater.install_appimage(self.asset(), [], self.folder, None)
+        self.assertEqual(list(self.folder.iterdir()), [])
+
     def test_no_published_checksum_is_said_not_hidden(self):
         self.assertFalse(updater.install_appimage(self.asset(digest=""), [], self.folder, None)[1])
 

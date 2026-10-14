@@ -161,8 +161,10 @@ def main() -> int:
     server.listen(path)
 
     code = app.exec()
-    server.close()
     tray.put_away()
-    backend.finish_updates()  # (out of sight: what's updating finishes, and is recorded)
+    # (Out of sight: what's updating finishes, and is recorded. Still listening meanwhile, so a second launch doesn't
+    # start another copy beside it, working on the same files.)
+    backend.finish_updates()
+    server.close()
     backend.shutdown()
     return code

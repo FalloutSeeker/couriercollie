@@ -473,8 +473,10 @@ class Backend(QObject, Updating, Account):
         """Quitting while something updates (Quit in the tray, or the window closed): it's left to finish first, out of
         sight, so what it did is recorded. Cutting a package manager or a clone short would leave it half done, and the
         work goes on anyway; without this, the app would forget it (an install would still say "Not installed")."""
+        self._quitting = True
         if not self._updating:
             return
+        updater.quitting()  # (a download gets a little longer, not forever)
         loop = QEventLoop()
 
         def over():
@@ -750,6 +752,8 @@ class Backend(QObject, Updating, Account):
     @Slot(str)
     def handleRequest(self, message):
         """From integration.tell_running_app: "show" (a second launch) or "check" (the background timer)."""
+        if getattr(self, "_quitting", False):
+            return  # (finishing what was updating, out of sight, before quitting)
         if message == "show":
             self.activateRequested.emit()
         elif message == "check":
