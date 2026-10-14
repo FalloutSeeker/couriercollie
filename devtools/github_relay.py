@@ -18,6 +18,7 @@ import subprocess
 import time
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -50,6 +51,20 @@ def chaos_rate() -> float:
 # Answers that aren't what was asked for: JSON of the wrong shape, an HTML page (a captive portal), nothing at all.
 WRONG = [b"{}", b'[1, "a", null, {"tag_name": 5, "assets": "x"}]', b'{"message": "chaos"}', b"null",
          b"<html><body>Please log in to the hotel Wi-Fi</body></html>", b"", b'[{"name": null, "commit": {}}]']
+
+
+class _GitHubRedirects(urllib.request.HTTPRedirectHandler):
+    """…except within api.github.com: a renamed project's address redirects to /repositories/<id>, and asked without
+    the login, those count against the 60 an hour this computer gets without one (and fail once they're used up)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and urllib.parse.urlparse(newurl).hostname == "api.github.com":
+            new.add_unredirected_header("Authorization", f"Bearer {TOKEN}")
+        return new
+
+
+OPENER = urllib.request.build_opener(_GitHubRedirects)
 
 
 class Relay(BaseHTTPRequestHandler):
@@ -98,9 +113,9 @@ class Relay(BaseHTTPRequestHandler):
             return
         req = urllib.request.Request("https://api.github.com" + self.path,
                                      headers={h: v for h in PASSED_ON if (v := self.headers.get(h))})
-        req.add_unredirected_header("Authorization", f"Bearer {TOKEN}")  # not sent on to wherever it redirects
+        req.add_unredirected_header("Authorization", f"Bearer {TOKEN}")  # not sent on to wherever it redirects…
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with OPENER.open(req, timeout=30) as resp:
                 status, headers, body = resp.status, resp.headers, resp.read()
         except urllib.error.HTTPError as e:
             status, headers, body = e.code, e.headers, e.read()
