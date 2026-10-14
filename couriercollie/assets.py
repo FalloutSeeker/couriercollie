@@ -206,14 +206,21 @@ def same_version(a: str, b: str) -> bool:
 
 
 def is_newer(a: str, b: str) -> bool:
-    """Whether version a is newer than b. Only told for versions made of numbers ("1.2.10" is newer than "1.2.9");
-    others (dates with words, commits, "nightly") aren't ordered, so this says no."""
+    """Whether version a is newer than b. Only told for versions made of numbers ("1.2.10" is newer than "1.2.9"),
+    or numbers then a test version's word ("2.0.0-rc1" is newer than "1.0.0", and older than "2.0.0"); others (dates
+    with words, commits, "nightly") aren't ordered, so this says no."""
     def numbers(v):  # "v1.2", "release-1.2", "1.2": yes; "abc1234" (a commit) isn't a version
-        m = re.match(r"(?:[^\d]*[-_. ])?[vV]?(\d[\d.\-_~]*)$", v)
-        return _numbers(re.sub(r"[-_~]", ".", m.group(1))) if m else None
+        m = re.match(r"(?:[^\d]*[-_. ])?[vV]?(\d[\d.\-_~]*?)(?:[-_.~]?((?:rc|beta|alpha|pre|preview|dev)[-_.]?\d*|[ab]\d+))?$",
+                     v, re.I)
+        n = _numbers(re.sub(r"[-_~]", ".", m.group(1).rstrip("-_.~"))) if m else None
+        return None if n is None else (n, not m.group(2))  # (a test version comes before its release)
 
     na, nb = numbers(a), numbers(b)
-    return na is not None and nb is not None and na > nb
+    if na is None or nb is None:
+        return False
+    if na[0] != nb[0]:
+        return na[0] > nb[0]
+    return na[1] and not nb[1]  # (two test versions of one release: not ordered)
 
 
 # What "*" in a pattern matches: a version number. Starts with a digit; may contain dashes only before another

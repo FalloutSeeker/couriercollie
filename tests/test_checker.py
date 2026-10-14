@@ -307,6 +307,14 @@ class NewerOrMissingTest(unittest.TestCase):
         r = checker.releases_result([self.rel("v0.6.1")], "0.6.2")
         self.assertEqual((r.status, r.text), (checker.UP_TO_DATE, "Up to date (newer than v0.6.1)"))
 
+    def test_a_test_version_is_newer_than_the_release_before(self):
+        # Test versions turned off with v2.0.0-rc1 installed: v1.0.0 isn't an update (it would go back).
+        self.assertTrue(assets.is_newer("v2.0.0-rc1", "v1.0.0") and assets.is_newer("2.0.0", "2.0.0-rc1")
+                        and assets.is_newer("3.0", "3.0b1"))
+        self.assertFalse(assets.is_newer("2.0.0-rc1", "2.0.0") or assets.is_newer("2.0.0-rc2", "2.0.0-rc1")
+                         or assets.is_newer("1.1.1", "1.1.1a"))  # (OpenSSL's "a" comes after)
+        self.assertEqual(checker.releases_result([self.rel("v1.0.0")], "v2.0.0-rc1").status, checker.UP_TO_DATE)
+
     def test_newest_release_without_your_file_isnt_an_update(self):
         shown = [self.rel("v2.0", "tool-2.0.rpm"), self.rel("v1.0", "tool-1.0.deb", "tool-1.0.rpm")]
         r = checker.releases_result(shown, "v1.0", pattern="tool-*.deb")
