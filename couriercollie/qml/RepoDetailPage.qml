@@ -198,6 +198,7 @@ Kirigami.ScrollablePage {
         readonly property string name: page.repo.name || ""
         property var readme: ({ heading: "", text: "" })
         property string changes: ""  // the files that changed since it was approved ("lib/common.sh, install.sh")
+        property string blocked: ""  // why it can't be approved here (it couldn't be shown whole), or ""
         // The height the script and the README's steps share: what the window has left after the dialog's title, text
         // and buttons. Kept within it, the dialog never needs a scrollbar of its own (which, narrowing the text and
         // so changing its height, would loop).
@@ -209,10 +210,14 @@ Kirigami.ScrollablePage {
             reviewText.text = backend.reviewStep(page.repoId, chosen.command);
             readme = backend.readmeSteps(page.repoId);
             changes = why === "changed" ? backend.stepChanges(page.repoId) : "";
+            blocked = backend.stepBlocked(page.repoId, chosen.command);
             open();
         }
 
-        onChoiceChanged: reviewText.text = backend.reviewStep(page.repoId, chosen.command)
+        onChoiceChanged: {
+            reviewText.text = backend.reviewStep(page.repoId, chosen.command);
+            blocked = backend.stepBlocked(page.repoId, chosen.command);
+        }
         objectName: "stepDialog"
         title: why === "changed" ? `${changes || Labels.capitalized(chosen.what)} Changed`
             : why === "change" ? `After Downloading ${name}`
@@ -225,6 +230,7 @@ Kirigami.ScrollablePage {
             Kirigami.Action {
                 text: stepDialog.why === "update" ? "Update" : stepDialog.why === "change" ? "Use This" : "Run"
                 icon.name: stepDialog.why === "update" ? "system-software-update" : "media-playback-start"
+                enabled: stepDialog.blocked === ""  // (one that can't be shown whole can't be approved: see the text)
                 onTriggered: {
                     stepDialog.close();
                     if (stepDialog.why === "update") {
@@ -261,7 +267,8 @@ Kirigami.ScrollablePage {
             QQC2.Label {
                 Layout.fillWidth: true
                 textFormat: Text.PlainText
-                text: stepDialog.why === "change" ? `Runs after each download of ${stepDialog.name}. It can change anything your account can, so read it first.`
+                text: stepDialog.blocked !== "" ? `${stepDialog.blocked} It can’t be approved here: run it in a terminal instead${stepDialog.why === "changed" ? "" : ", or choose Only Download"}.`
+                    : stepDialog.why === "change" ? `Runs after each download of ${stepDialog.name}. It can change anything your account can, so read it first.`
                     : stepDialog.why === "changed" ? `This download changed ${stepDialog.changes || stepDialog.chosen.what}. What changed is shown first; read it before it runs.`
                     : stepDialog.why === "installed" ? `Run ${stepDialog.chosen.what} now, and after each download? It can change anything your account can, so read it first.`
                     : `Update downloads ${stepDialog.name}, then runs ${stepDialog.chosen.what}. It can change anything your account can, so read it first. From now on it runs after each download, and you’re asked again only if it changes.`

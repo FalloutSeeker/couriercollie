@@ -454,6 +454,14 @@ class Updating:
         since = repo.apply_commit if command == repo.apply_command else ""
         return applying.review_text(repo.local_path, command, since)
 
+    @Slot(str, str, result=str)
+    def stepBlocked(self, repo_id, command):
+        """Why this step can't be approved here (it couldn't be shown whole), or ""."""
+        repo = self._config.find(repo_id)
+        if not repo or not _is_clone(repo) or not command.strip():
+            return ""
+        return applying.unapprovable(repo.local_path, command.strip())
+
     @Slot(str, result=str)
     def stepChanges(self, repo_id):
         """The files that changed in the approved step since it was approved ("lib/common.sh, install.sh"), or ""."""

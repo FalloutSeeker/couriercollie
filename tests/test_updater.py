@@ -174,6 +174,19 @@ class AfterUpdatingTest(UpstreamCase):
         self.assertIn("+echo one more thing", review)
         self.assertIn("All it runs, as it is now", review)
 
+    def test_a_step_that_cant_be_shown_whole_cant_be_approved(self):
+        from couriercollie import applying
+
+        (self.clone / "deploy.sh").write_text("#!/bin/sh\nfor f in parts/*.sh; do . $f; done\n")
+        for i in range(applying.NAMED_MAX + 5):
+            (self.clone / "parts").mkdir(exist_ok=True)
+            (self.clone / "parts" / f"p{i:03}.sh").write_text("x\n")
+        git(self.clone, "add", ".")
+        self.assertIn("too many", self.backend.stepBlocked(self.id, "/bin/sh ./deploy.sh"))
+        self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")
+        self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
+        self.assertEqual(self.repo().apply_command, "")
+
     def test_only_download(self):
         asks = self.asked()
         self.update()
