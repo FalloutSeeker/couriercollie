@@ -107,4 +107,7 @@ for distro in $distros; do
 done
 for distro in $distros; do cp "$work/$distro.log" .uicheck/scan-stress/$distro${PACKAGE:+-package}/run.log; done
 echo "GitHub requests: $(grep -cE '^[0-9]{3} ' "$work/relay.log")"
+# GitHub's answers that weren't a success (a 404 is expected for the deleted project): to tell its hiccups (502) from
+# couriercollie's own failures, when a find or a check went wrong.
+grep -E '^[45][0-9]{2} ' "$work/relay.log" | sort | uniq -c | sort -rn | head -20 || true
 grep -h "refused" "$work/relay.log" | sort | uniq -c || true
