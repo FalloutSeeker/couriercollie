@@ -175,10 +175,11 @@ class MergeTest(unittest.TestCase):
                               config.Config(repos=[self.repo("a", name="Mine")]))
         self.assertEqual(merged.repos[0].name, "Mine")
 
-    def test_removed_by_hand_but_changed_in_the_app_is_kept(self):
+    def test_removed_by_hand_goes_even_if_the_app_changed_it(self):
+        # (The app changes repos quietly all the time: a check found it's installed with the package manager, say.)
         base = config.Config(repos=[self.repo("a")])
-        merged = config.merge(base, config.Config(repos=[self.repo("a", installed="v2")]), config.Config())
-        self.assertEqual([(r.id, r.installed) for r in merged.repos], [("a", "v2")])
+        merged = config.merge(base, config.Config(repos=[self.repo("a", managed_by="dnf")]), config.Config())
+        self.assertEqual(merged.repos, [])
 
 
 class SymlinkTest(unittest.TestCase):

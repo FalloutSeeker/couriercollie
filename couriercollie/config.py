@@ -204,7 +204,8 @@ def merge(base: Config, mine: Config, theirs: Config) -> Config:
     """The settings file was changed by hand while the app had changes of its own: both are kept. `base` is the file
     as the app last read or wrote it, `mine` the app's settings now, `theirs` the file now. Each setting, each repo's
     each field, and the categories: whichever side changed it; where both did, the hand edit. A repo added on either
-    side is kept; one removed on either side goes, unless the other side changed it."""
+    side is kept. One removed by hand goes (the app changes repos quietly all the time: a check's finding, a page's);
+    one removed in the app goes unless it was changed by hand."""
     def pick(b, m, t):
         if m == b:
             return t
@@ -223,8 +224,8 @@ def merge(base: Config, mine: Config, theirs: Config) -> Config:
         b = b_repos.get(key, {})  # (added by hand: nothing before)
         repos.append(pick(b, m_repos.get(key, b or t), t))  # (removed in the app but changed by hand: kept)
     for key, m in m_repos.items():
-        if key not in t_repos and (key not in b_repos or m != b_repos[key]):
-            repos.append(m)  # added in the app (or changed there while removed by hand: kept)
+        if key not in t_repos and key not in b_repos:
+            repos.append(m)  # added in the app
     tracked = [_from_dict(TrackedRepo, r) for r in repos]
     settings = _from_dict(Settings, pick(asdict(base.settings), asdict(mine.settings), asdict(theirs.settings)))
     return Config(settings=settings, repos=tracked,
