@@ -535,6 +535,9 @@ def install_appimage(asset, others: list, folder: Path, old: Path | None,
     which is then removed. Returns (the new file, whether it was checked against a published checksum)."""
     folder.mkdir(parents=True, exist_ok=True)
     if not os.access(folder, os.W_OK):
+        if folder.stat().st_uid == os.getuid():
+            raise UpdateError(f"{shown(folder)} is read-only, so the new version can\u2019t be put there. Make it "
+                              "writable, then try again.")
         raise UpdateError(f"{shown(folder)} belongs to another user (often the system), so the new version "
                           "can\u2019t be put there from here.")
     name = Path(asset.name).name  # never a path from the site
@@ -835,11 +838,15 @@ INSTALL_TIMEOUT = 1800
 LEFTOVER_AGE = 3600
 
 
-def clean_leftovers(now: float | None = None) -> list[Path]:
+_APPIMAGE_PART = re.compile(r"\..+\.appimage\.[0-9a-f]{8}\.part", re.I)  # (install_appimage's)
+
+
+def clean_leftovers(now: float | None = None, appimage_folders=()) -> list[Path]:
     """Removes what an update cut short left behind, in the app's own folders: a half-downloaded ".x.part", a
     half-unpacked ".v2.0.unpacking", a half-made clone, a link not yet put in place. A program's version set aside
     (".v2.0.old") is put back if the version it stood for is missing (cut short just after setting it aside), else
-    removed. Nothing that isn't hidden is touched. Returns what was removed or put back."""
+    removed. In `appimage_folders` (where tracked AppImages are, elsewhere), only a half-downloaded AppImage, as
+    install_appimage names it. Nothing that isn't hidden is touched. Returns what was removed or put back."""
     now = time.time() if now is None else now
     done: list[Path] = []
 
@@ -859,6 +866,10 @@ def clean_leftovers(now: float | None = None) -> list[Path]:
     for folder in (apps_dir(), downloads_dir(), clones_dir()):
         for path in folder.glob(".*.part") if folder.is_dir() else []:
             if stale(path):
+                remove(path)
+    for folder in {Path(f) for f in appimage_folders} - {apps_dir(), downloads_dir(), clones_dir()}:
+        for path in folder.glob(".*.part") if folder.is_dir() else []:
+            if _APPIMAGE_PART.fullmatch(path.name) and stale(path):
                 remove(path)
     for path in downloads_dir().iterdir() if downloads_dir().is_dir() else []:
         if stale(path):

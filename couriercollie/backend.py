@@ -427,7 +427,9 @@ class Backend(QObject, Updating, Account):
         self._started = True
         if self._desktop:
             # What an update cut short left behind (the app killed, the computer turned off), off the main thread.
-            self._run(updater.clean_leftovers, lambda _done, _error: None)
+            folders = [str(Path(r.local_path).parent) for r in self._config.repos
+                       if r.local_path.lower().endswith(".appimage")]
+            self._run(lambda: updater.clean_leftovers(appimage_folders=folders), lambda _done, _error: None)
             self._track_myself()
             integration.set_background_checks(self._config.settings.auto_check)
             integration.set_start_at_login(self._config.settings.start_at_login)  # rewritten if couriercollie moved

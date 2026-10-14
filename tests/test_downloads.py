@@ -413,6 +413,18 @@ class LeftoversTest(unittest.TestCase):
                                 "data/couriercollie/programs/github.com_a_tool/v2.0", "src"])
         # v2.0 was set aside and never replaced: put back. v1.0's aside copy is a leftover: removed.
 
+    def test_beside_an_appimage_kept_elsewhere_only_its_half_download_goes(self):
+        import time
+
+        elsewhere = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, elsewhere, True)
+        part, other = elsewhere / ".Ext-2.0.0-x86_64.AppImage.0a1b2c3d.part", elsewhere / ".notes.part"
+        for path in (part, other):
+            path.write_text("x")
+            os.utime(path, (time.time() - 2 * updater.LEFTOVER_AGE,) * 2)
+        updater.clean_leftovers(appimage_folders=[str(elsewhere)])
+        self.assertEqual([p.name for p in elsewhere.iterdir()], [".notes.part"])  # (not the app's: left alone)
+
 
 class ProgramClickedTest(InstallClickedTest):
     """Install clicked for a repo that follows a program archive; one with several programs asks which."""
