@@ -1352,3 +1352,33 @@ class ScanKeysTest(unittest.TestCase):
 
         self.assertEqual([_whole_number(k) for k in (3.0, 3, "3", 0.0, "nope", "", None, 2.5, -1)],
                          [3, 3, 3, 0, None, None, None, None, None])
+
+
+class CheckAgainTest(unittest.TestCase):
+    def test_asked_while_a_check_runs_it_checks_once_more_after(self):
+        # (Repos tracked while a check ran weren't checked until the next Check Now.)
+        from PySide6.QtCore import QCoreApplication
+
+        from couriercollie import checker
+
+        app = QCoreApplication.instance() or QCoreApplication([])
+        with tempfile.TemporaryDirectory() as d:
+            b = Backend(Path(d) / "repos.toml")
+            self.addCleanup(b.shutdown)
+            pending, seen = [], []
+            b._run = lambda work, done: pending.append((work, done))
+            saved = checker.check_all
+            self.addCleanup(setattr, checker, "check_all", saved)
+            checker.check_all = lambda repos, previous: (seen.append(len(repos)) or (checker.State(), []))
+            b.checkNow()
+            b._config.repos.append(TrackedRepo(id="github.com/a/new", name="new", url="", host="github"))
+            b.checkNow()  # (tracked meanwhile: asked again while the first runs)
+            self.assertEqual(len(pending), 1)
+            work, done = pending.pop()
+            done(work(), None)
+            app.processEvents()
+            self.assertEqual(len(pending), 1)  # once more…
+            work, done = pending.pop()
+            done(work(), None)
+            app.processEvents()
+            self.assertEqual((seen, pending), ([0, 1], []))  # …with the new repo, and no more
