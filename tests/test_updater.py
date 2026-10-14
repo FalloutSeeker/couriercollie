@@ -123,6 +123,11 @@ class AfterUpdatingTest(UpstreamCase):
         self.assertEqual(asks, ["update"])
         self.assertTrue((self.clone / "deployed.txt").exists())
 
+    def test_the_readmes_own_steps_beside_it(self):
+        (self.clone / "README.md").write_text("# Project\n\n## Updating\n\nPull, then run deploy.sh.\n")
+        self.assertEqual(self.backend.readmeSteps(self.id), {"heading": "Updating", "text": "Pull, then run deploy.sh."})
+        self.assertEqual(self.backend.readmeSteps("github.com/not/tracked"), {"heading": "", "text": ""})
+
     def test_only_download(self):
         asks = self.asked()
         self.update()

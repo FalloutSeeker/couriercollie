@@ -438,6 +438,15 @@ class Updating:
             return ""
         return applying.review_text(repo.local_path, command.strip())
 
+    @Slot(str, result="QVariantMap")
+    def readmeSteps(self, repo_id):
+        """The README's own steps for updating (or installing), to read beside the step: never run."""
+        repo = self._config.find(repo_id)
+        if not repo or not _is_clone(repo):
+            return {"heading": "", "text": ""}
+        heading, text = applying.readme_section(repo.local_path)
+        return {"heading": heading, "text": text}
+
     @Slot(str, str)
     def approveStep(self, repo_id, command):
         """Run this after each update, as it is now: what it names is remembered, so a change is noticed. Only one

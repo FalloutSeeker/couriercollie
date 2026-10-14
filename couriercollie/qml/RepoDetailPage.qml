@@ -184,9 +184,10 @@ Kirigami.ScrollablePage {
         }
     }
 
-    // What runs after Update downloads a clone (applying.py): the command and the files it names, read first (D6).
-    // Asked the first time Update is clicked ("update"), once Install has cloned it ("installed"), when an update
-    // changed what was approved ("changed"), or to change it ("change", from Tracking).
+    // What runs after Update downloads a clone (applying.py): the command and the files it names, read first (D6), and
+    // beside them the README's own steps, only to read. Asked the first time Update is clicked ("update"), once Install
+    // has cloned it ("installed"), when a download changed what was approved ("changed"), or to change it ("change",
+    // from Tracking).
     Kirigami.Dialog {
         id: stepDialog
 
@@ -195,18 +196,20 @@ Kirigami.ScrollablePage {
         readonly property var choices: page.details.stepChoices || []
         readonly property var chosen: choices[Math.min(choice, choices.length - 1)] || ({ label: "", command: "", what: "" })
         readonly property string name: page.repo.name || ""
+        property var readme: ({ heading: "", text: "" })
 
         function ask(why) {
             stepDialog.why = why;
             choice = Math.max(0, choices.findIndex(c => c.command === page.details.step));
             reviewText.text = backend.reviewStep(page.repoId, chosen.command);
+            readme = backend.readmeSteps(page.repoId);
             open();
         }
 
         onChoiceChanged: reviewText.text = backend.reviewStep(page.repoId, chosen.command)
         objectName: "stepDialog"
         title: why === "changed" ? `${Labels.capitalized(chosen.what)} Changed`
-            : why === "change" ? `After Updating ${name}`
+            : why === "change" ? `After Downloading ${name}`
             : why === "installed" ? `${name} Is Downloaded`
             : `Update ${name}`
         padding: Kirigami.Units.largeSpacing
@@ -252,10 +255,10 @@ Kirigami.ScrollablePage {
             QQC2.Label {
                 Layout.fillWidth: true
                 textFormat: Text.PlainText
-                text: stepDialog.why === "change" ? `What runs after Update downloads ${stepDialog.name}. Read it first: it can change anything you can.`
-                    : stepDialog.why === "changed" ? `This update changed ${stepDialog.chosen.what} since you approved it. Read it before it runs.`
-                    : stepDialog.why === "installed" ? `Run ${stepDialog.chosen.what} now, and after every update? Read it first: it can change anything you can.`
-                    : `Updating ${stepDialog.name} downloads the new version, then runs ${stepDialog.chosen.what}. Read it first: it can change anything you can. From now on, it runs after every update; you’ll be asked again if it changes.`
+                text: stepDialog.why === "change" ? `Runs after each download of ${stepDialog.name}. It can change anything your account can, so read it first.`
+                    : stepDialog.why === "changed" ? `This download changed ${stepDialog.chosen.what}. Read it again before it runs.`
+                    : stepDialog.why === "installed" ? `Run ${stepDialog.chosen.what} now, and after each download? It can change anything your account can, so read it first.`
+                    : `Update downloads ${stepDialog.name}, then runs ${stepDialog.chosen.what}. It can change anything your account can, so read it first. From now on it runs after each download, and you’re asked again only if it changes.`
                 wrapMode: Text.Wrap
             }
 
@@ -268,10 +271,11 @@ Kirigami.ScrollablePage {
                 onActivated: index => stepDialog.choice = index
             }
 
-            // As tall as the text, up to about 20 lines; longer ones scroll.
+            // As tall as the text, up to about 20 lines (14 with the README's steps below); longer ones scroll.
             QQC2.ScrollView {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(reviewText.implicitHeight, Kirigami.Units.gridUnit * 20)
+                Layout.preferredHeight: Math.min(reviewText.implicitHeight,
+                                                 Kirigami.Units.gridUnit * (stepDialog.readme.text !== "" ? 14 : 20))
 
                 QQC2.TextArea {
                     id: reviewText
@@ -281,6 +285,41 @@ Kirigami.ScrollablePage {
                     font: Kirigami.Theme.fixedWidthFont
                     wrapMode: TextEdit.NoWrap
                     textFormat: TextEdit.PlainText
+                }
+            }
+
+            // The README's own steps for updating (or installing), only to read: what the project says to do, beside
+            // what will run. Links open web pages only.
+            ColumnLayout {
+                objectName: "readmeSteps"
+                Layout.fillWidth: true
+                visible: stepDialog.readme.text !== ""
+                spacing: Kirigami.Units.smallSpacing
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    textFormat: Text.PlainText
+                    font.bold: true
+                    elide: Text.ElideRight
+                    text: stepDialog.readme.heading ? `From the project’s README: ${stepDialog.readme.heading}` : "From the project’s README"
+                }
+
+                QQC2.ScrollView {
+                    id: readmeScroll
+
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.min(readmeText.implicitHeight, Kirigami.Units.gridUnit * 12)
+                    contentWidth: availableWidth
+
+                    QQC2.Label {
+                        id: readmeText
+
+                        width: readmeScroll.availableWidth
+                        text: stepDialog.readme.text
+                        textFormat: Text.MarkdownText
+                        wrapMode: Text.Wrap
+                        onLinkActivated: link => Labels.openLink(link)
+                    }
                 }
             }
         }
@@ -774,9 +813,9 @@ Kirigami.ScrollablePage {
                     : stepRun.result === "password" ? Kirigami.MessageType.Warning
                     : Kirigami.MessageType.Information
                 text: Labels.plain(stepRun.running ? `Running ${page.details.stepWhat}…`
-                    : stepRun.changed ? `${stepRun.what} changed since you approved it, so it didn’t run.`
+                    : stepRun.changed ? `${stepRun.what} changed in this download, so it didn’t run. Review it to run it.`
                     : stepRun.result === "applied" ? `${stepRun.what} finished.`
-                    : stepRun.result === "password" ? `${stepRun.what} didn’t finish: it asked for a password, and none was given.`
+                    : stepRun.result === "password" ? `${stepRun.what} didn’t finish: it needs your password. Run it again, or copy the command for a terminal.`
                     : stepRun.result === "stopped" ? `${stepRun.what} was stopped.`
                     : `${stepRun.what} failed (exit code ${page.details.stepCode}). The end of its output is below.`)
                 actions: [
@@ -916,7 +955,7 @@ Kirigami.ScrollablePage {
             // What Update runs after downloading (a clone with something to run): changed here.
             QQC2.Label {
                 visible: (page.details.stepChoices || []).length > 0
-                text: "After updating"
+                text: "After downloading"
                 opacity: 0.7
             }
 
@@ -928,7 +967,7 @@ Kirigami.ScrollablePage {
                     textFormat: Text.PlainText
                     text: (page.details.step || "") !== "" ? `Runs ${page.details.stepWhat}`
                         : page.details.stepSkip === true ? "Only downloads"
-                        : "Asks the next time you update"
+                        : "Asks at the next Update"
                 }
 
                 QQC2.Button {

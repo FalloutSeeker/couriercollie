@@ -154,3 +154,61 @@ class CoveredTest(unittest.TestCase):
             subprocess.run(["git", "-C", folder, "add", "."], check=True)
             named = {str(f.relative_to(root.resolve())) for f in applying.named_files(folder, "/bin/sh ./install.sh")}
             self.assertEqual(named, {"install.sh", "install-services.sh"})
+
+
+class ReadmeSectionTest(unittest.TestCase):
+    """The README's own steps, shown beside the step (applying.readme_section)."""
+
+    def section(self, readme: str, **files):
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder) / "README.md").write_text(readme)
+            for name, text in files.items():
+                (Path(folder) / name.replace("__", "/")).parent.mkdir(parents=True, exist_ok=True)
+                (Path(folder) / name.replace("__", "/")).write_text(text)
+            return applying.readme_section(folder)
+
+    def test_updating_first_then_installing(self):
+        readme = "# App\n\n## Installation\n\nRun ./install.sh\n\n## Updating\n\ngit pull, then ./install.sh\n\n## License\n\nMIT\n"
+        self.assertEqual(self.section(readme), ("Updating", "git pull, then ./install.sh"))
+        self.assertEqual(self.section(readme.replace("## Updating\n\ngit pull, then ./install.sh\n\n", "")),
+                         ("Installation", "Run ./install.sh"))
+
+    def test_up_to_the_next_heading_as_big(self):
+        readme = "## Install\n\nStep one.\n\n### From source\n\n```sh\n# not a heading\nmake install\n```\n\n## Usage\n\nx\n"
+        title, text = self.section(readme)
+        self.assertEqual(title, "Install")
+        self.assertIn("### From source", text)
+        self.assertIn("make install", text)
+        self.assertNotIn("Usage", text)
+
+    def test_underlined_headings(self):
+        self.assertEqual(self.section("App\n===\n\nInstall\n-------\n\nRun it.\n\nMore\n----\n\nx\n"),
+                         ("Install", "Run it."))
+
+    def test_badges_and_pictures_are_not_its_words(self):
+        # A badge saying "Build" doesn't make a heading about building; a section's badges and comments don't show.
+        readme = ("# tool [![Build Status][badge]][link]\n\nA tool.\n\n## Installation\n\n<!-- comment -->\n"
+                  "[![Packaging status](https://repology.org/x.svg)](https://repology.org)\n\nUse your package manager.\n")
+        self.assertEqual(self.section(readme), ("Installation", "Use your package manager."))
+
+    def test_a_readme_that_points_elsewhere_is_followed(self):
+        readme = "# Theme\n\n## Installation\n\nSee [INSTALL.md](./INSTALL.md) for a detailed guide.\n"
+        install = "# Installation\n\n## Prerequisites\n\nx\n\n### Updating Theme\n\nRun git pull, then ./install.sh again.\n"
+        self.assertEqual(self.section(readme, **{"INSTALL.md": install}),
+                         ("INSTALL.md · Updating Theme", "Run git pull, then ./install.sh again."))
+
+    def test_without_steps_the_usual_files(self):
+        self.assertEqual(self.section("# Thing\n\nIt does things.\n", **{"docs__INSTALL.md": "## Build\n\nmake\n"}),
+                         ("docs/INSTALL.md · Build", "make"))
+
+    def test_never_outside_the_clone(self):
+        readme = "## Install\n\nSee [the guide](../../../etc/passwd.md).\n"
+        self.assertEqual(self.section(readme)[0], "Install")
+
+    def test_none(self):
+        self.assertEqual(self.section("# Thing\n\nIt does things.\n"), ("", ""))
+
+    def test_long_sections_are_shortened_without_an_open_code_block(self):
+        title, text = self.section("## Install\n\n```sh\n" + "echo step\n" * 600 + "```\n")
+        self.assertLessEqual(len(text), applying.SECTION_MAX_CHARS + 10)
+        self.assertEqual(sum(1 for line in text.splitlines() if line.startswith("```")) % 2, 0)

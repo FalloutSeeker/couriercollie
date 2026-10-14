@@ -76,6 +76,137 @@ def build_command(b: Build) -> str:
     return f"meson compile -C {folder} && {sudo}meson install -C {folder}"
 
 
+# ---- The README's install or update steps, shown beside the step (only to read: never run) -------------------------
+
+README_NAMES = ("README.md", "README.markdown", "Readme.md", "readme.md", "README.MD", "README", "README.txt")
+README_MAX_BYTES = 512 * 1024
+SECTION_MAX_CHARS = 2500  # enough for a few steps, not the whole README
+# What a heading is about, in the order they're looked for: updating first, else installing or building.
+_ABOUT = (re.compile(r"\b(updat(e|es|ing)|upgrad(e|es|ing))\b", re.I),
+          re.compile(r"\b(install(ation|ing|s)?|set ?up|setting up|getting started|quick ?start|build(ing)?|"
+                     r"compil(e|ing|ation))\b", re.I))
+# What isn't the README's words: pictures and badges ("![…](…)", "<img …>"), HTML tags and comments; a link keeps its
+# words ("[Manual Install](#manual-install)" is "Manual Install").
+_TARGET = r"(\([^)]*\)|\[[^\]]*\])"  # a link's address: "(https://…)", or "[name]" defined elsewhere
+_PICTURE = re.compile(rf"\[?!\[[^\]]*\]{_TARGET}(\]{_TARGET})?|<img\b[^>]*>", re.I)
+_COMMENT = re.compile(r"<!--.*?-->", re.S)
+_TAG = re.compile(r"</?[a-z][^>]*>", re.I)
+_LINK = re.compile(rf"\[([^\]]*)\]{_TARGET}")
+# A paragraph that starts like one ("To update: …", "To install it, …").
+_STARTS = re.compile(r"^\W*(to (update|upgrade|install)|updating|upgrading|installing)\b", re.I)
+_HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
+_UNDERLINE = re.compile(r"^\s*(=+|-+)\s*$")  # a heading written as a line underlined with === or ---
+_FENCE = re.compile(r"^\s*(```|~~~)")
+
+
+def _readme(path: str) -> str:
+    for name in README_NAMES:
+        file = Path(path) / name
+        try:
+            if file.is_file() and file.stat().st_size <= README_MAX_BYTES:
+                return file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+    return ""
+
+
+def _headings(lines: list[str]) -> list[tuple[int, int, str]]:
+    """(line index, level, text) of each heading, outside code blocks: "## Install", or "Install" underlined."""
+    found, in_code = [], False
+    for i, line in enumerate(lines):
+        if _FENCE.match(line):
+            in_code = not in_code
+        elif in_code:
+            continue
+        elif m := _HEADING.match(line):
+            found.append((i, len(m.group(1)), m.group(2)))
+        elif i and _UNDERLINE.match(line) and lines[i - 1].strip() and not _FENCE.match(lines[i - 1]) \
+                and not (found and found[-1][0] == i - 1):
+            found.append((i - 1, 1 if line.strip()[0] == "=" else 2, lines[i - 1].strip()))
+    return found
+
+
+def _shortened(text: str) -> str:
+    text = text.strip("\n")
+    if len(text) <= SECTION_MAX_CHARS:
+        return text
+    cut = text[:SECTION_MAX_CHARS].rsplit("\n", 1)[0]
+    if sum(1 for line in cut.splitlines() if _FENCE.match(line)) % 2:  # don't leave a code block open
+        cut += "\n```"
+    return cut + "\n\n…"
+
+
+def _words(title: str) -> str:
+    """A heading as words: without its badges, pictures, tags, and links' addresses."""
+    return " ".join(_LINK.sub(r"\1", _TAG.sub("", _PICTURE.sub("", title))).split())
+
+
+def _cleaned(text: str) -> str:
+    """A section without its badges, pictures and HTML comments (clutter, and pictures from anywhere)."""
+    text = _PICTURE.sub("", _COMMENT.sub("", text))
+    return "\n".join(line for line in text.splitlines() if line.strip() not in ("[]", "()")) if text else ""
+
+
+def _section(text: str) -> tuple[str, str]:
+    """In a Markdown text, the steps for updating (else installing or building): (heading, section)."""
+    lines = text.splitlines()
+    headings = [(i, level, _words(title)) for i, level, title in _headings(lines)]
+    for about in _ABOUT:
+        for n, (i, level, title) in enumerate(headings):
+            if not about.search(title):
+                continue
+            end = next((j for j, lv, _t in headings[n + 1:] if lv <= level), len(lines))
+            body = lines[i + 1:end]
+            if body and _UNDERLINE.match(body[0]):  # (an underlined heading's own line)
+                body = body[1:]
+            if (text := _cleaned("\n".join(body))).strip():
+                return title, _shortened(text)
+    paragraph: list[str] = []
+    in_code = False
+    for line in [*lines, ""]:
+        if _FENCE.match(line):
+            in_code = not in_code
+        if line.strip() or in_code:
+            paragraph.append(line)
+            continue
+        if paragraph and _STARTS.match(paragraph[0]):
+            return "", _shortened(_cleaned("\n".join(paragraph)))
+        paragraph = []
+    return "", ""
+
+
+# A link to another text file in the clone ("See [INSTALL.md](./INSTALL.md)"): not to a website.
+_LOCAL_DOC = re.compile(r"\]\((?!\w+:)(?:\./)?([^)\s#]+\.(?:md|markdown|txt))(?:#[^)]*)?\)", re.I)
+_DOCS = ("UPDATING.md", "UPGRADING.md", "INSTALL.md", "INSTALLING.md", "docs/INSTALL.md", "docs/install.md")
+POINTER_MAX_CHARS = 400  # a section this short that links elsewhere only points there
+
+
+def readme_section(path: str) -> tuple[str, str]:
+    """The README's own steps for updating (else for installing or building): (its heading, the section as Markdown).
+    A heading about it, with everything under it up to the next heading as big; else a paragraph that starts "To
+    update" or "To install". A README that only points elsewhere ("See INSTALL.md") is followed there, and one
+    without any such steps is looked for in INSTALL.md and the like. ("", "") if there are none."""
+    root = Path(path).resolve()
+    title, body = _section(_readme(path))
+    if body and len(body) > POINTER_MAX_CHARS:
+        return title, body
+    linked = list(dict.fromkeys(_LOCAL_DOC.findall(body))) if body else list(_DOCS)
+    for name in linked:
+        file = (root / name).resolve()
+        try:
+            if not file.is_relative_to(root) or not file.is_file() or file.stat().st_size > README_MAX_BYTES:
+                continue
+            text = file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        there, steps = _section(text)
+        if steps:
+            return " · ".join(t for t in (file.relative_to(root).as_posix(), there) if t), steps
+        if body:  # linked from the README, though no heading says what it is: its beginning
+            return file.relative_to(root).as_posix(), _shortened(_cleaned(text))
+    return title, body
+
+
 def scripts_name(path: str, addresses: list[str]) -> bool:
     """Whether the clone's install scripts name one of these projects (as "gitgud.io/aeroshell/smod"): it sets that
     project up as part of itself."""
