@@ -845,8 +845,15 @@ elif PHASE == "package":
 else:
     run(restart)
 warnings = [m for m in h.messages if "oxygen" not in m.lower() and "breeze-internal" not in m]  # (icons: container)
+# Kirigami's own, inside its own files, which some distros' versions log (Ubuntu's toolbar, when the actions change,
+# "Could not create delegate for ToolBarLayout"): noted, not failed. Anything that starts in couriercollie's code fails.
+theirs = [m for m in warnings if m.startswith("qrc:/qt/qml/org/kde/kirigami/")
+          or m.startswith("Could not create delegate for ToolBarLayout")]
+warnings = [m for m in warnings if m not in theirs]
+if theirs:
+    note(f"Kirigami's own messages (not failed): {len(theirs)}, e.g. {theirs[0][:120]!r}")
 print("qt messages:", warnings[:15], flush=True)
-check("no Qt warnings", not warnings, len(warnings))
+check("no Qt warnings from couriercollie's code", not warnings, len(warnings))
 print("FAILURES:", fails or "none", flush=True)
 if PHASE == "main":
     run(quit_mid_scan)
