@@ -25,6 +25,11 @@ class TempHome(unittest.TestCase):
         (self.root / "run").mkdir()
         os.environ.pop("COURIERCOLLIE_CONFIG", None)
         os.environ.pop("COURIERCOLLIE_STATE", None)
+        # Never to the real desktop: the signal that makes it look icons up again is noted instead.
+        self.icons_changed = []
+        saved = integration._icons_changed
+        integration._icons_changed = lambda: self.icons_changed.append(1)
+        self.addCleanup(setattr, integration, "_icons_changed", saved)
 
     def tearDown(self):
         os.environ.clear()
@@ -33,6 +38,16 @@ class TempHome(unittest.TestCase):
 
 
 class MenuEntryTest(TempHome):
+    def test_the_desktop_is_told_when_the_icon_changes(self):
+        # The old drawing there (found first), then the logo: the desktop is told, once; after, nothing to tell.
+        old = integration._old_icon_path()
+        old.parent.mkdir(parents=True)
+        old.write_text("<svg/>")
+        integration.install_menu_entry()
+        self.assertEqual((old.exists(), integration.icon_path().is_file(), self.icons_changed), (False, True, [1]))
+        integration.install_menu_entry()
+        self.assertEqual(self.icons_changed, [1])
+
     def test_written_once_and_kept_current(self):
         self.assertTrue(integration.install_menu_entry())
         path = integration.menu_entry_path()

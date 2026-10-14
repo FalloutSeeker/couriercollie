@@ -81,6 +81,14 @@ def _old_icon_path() -> Path:
     return _data_home() / "icons" / "hicolor" / "scalable" / "apps" / f"{APP_ID}.svg"
 
 
+def _icons_changed() -> None:
+    """Tell the desktop the app's icon changed: KDE's taskbar otherwise keeps showing the icon it found before (or,
+    for one since removed, a blank page) until you log in again. The signal KDE's own settings send."""
+    if exe := shutil.which("dbus-send"):
+        subprocess.run([exe, "--session", "--type=signal", "/KIconLoader", "org.kde.KIconLoader.iconChanged",
+                        "int32:0"], capture_output=True, timeout=5, check=False)
+
+
 def install_menu_entry() -> bool:
     """Run from the project folder: write the menu entry and the app's icon into your home folder if they're missing
     or out of date (e.g. the project folder moved). Returns True if the entry was written. Notifications and the
@@ -95,10 +103,14 @@ def install_menu_entry() -> bool:
                     and "/run.sh" in path.read_text(encoding="utf-8"):
                 path.unlink()
             return False
+        changed = _old_icon_path().is_file()
         if ICON_FILE.is_file() and (not icon_path().is_file() or icon_path().read_bytes() != ICON_FILE.read_bytes()):
             icon_path().parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ICON_FILE, icon_path())
+            changed = True
         _old_icon_path().unlink(missing_ok=True)
+        if changed:
+            _icons_changed()
         if path.is_file() and path.read_text(encoding="utf-8") == text:
             return False
         path.parent.mkdir(parents=True, exist_ok=True)

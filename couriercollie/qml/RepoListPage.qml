@@ -7,20 +7,24 @@ Kirigami.ScrollablePage {
     id: page
 
     title: "Tracked Repos"
-    // couriercollie's logo before the title (in its white circle, it reads on light and dark windows alike).
+    // couriercollie's logo before the title: black on a light window, white on a dark one.
     titleDelegate: RowLayout {
         Layout.fillWidth: true
         Layout.minimumWidth: 0
         spacing: Kirigami.Units.smallSpacing
 
         Image {
+            readonly property bool dark: Kirigami.ColorUtils.brightnessForColor(Kirigami.Theme.backgroundColor) === Kirigami.ColorUtils.Dark
+
             objectName: "appLogo"
             Layout.leftMargin: Kirigami.Units.largeSpacing  // (where the title alone started)
-            Layout.preferredWidth: Kirigami.Units.iconSizes.medium
             Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-            source: Qt.resolvedUrl("../logo/logo.png")
+            Layout.preferredWidth: Math.round(Kirigami.Units.iconSizes.medium * 217 / 256)  // (its shape)
+            source: Qt.resolvedUrl(`../logo/${dark ? "dark" : "light"}.png`)
+            // Shrunk once, smoothly, to the pixels it's shown at: a drawing this detailed blurs if shrunk on the fly.
+            sourceSize.height: Kirigami.Units.iconSizes.medium * Screen.devicePixelRatio
             fillMode: Image.PreserveAspectFit
-            mipmap: true
+            smooth: true
         }
 
         Kirigami.Heading {
