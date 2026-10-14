@@ -36,15 +36,36 @@ Kirigami.ApplicationWindow {
     // The page belongs to this window rather than the Settings window: if it were deleted along with the Settings
     // window, a calculation inside Kirigami would run on the half-deleted page and log a TypeError. A page can only be
     // shown once, so each opening gets a new one and the previous is deleted.
+    // Once its window has closed, the page goes too, a moment later (with the window, it would be half-deleted): left
+    // alone, it kept answering every change to the settings with no window to lay it out, and could crash the app.
     function openSettings() {
+        settingsGone.stop();
         if (settingsPageItem)
             settingsPageItem.destroy();
         settingsPageItem = settingsPage.createObject(root);
-        pageStack.pushDialogLayer(settingsPageItem, {}, {
+        const page = pageStack.pushDialogLayer(settingsPageItem, {}, {
             title: "Settings",
             width: Kirigami.Units.gridUnit * 36,
             height: Kirigami.Units.gridUnit * 30
         });
+        const window = page.Window.window;
+        if (window)
+            window.visibleChanged.connect(() => {
+                if (!window.visible && settingsPageItem === page)
+                    settingsGone.restart();
+            });
+    }
+
+    Timer {
+        id: settingsGone
+
+        interval: 500
+        onTriggered: {
+            if (root.settingsPageItem) {
+                root.settingsPageItem.destroy();
+                root.settingsPageItem = null;
+            }
+        }
     }
 
     title: "couriercollie"

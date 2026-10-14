@@ -146,53 +146,59 @@ Kirigami.ScrollablePage {
             enabled: page.s.scanning
             spacing: 0
 
-            Repeater {
-                model: page.s.scanFolders
+            // The rows in a plain column: a layout holding them directly can be left with a row that's just been
+            // removed, and crash.
+            Column {
+                Layout.fillWidth: true
 
-                delegate: RowLayout {
-                    id: folderRow
+                Repeater {
+                    model: page.s.scanFolders
 
-                    required property var modelData
+                    delegate: RowLayout {
+                        id: folderRow
 
-                    Layout.fillWidth: true
+                        required property var modelData
 
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 0
+                        width: parent.width
 
-                        QQC2.Label {
+                        ColumnLayout {
                             Layout.fillWidth: true
-                            text: folderRow.modelData.label
-                            textFormat: Text.PlainText
-                            elide: Text.ElideMiddle
+                            spacing: 0
+
+                            QQC2.Label {
+                                Layout.fillWidth: true
+                                text: folderRow.modelData.label
+                                textFormat: Text.PlainText
+                                elide: Text.ElideMiddle
+                            }
+
+                            QQC2.Label {
+                                objectName: "folderProblem:" + folderRow.modelData.path
+                                Layout.fillWidth: true
+                                visible: text !== ""
+                                textFormat: Text.PlainText
+                                text: folderRow.modelData.problem
+                                font: Kirigami.Theme.smallFont
+                                color: Kirigami.Theme.neutralTextColor
+                                wrapMode: Text.Wrap
+                            }
                         }
 
-                        QQC2.Label {
-                            objectName: "folderProblem:" + folderRow.modelData.path
-                            Layout.fillWidth: true
-                            visible: text !== ""
-                            textFormat: Text.PlainText
-                            text: folderRow.modelData.problem
-                            font: Kirigami.Theme.smallFont
-                            color: Kirigami.Theme.neutralTextColor
-                            wrapMode: Text.Wrap
+                        Tag {
+                            visible: folderRow.modelData.isDefault
+                            text: "Default"
                         }
-                    }
 
-                    Tag {
-                        visible: folderRow.modelData.isDefault
-                        text: "Default"
-                    }
-
-                    QQC2.ToolButton {
-                        objectName: "removeFolder:" + folderRow.modelData.path
-                        icon.name: "edit-delete-remove"
-                        text: `Remove ${folderRow.modelData.label}`
-                        display: QQC2.AbstractButton.IconOnly
-                        QQC2.ToolTip.text: text
-                        QQC2.ToolTip.visible: hovered
-                        QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
-                        onClicked: backend.removeScanFolder(folderRow.modelData.path)
+                        QQC2.ToolButton {
+                            objectName: "removeFolder:" + folderRow.modelData.path
+                            icon.name: "edit-delete-remove"
+                            text: `Remove ${folderRow.modelData.label}`
+                            display: QQC2.AbstractButton.IconOnly
+                            QQC2.ToolTip.text: text
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                            onClicked: backend.removeScanFolder(folderRow.modelData.path)
+                        }
                     }
                 }
             }
