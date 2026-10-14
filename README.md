@@ -1,11 +1,13 @@
 # couriercollie
 
-
 ⚠️ **Beta:** couriercollie still needs testing and feedback from more users. Please report problems with Send Feedback (in Settings) or as a [GitHub issue](https://github.com/FalloutSeeker/couriercollie/issues).
+
+ℹ️ **Note:** couriercollie was built with heavy AI assistance. I designed it, decided its features and how it behaves, and maintain it, but I didn’t hand-write the code. It's a tool I wanted personally, and I thought it would be good to share to others if they find it useful.
 
 <p align="center">
   <img src="docs/logo.png" alt="couriercollie logo: a collie carrying a parcel" width="170">
 </p>
+
 
 <p align="center">
   <a href="https://ko-fi.com/E1E01YFRJU"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support couriercollie on Ko-fi"></a>
