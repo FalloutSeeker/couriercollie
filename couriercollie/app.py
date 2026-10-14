@@ -65,6 +65,27 @@ def choose_style() -> None:
     os.environ["QT_QUICK_CONTROLS_STYLE"] = "org.kde.desktop" if kde else "Fusion"
 
 
+def choose_qml_cache() -> None:
+    """Before the window loads: Qt keeps the window's compiled QML and reuses it while each file's date is unchanged.
+    Packages give every file one fixed date (rpmbuild takes it from the spec's changelog; makepkg and dpkg do the
+    same), so after an update Qt went on showing the old window. The cache is kept by the files' contents instead:
+    a folder for each version of them, and only the current one is kept."""
+    if "QML_DISK_CACHE_PATH" in os.environ:
+        return
+    import hashlib
+    import shutil
+
+    digest = hashlib.sha1()
+    for f in sorted(p for p in QML_DIR.rglob("*") if p.is_file()):
+        digest.update(f.relative_to(QML_DIR).as_posix().encode() + b"\0" + f.read_bytes())
+    base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "couriercollie"
+    folder = base / "qml" / digest.hexdigest()[:16]
+    for old in [*(base / "qml").glob("*"), base / "couriercollie" / "qmlcache"]:  # (the last: Qt's own, before)
+        if old != folder:
+            shutil.rmtree(old, ignore_errors=True)
+    os.environ["QML_DISK_CACHE_PATH"] = str(folder)
+
+
 def fill_in_icons() -> None:
     """After the app starts: icons the desktop's theme lacks (GNOME's Adwaita has far fewer than KDE's Breeze) still
     show. From Breeze if it's installed; otherwise from the copies of the icons the app uses that come with it
@@ -126,6 +147,7 @@ def main() -> int:
     integration.install_menu_entry()
 
     choose_style()
+    choose_qml_cache()
 
     from PySide6.QtCore import QUrl
     from PySide6.QtNetwork import QLocalServer
