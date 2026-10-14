@@ -38,6 +38,9 @@ Kirigami.Dialog {
     }
 
     objectName: "scanDialog"
+    // Takes the keyboard when it opens: otherwise Tab and Space go on working the list behind it.
+    focus: true
+    onOpened: forceActiveFocus(Qt.PopupFocusReason)
 
     Connections {
         function onScanChanged() {
@@ -174,6 +177,8 @@ Kirigami.Dialog {
                 // Shows the ticked state only; a click toggles it in `picked`, so Select all / none stay in charge.
                 checkable: false
                 checked: !!dialog.picked[modelData.key]
+                // Tab reaches each row, and Space ticks or unticks it (delegates aren't in the Tab order otherwise).
+                focusPolicy: Qt.StrongFocus
                 onClicked: dialog.toggle(modelData.key)
                 // The style's own indicator is replaced by one at the row's start: some styles (Fusion) draw
                 // theirs on the right, over the row's content.

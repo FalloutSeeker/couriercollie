@@ -66,7 +66,16 @@ print("scan found:", [(i.get("name"), i.get("status")) for i in b.scanItems], fl
 from PySide6.QtCore import QObject  # noqa: E402
 picked = win.findChild(QObject, "scanDialog").property("pickedCount")
 print("ticked to start with:", picked, "of", sum(i["status"] == "new" for i in b.scanItems), "new", flush=True)
-b.trackFound([str(i["key"]) for i in b.scanItems if i.get("status") != "problem"])
+# Track Selected, as clicking it does (its keys come from QML as numbers: 3.0).
+h.click("selectAll")
+pump(seconds=0.3)
+picked = win.findChild(QObject, "scanDialog").property("pickedCount")
+before = len(b._config.repos)
+h.press("scanDialog", f"Track Selected ({picked})")
+pump(lambda: len(b._config.repos) > before, 10)
+print(f"Track Selected: {before} -> {len(b._config.repos)} tracked", flush=True)
+if len(b._config.repos) - before != picked:
+    print(f"FAIL Track Selected tracked {len(b._config.repos) - before} of {picked} ticked", flush=True)
 h.call("scanDialog", "close")
 pump(lambda: not b.checking, 120)
 shot("list-after-scan")
