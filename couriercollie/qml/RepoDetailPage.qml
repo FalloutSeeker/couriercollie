@@ -99,6 +99,9 @@ Kirigami.ScrollablePage {
         Kirigami.Action {
             text: "Stop Tracking…"
             icon.name: "edit-delete-remove"
+            // (Its update would still install it, for a repo no longer here: once it's done.)
+            enabled: page.details.updating !== true
+            tooltip: enabled ? "" : "Wait for its update to finish"
             onTriggered: removeDialog.open()
         }
     ]

@@ -1243,6 +1243,8 @@ class Backend(QObject, Updating, Account):
 
     @Slot(str)
     def removeRepo(self, repo_id):
+        if repo_id in self._updating:
+            return  # (what it's installing would land for a repo that's gone: the page waits for it)
         if (repo := self._config.find(repo_id)) and repo.icon.startswith("file:"):
             picture = Path(repo.icon.removeprefix("file:"))
             if picture.parent == icons.cache_dir():
