@@ -8,6 +8,8 @@ Inspired by [Obtainium](https://github.com/ImranR98/Obtainium), keep the softwar
 
 ![couriercollie showing an update for LocalSend](docs/screenshot.png)
 
+![couriercollie in a light theme, with a clone's install script after an update](docs/screenshot-light.png)
+
 AppImages, programs from release archives, downloaded `.rpm` or `.deb` files and git clones never get updates from
 your package manager. couriercollie keeps track of them, tells you when there's a new version, and updates them with
 a click.
