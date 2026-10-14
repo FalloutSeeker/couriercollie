@@ -61,6 +61,9 @@ Kirigami.Dialog {
     // A fixed height: the list can be long, and scrolls inside the dialog.
     // Never taller than the window (a dialog taller than it can't be centred, and Kirigami loops trying).
     preferredHeight: Math.min(Kirigami.Units.gridUnit * 30, applicationWindow().height - Kirigami.Units.gridUnit * 4)
+    // At most that, with room for the slide it opens with (two grid units): Kirigami's own limit leaves none, so in a
+    // short window it ran out of the bottom while opening, Qt pushed it back, and the two fought over where it goes.
+    maximumHeight: applicationWindow().height - Kirigami.Units.gridUnit * 6
     standardButtons: Kirigami.Dialog.NoButton
 
     customFooterActions: [

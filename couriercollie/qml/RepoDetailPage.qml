@@ -260,6 +260,9 @@ Kirigami.ScrollablePage {
                 review();
         }
         objectName: "stepDialog"
+        // (Room for the slide it opens and closes with: at Kirigami's own limit, a short window had Qt and Kirigami
+        // fighting over where it goes.)
+        maximumHeight: applicationWindow().height - Kirigami.Units.gridUnit * 6
         title: why === "changed" ? `${changes || Labels.capitalized(chosen.what)} Changed`
             : why === "change" ? `After Downloading ${name}`
             : why === "installed" ? `${name} Is Downloaded`
