@@ -34,6 +34,7 @@ git("push", "-q", "origin", "HEAD:main", cwd=other)
 git("clone", "-q", str(upstream), str(clone))
 start = git("rev-parse", "HEAD", cwd=clone)
 (clone / "install.sh").write_text("#!/bin/sh\necho installed > installed.txt\n")
+(clone / "setup.sh").write_text("#!/bin/sh\necho set up > setup.txt\n")  # (another choice in the window)
 for i in (1, 2):
     (other / "README.md").write_text(f"change {i}\n")
     git("commit", "-q", "-am", f"change {i}", cwd=other)
@@ -89,6 +90,16 @@ def details():
     return b.details(ID)
 
 
+def pick(index):
+    """Picks a script in the window's list, as a click on it does."""
+    h.engine.evaluate("(function (c, i) { c.activated(i); })").call(
+        [h.engine.toScriptValue(h.win.findChild(QObject, "stepChoice")), index])
+
+
+def shown_text():
+    return h.win.findChild(QObject, "reviewText").property("text") or ""
+
+
 h.run([
     (300, checked_once),
     (300, lambda: h.check("list: the update icon is a button for a clone", h.find("updateButton:" + ID) is not None)),
@@ -102,6 +113,11 @@ h.run([
                           and "echo installed" in (h.win.findChild(QObject, "reviewText").property("text") or ""))),
     (0, lambda: h.check("…and nothing is done yet", git("rev-parse", "HEAD", cwd=clone) == start)),
     (0, lambda: h.shot("update-clone-1-asks")),
+    # Picking another script in the list shows it; picking back shows the first again: what Update approves.
+    (0, lambda: pick(1)),
+    (300, lambda: h.check("picking setup.sh shows it", "echo set up" in shown_text())),
+    (0, lambda: pick(0)),
+    (300, lambda: h.check("…picking install.sh again shows it", "echo installed" in shown_text())),
     (0, lambda: h.press("stepDialog", "Update")),
     h.until(lambda: not details()["updating"] and details()["stepResult"] != "", 30000),
     (500, lambda: h.check("pulled to the newest commit", git("rev-parse", "HEAD", cwd=clone) == newest)),

@@ -470,7 +470,9 @@ class Updating:
             return ""
         names, _diff = applying.changes(repo.local_path, repo.apply_command, repo.apply_commit)
         names = [applying._shown(n) for n in names]  # (what can't be seen, shown as its code)
-        return ", ".join(names[:3]) + (f" and {len(names) - 3} more" if len(names) > 3 else "")
+        more = "" if len(names) <= 3 else f" and {len(names) - 3} more" if len(names) < applying.NAMED_MAX else \
+            " and more"  # (only so many are named)
+        return ", ".join(names[:3]) + more
 
     @Slot(str, result="QVariantMap")
     def readmeSteps(self, repo_id):
@@ -481,21 +483,31 @@ class Updating:
         heading, text = applying.readme_section(repo.local_path)
         return {"heading": heading, "text": text}
 
-    @Slot(str, str)
+    @Slot(str, str, result=str)
+    def stepCommandLine(self, repo_id, command):
+        """A choice as one line to paste into a terminal (one that can't be approved here can be run there)."""
+        repo = self._config.find(repo_id)
+        return applying.terminal_line(repo.local_path, command.strip()) if repo and _is_clone(repo) else ""
+
+    @Slot(str, str, result=str)
     def approveStep(self, repo_id, command):
         """Run this after each update, as it is now: what it names is remembered, so a change is noticed. Only one
-        of the choices (_step_choices): nothing typed in."""
+        of the choices (_step_choices): nothing typed in. "" once approved; else why it wasn't, for the window."""
         repo = self._config.find(repo_id)
-        if not repo or not _is_clone(repo) or not (command := command.strip()) \
+        if not repo or not _is_clone(repo):
+            return "It\u2019s no longer a clone couriercollie updates."
+        if not (command := command.strip()) \
                 or command not in (c["command"] for c in self._step_choices(repo, self._details.get(repo_id))):
-            return
+            return "It\u2019s no longer one of the choices: the clone changed."
         # As the window showed it (reviewStep): never what wasn't shown, nor what couldn't be shown whole.
-        if (shown := self._reviewed.pop((repo_id, command), None)) is None \
-                or applying.unapprovable(repo.local_path, command):
-            return
+        if (shown := self._reviewed.pop((repo_id, command), None)) is None:
+            return "It wasn\u2019t shown here yet: read it first."
+        if why := applying.unapprovable(repo.local_path, command):
+            return why
         repo.apply_command, (repo.apply_approved, repo.apply_commit) = command, shown
         repo.apply_skip = False
         self._changed(repo_id)
+        return ""
 
     @Slot(str)
     def skipStep(self, repo_id):
@@ -505,11 +517,14 @@ class Updating:
             self._steps.pop(repo_id, None)
             self._changed(repo_id)
 
-    @Slot(str, str)
+    @Slot(str, str, result=str)
     def updateWithStep(self, repo_id, command):
-        """Update, the first time (the page asked): download, then run this, now and after each update."""
-        self.approveStep(repo_id, command)
+        """Update, the first time (the page asked): download, then run this, now and after each update. "" once
+        started; else why it couldn't be approved (and nothing is downloaded)."""
+        if why := self.approveStep(repo_id, command):
+            return why
         self.updateRepo(repo_id)
+        return ""
 
     @Slot(str)
     def updateOnly(self, repo_id):
@@ -523,8 +538,14 @@ class Updating:
         repo = self._config.find(repo_id)
         if not repo or not repo.apply_command or repo_id in self._updating or not _is_clone(repo):
             return
-        if applying.missing(repo.local_path, repo.apply_command) or not self._step_still_approved(repo):
-            self.detailsChanged.emit(repo_id)  # the page asks for it to be looked at again (or says it's gone)
+        if gone := applying.missing(repo.local_path, repo.apply_command):
+            self._steps.pop(repo_id, None)  # (its last run says nothing now: what it ran is gone)
+            self._update_notes[repo_id] = ("warning", f"{gone[0].removeprefix('./')} is no longer in the clone, so "
+                                                      "it can\u2019t run.")
+            self.detailsChanged.emit(repo_id)
+            return
+        if not self._step_still_approved(repo):
+            self.detailsChanged.emit(repo_id)  # the page asks for it to be looked at again
             return
         # sudo in the step asks for the password in the desktop's own window (couriercollie never sees it). Without
         # one (it couldn't be set up), sudo stops, and the page offers the command for a terminal.

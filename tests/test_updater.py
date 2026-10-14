@@ -157,9 +157,42 @@ class AfterUpdatingTest(UpstreamCase):
         self.assertFalse(self.backend._step_still_approved(self.repo()))
 
     def test_nothing_is_approved_unseen(self):
-        # Approving needs the window to have shown it (reviewStep): a call without that approves nothing.
-        self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
+        # Approving needs the window to have shown it (reviewStep): a call without that approves nothing, and says so.
+        self.assertIn("wasn\u2019t shown", self.backend.approveStep(self.id, "/bin/sh ./deploy.sh"))
         self.assertEqual(self.repo().apply_command, "")
+        self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")
+        self.assertEqual(self.backend.approveStep(self.id, "/bin/sh ./deploy.sh"), "")
+
+    def test_names_and_text_that_arent_utf8(self):
+        # A file named in Latin-1, and one whose text is: shown (the name's byte by its code), approved, and a change
+        # to them shown as what changed. Nothing stops on them.
+        latin = os.fsdecode(b"r\xe9glages.sh")
+        (self.other / latin).write_bytes(b"echo r\xe9glages\n")
+        (self.other / "\u00e9t\u00e9.sh").write_text("echo summer\n")  # (UTF-8, which git would quote)
+        (self.other / "deploy.sh").write_bytes("#!/bin/sh\n. ./r\udce9glages.sh\n. ./\u00e9t\u00e9.sh\n"
+                                              .encode("utf-8", "surrogateescape"))
+        git(self.other, "add", ".")
+        git(self.other, "commit", "-q", "-m", "settings")
+        git(self.other, "push", "-q", "origin", "HEAD:main")
+        git(self.clone, "pull", "-q")
+        review = self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")
+        self.assertIn("# ---- r\u27e8E9\u27e9glages.sh ----", review)
+        self.assertEqual(self.backend.approveStep(self.id, "/bin/sh ./deploy.sh"), "")
+        (self.other / latin).write_bytes(b"echo r\xe9glages chang\xe9s\n")
+        (self.other / "\u00e9t\u00e9.sh").write_text("echo autumn\n")
+        git(self.other, "commit", "-q", "-am", "changed")
+        self.update()
+        self.assertTrue(self.details()["stepChanged"])
+        self.assertEqual(self.backend.stepChanges(self.id), "r\u27e8E9\u27e9glages.sh, \u00e9t\u00e9.sh")
+        self.assertIn("+echo autumn", self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh"))
+
+    def test_run_again_once_its_script_is_gone(self):
+        self.approved("/bin/sh ./deploy.sh")
+        (self.clone / "deploy.sh").unlink()  # (removed by hand, after it failed)
+        self.backend.runStep(self.id)
+        d = self.details()
+        self.assertIn("deploy.sh is no longer in the clone", d["updateNote"])
+        self.assertEqual(d["stepResult"], "")
 
     def test_a_change_is_shown_as_what_changed(self):
         # Approved at one commit; an update changes the script: the window opens with what changed (named, and as a
@@ -184,8 +217,10 @@ class AfterUpdatingTest(UpstreamCase):
         git(self.clone, "add", ".")
         self.assertIn("too many", self.backend.stepBlocked(self.id, "/bin/sh ./deploy.sh"))
         self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")
-        self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
-        self.assertEqual(self.repo().apply_command, "")
+        self.assertIn("too many", self.backend.updateWithStep(self.id, "/bin/sh ./deploy.sh"))  # (the window says)
+        self.assertEqual((self.repo().apply_command, self.repo().installed), ("", self.start))  # nor downloaded
+        self.assertEqual(self.backend.stepCommandLine(self.id, "/bin/sh ./deploy.sh"),
+                         f"cd {self.clone} && /bin/sh ./deploy.sh")  # (to run it in a terminal instead)
 
     def test_only_download(self):
         asks = self.asked()

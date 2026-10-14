@@ -199,6 +199,10 @@ Kirigami.ScrollablePage {
         property var readme: ({ heading: "", text: "" })
         property string changes: ""  // the files that changed since it was approved ("lib/common.sh, install.sh")
         property string blocked: ""  // why it can't be approved here (it couldn't be shown whole), or ""
+        property string refused: ""  // why approving it just didn't (it changed while the window was open), or ""
+        // The command whose text is shown: what the buttons approve (never another one, whatever the list shows).
+        property string shown: ""
+        property string choicesKey: ""
         // The height the script and the README's steps share: what the window has left after the dialog's title, text
         // and buttons. Kept within it, the dialog never needs a scrollbar of its own (which, narrowing the text and
         // so changing its height, would loop).
@@ -207,16 +211,50 @@ Kirigami.ScrollablePage {
         function ask(why) {
             stepDialog.why = why;
             choice = Math.max(0, choices.findIndex(c => c.command === page.details.step));
-            reviewText.text = backend.reviewStep(page.repoId, chosen.command);
+            choicesKey = JSON.stringify(choices);
             readme = backend.readmeSteps(page.repoId);
-            changes = why === "changed" ? backend.stepChanges(page.repoId) : "";
-            blocked = backend.stepBlocked(page.repoId, chosen.command);
+            refused = "";
+            review();
             open();
         }
 
-        onChoiceChanged: {
-            reviewText.text = backend.reviewStep(page.repoId, chosen.command);
-            blocked = backend.stepBlocked(page.repoId, chosen.command);
+        // Shows the chosen command and what it covers (read from the list itself: `chosen` may not have caught up).
+        function review() {
+            const c = choices[Math.min(choice, choices.length - 1)] || ({ command: "" });
+            shown = c.command;
+            reviewText.text = backend.reviewStep(page.repoId, shown);
+            changes = why === "changed" ? backend.stepChanges(page.repoId) : "";
+            blocked = backend.stepBlocked(page.repoId, shown);
+        }
+
+        // The buttons' approval, or why it didn't happen: then the window stays, showing it as it is now.
+        function approve() {
+            const update = why === "update";
+            const no = update ? backend.updateWithStep(page.repoId, shown) : backend.approveStep(page.repoId, shown);
+            if (no !== "") {
+                review();
+                refused = blocked !== "" ? "" : no;  // (blocked says it already)
+                return;
+            }
+            close();
+            if (!update && why !== "change")
+                backend.runStep(page.repoId);
+        }
+
+        onChoiceChanged: if (visible) { refused = ""; review(); }
+        // What it could run changed while the window is open (a download, a Refresh): the same one, shown again.
+        onChoicesChanged: {
+            const key = JSON.stringify(choices);
+            if (!visible || key === choicesKey)
+                return;
+            choicesKey = key;
+            let i = choices.findIndex(c => c.command === shown);
+            if (i < 0)  // (gone, or none was there yet: the one approved, or the first)
+                i = Math.max(0, choices.findIndex(c => c.command === page.details.step));
+            if (choice !== i)
+                choice = i;  // (shown by onChoiceChanged)
+            else
+                review();
         }
         objectName: "stepDialog"
         title: why === "changed" ? `${changes || Labels.capitalized(chosen.what)} Changed`
@@ -231,21 +269,17 @@ Kirigami.ScrollablePage {
                 text: stepDialog.why === "update" ? "Update" : stepDialog.why === "change" ? "Use This" : "Run"
                 icon.name: stepDialog.why === "update" ? "system-software-update" : "media-playback-start"
                 enabled: stepDialog.blocked === ""  // (one that can't be shown whole can't be approved: see the text)
-                onTriggered: {
-                    stepDialog.close();
-                    if (stepDialog.why === "update") {
-                        backend.updateWithStep(page.repoId, stepDialog.chosen.command);
-                    } else {
-                        backend.approveStep(page.repoId, stepDialog.chosen.command);
-                        if (stepDialog.why !== "change")
-                            backend.runStep(page.repoId);
-                    }
-                }
+                onTriggered: stepDialog.approve()
+            },
+            Kirigami.Action {
+                text: "Copy Command"
+                icon.name: "edit-copy"
+                visible: stepDialog.blocked !== ""  // (to run it in a terminal, as the text says)
+                onTriggered: backend.copyText(backend.stepCommandLine(page.repoId, stepDialog.shown))
             },
             Kirigami.Action {
                 text: "Only Download"
                 icon.name: "download"
-                visible: stepDialog.why !== "changed"
                 onTriggered: {
                     stepDialog.close();
                     if (stepDialog.why === "update")
@@ -267,11 +301,23 @@ Kirigami.ScrollablePage {
             QQC2.Label {
                 Layout.fillWidth: true
                 textFormat: Text.PlainText
-                text: stepDialog.blocked !== "" ? `${stepDialog.blocked} It can’t be approved here: run it in a terminal instead${stepDialog.why === "changed" ? "" : ", or choose Only Download"}.`
+                text: stepDialog.blocked !== "" ? `${stepDialog.blocked} It can’t be approved here: run it in a terminal instead, or choose Only Download.`
                     : stepDialog.why === "change" ? `Runs after each download of ${stepDialog.name}. It can change anything your account can, so read it first.`
-                    : stepDialog.why === "changed" ? `This download changed ${stepDialog.changes || stepDialog.chosen.what}. What changed is shown first; read it before it runs.`
+                    : stepDialog.why === "changed" && stepDialog.changes !== "" ? `This download changed ${stepDialog.changes}. What changed is shown first; read it before it runs.`
+                    : stepDialog.why === "changed" ? `This download changed ${stepDialog.chosen.what}. Read it before it runs.`
                     : stepDialog.why === "installed" ? `Run ${stepDialog.chosen.what} now, and after each download? It can change anything your account can, so read it first.`
                     : `Update downloads ${stepDialog.name}, then runs ${stepDialog.chosen.what}. It can change anything your account can, so read it first. From now on it runs after each download, and you’re asked again only if it changes.`
+                wrapMode: Text.Wrap
+            }
+
+            // Approving it just didn't happen: why (it's shown again below, as it is now).
+            QQC2.Label {
+                objectName: "stepRefused"
+                Layout.fillWidth: true
+                visible: stepDialog.refused !== ""
+                textFormat: Text.PlainText
+                text: `${stepDialog.refused} It’s shown again below, as it is now.`
+                color: Kirigami.Theme.negativeTextColor
                 wrapMode: Text.Wrap
             }
 

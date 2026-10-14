@@ -415,7 +415,7 @@ def _tracked(root: Path) -> list[str] | None:
     from .updater import UpdateError, _git
 
     try:
-        out = _git(str(root), "ls-files", "-z")
+        out = _git(str(root), "ls-files", "-z", errors="surrogateescape")
     except UpdateError:
         return None
     return sorted(p for p in out.stdout.split("\0") if p) if out.returncode == 0 else None
@@ -453,7 +453,8 @@ def _file_words(file: Path) -> list[tuple[str, bool]]:
         return []  # (not text: a picture, a program)
     found = []
     # (A line ending in "\" goes on in the next: its first word isn't a command.)
-    for line in re.sub(r"\\\r?\n", " ", data.decode("utf-8", "replace")).splitlines():
+    # (Bytes that aren't UTF-8 kept as they are: a name in another encoding still names its file.)
+    for line in re.sub(r"\\\r?\n", " ", data.decode("utf-8", "surrogateescape")).splitlines():
         # (Quotes don't end a word: "$DIR/hooks/"*.sh is one, to the shell as here.)
         line = _VARIABLE_ANY.sub(_VAR, line).replace('"', "").replace("'", "")
         for part in _COMMANDS.split(line):
@@ -643,7 +644,7 @@ def _gitlinks(root: Path) -> list[str]:
     from .updater import UpdateError, _git
 
     try:
-        staged = _git(str(root), "ls-files", "-s", "-z").stdout
+        staged = _git(str(root), "ls-files", "-s", "-z", errors="surrogateescape").stdout
     except UpdateError:
         return ["?"]
     return [e for e in staged.split("\0") if e.startswith("160000")]
@@ -655,11 +656,11 @@ def fingerprint(path: str, command: str) -> str:
     files = named_files(path, command)
     # The clone's submodules, always (a step can run one's file without saying "submodule"): the commits they're
     # at, and where they come from. A pull that only moves one changes what a step running its files runs.
-    digest.update(b"\0submodules\0" + "\0".join(_gitlinks(root)).encode())
+    digest.update(b"\0submodules\0" + os.fsencode("\0".join(_gitlinks(root))))
     if _usable(root / ".gitmodules", root):
         digest.update(b"\0.gitmodules\0" + (root / ".gitmodules").read_bytes())
     for file in files:
-        digest.update(b"\0" + str(file.relative_to(root)).encode() + b"\0")
+        digest.update(b"\0" + os.fsencode(file.relative_to(root)) + b"\0")
         try:
             with file.open("rb") as f:
                 digest.update(hashlib.file_digest(f, "sha256").digest())  # (in parts: a big file too)
@@ -679,7 +680,11 @@ _FETCHES = re.compile(r"\b(curl|wget|git (?:clone|pull|fetch|submodule)|(?:npm|p
 
 
 def _shown(text: str) -> str:
-    return _HIDDEN.sub(lambda m: f"\u27e8U+{ord(m.group()):04X}\u27e9", text)
+    # (A name's byte that isn't UTF-8, kept as git gave it: shown as that byte.)
+    return _HIDDEN.sub(lambda m: f"\u27e8U+{ord(m.group()):04X}\u27e9", text).translate(_BYTES)
+
+
+_BYTES = {c: f"\u27e8{c - 0xDC00:02X}\u27e9" for c in range(0xDC80, 0xDD00)}
 
 
 def changes(path: str, command: str, since: str) -> tuple[list[str], str]:
@@ -696,10 +701,11 @@ def changes(path: str, command: str, since: str) -> tuple[list[str], str]:
     names += [e.split("\t", 1)[1] for e in _gitlinks(root) if "\t" in e]
     diff_args = ["diff", "--no-color", "--no-ext-diff", "--text", "--no-textconv", since, "--"]
     try:
-        listed = _git(str(root), "diff", "--name-only", "--no-textconv", since, "--", *names)
+        listed = _git(str(root), "diff", "--name-only", "-z", "--no-textconv", since, "--", *names,
+                      errors="surrogateescape")  # (-z: names as they are, never quoted)
         if listed.returncode != 0:
             return [], ""
-        changed = listed.stdout.split("\n")
+        changed = listed.stdout.split("\0")
         diff = "".join(_git(str(root), *diff_args, name).stdout for name in names if name in changed)
     except UpdateError:
         return [], ""
@@ -713,7 +719,7 @@ def unapprovable(path: str, command: str) -> str:
     checked, or a script too big to read."""
     files = named_files(path, command)
     if len(files) >= NAMED_MAX:
-        return f"It runs or reads more than {NAMED_MAX} files: too many to show and check here."
+        return f"It runs or reads {NAMED_MAX} files or more: too many to show and check here."
     big = next((f.name for f in files if _is_script(f) and _usable(f, Path(path).resolve())
                 and f.stat().st_size > FILE_MAX_BYTES), "")
     return f"{big} is too big to show here, so what it runs can\u2019t be checked." if big else ""

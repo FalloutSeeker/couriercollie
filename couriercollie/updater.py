@@ -70,12 +70,14 @@ def shown(path) -> str:
     return "~" + text[len(home):] if text == home or text.startswith(home + "/") else text
 
 
-def _git(path: str, *args: str, timeout: int = 30) -> subprocess.CompletedProcess:
+def _git(path: str, *args: str, timeout: int = 30, errors: str = "replace") -> subprocess.CompletedProcess:
     # safe.directory: git won't otherwise read a clone that belongs to another user (e.g. the system, in /opt).
+    # What isn't UTF-8 (a file's text, a commit message, a name in another encoding) never stops it: shown replaced,
+    # or, for names that are opened after (errors="surrogateescape"), kept as they are.
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0", "LC_ALL": "C"}
     try:
         return subprocess.run(["git", "-c", f"safe.directory={path}", "-C", path, *args], capture_output=True,
-                              text=True, timeout=timeout, env=env)
+                              encoding="utf-8", errors=errors, timeout=timeout, env=env)
     except subprocess.TimeoutExpired as e:
         raise UpdateError("Git took too long to answer; check your connection and try again.") from e
     except OSError as e:
