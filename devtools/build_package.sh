@@ -11,7 +11,7 @@ work=$(mktemp -d)
 # Files made in a container belong to its users: removed from inside podman's user namespace.
 trap 'podman unshare rm -rf "$work"' EXIT
 git archive --format=tar.gz --prefix="couriercollie-$version/" -o "$work/couriercollie-$version.tar.gz" HEAD
-cp packaging/couriercollie.spec packaging/arch/PKGBUILD packaging/debian/control "$work/"
+cp packaging/couriercollie.spec packaging/arch/PKGBUILD packaging/debian/control packaging/debian/prerm "$work/"
 # The Arch package's version is written in its PKGBUILD: kept in step with the app's, so a release can't forget it.
 sed -i "s/^pkgver=.*/pkgver=$version/" "$work/PKGBUILD"
 mkdir -p dist
@@ -42,6 +42,7 @@ install -Dm644 README.md $root/usr/share/doc/couriercollie/README.md
 { printf "couriercollie: GPL-3.0-or-later. Its Breeze icons (couriercollie/icons): LGPL-3.0-or-later.\n\n"; cat LICENSE; } \
     > $root/usr/share/doc/couriercollie/copyright
 sed "s/@VERSION@/'"$version"'/" /work/control > $root/DEBIAN/control
+install -m755 /work/prerm $root/DEBIAN/prerm
 dpkg-deb --build --root-owner-group $root /dist/couriercollie_'"$version"'_all.deb >/dev/null'
 
 arch_build='
