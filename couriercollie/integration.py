@@ -72,6 +72,15 @@ def menu_entry_text(launcher: str | Path = LAUNCHER) -> str:
     )
 
 
+ICON_SIZES = (16, 22, 24, 32, 48, 64, 128, 256, 512)
+
+
+def icon_files() -> list[Path]:
+    """The app's icon at each size it comes in, where ICON_FILE (the largest) is."""
+    hicolor = ICON_FILE.parents[2]
+    return [p for s in ICON_SIZES if (p := hicolor / f"{s}x{s}" / "apps" / f"{APP_ID}.png").is_file()]
+
+
 def icon_path() -> Path:
     return _data_home() / _ICON_IN
 

@@ -18,6 +18,8 @@ BuildRequires:  desktop-file-utils
 # The window: PySide6 and Kirigami (KDE's toolkit, a Qt library: not the rest of KDE). The icons come with the app.
 Requires:       python3
 Requires:       python3-pyside6
+# Its icon goes in the hicolor theme, which needs this to be found by name.
+Requires:       hicolor-icon-theme
 # KDE's look for the window's controls; without it, Qt's Fusion is used.
 Recommends:     kf6-qqc2-desktop-style
 # Git clones, and updates that need your password.

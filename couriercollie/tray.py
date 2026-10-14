@@ -26,7 +26,13 @@ def app_icon() -> QIcon:
     """couriercollie's icon: from the icon theme (installed with the package, or by a project folder's first run),
     else the file in the project."""
     icon = QIcon.fromTheme(integration.ICON)
-    return icon if not icon.isNull() else QIcon(str(integration.ICON_FILE))
+    if icon.isNull():
+        # Every size, not only the largest: a window's icon is handed to the desktop at its sizes, and the largest
+        # alone is too big for some (X11 drops it, and the window has none).
+        icon = QIcon()
+        for file in integration.icon_files():
+            icon.addFile(str(file))
+    return icon
 
 
 def with_count(icon: QIcon, count: int) -> QIcon:

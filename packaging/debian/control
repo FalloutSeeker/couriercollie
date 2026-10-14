@@ -9,7 +9,7 @@ Depends: python3 (>= 3.13), python3-pyside6.qtcore, python3-pyside6.qtgui, pytho
  python3-pyside6.qtqml, python3-pyside6.qtquick, python3-pyside6.qtdbus, python3-pyside6.qtnetwork,
  python3-pyside6.qtsvg, qml6-module-org-kde-kirigami, qml6-module-qtquick-controls,
  qml6-module-qtquick-dialogs, qml6-module-qtquick-layouts, qml6-module-qtquick-window, libnotify-bin, git, pkexec,
- libsecret-tools
+ libsecret-tools, hicolor-icon-theme
 Recommends: qml6-module-org-kde-desktop
 Description: Keep software from GitHub and GitLab up to date
  A desktop app that keeps track of software you got straight from GitHub or GitLab: git clones, AppImages,
