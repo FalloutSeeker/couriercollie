@@ -253,6 +253,65 @@ if item:
     check("Quit, from the tray icon's menu, ends it", wait_for(lambda: app.poll() is not None, 15))
 if app.poll() is None:
     app.terminate()
+
+# ---- Opened and closed, every way a person does it ------------------------------------------------------------------
+
+print(f"=== {DISTRO}: opened and closed, every way", flush=True)
+
+
+def launch():
+    return subprocess.Popen([command or "couriercollie"], env=ENV, stdout=log, stderr=subprocess.STDOUT)
+
+
+def copies():
+    """couriercollie's processes, from /proc (no pgrep in every image)."""
+    found = []
+    for d in Path("/proc").iterdir():
+        try:
+            words = (d / "cmdline").read_bytes().split(b"\0")
+        except OSError:
+            continue
+        if d.name.isdigit() and any(w.endswith(b"/couriercollie") or w == b"couriercollie" for w in words):
+            found.append(d.name)
+    return found
+
+
+app = launch()
+check("started again after Quit", wait_for(lambda: window_id() != "", 30))
+sh("wmctrl", "-c", "couriercollie", env=ENV)
+check("closing the window (tray on) leaves it running", wait_for(lambda: window_id() == "", 5) and app.poll() is None)
+second = launch()
+check("starting it again brings its window back…", wait_for(lambda: window_id() != "", 15))
+check("…from the copy already running (the second start hands over and ends)",
+      wait_for(lambda: second.poll() is not None, 15) and app.poll() is None, str(copies()))
+for i in range(5):  # quit and start, quickly
+    app.terminate()
+    wait_for(lambda: app.poll() is not None, 15)
+    app = launch()
+    if not wait_for(lambda: window_id() != "", 30):
+        break
+check("quit and started five times in a row: it starts each time", window_id() != "" and app.poll() is None)
+app.kill()  # killed outright: its socket is left behind
+wait_for(lambda: app.poll() is not None, 10)
+app = launch()
+check("killed outright, it starts again (what it left behind doesn't stop it)", wait_for(lambda: window_id() != "", 30))
+app.terminate()
+wait_for(lambda: app.poll() is not None, 15)
+good = config.read_text()
+broken = good + "\n[[repos]\nbroken"
+config.write_text(broken)
+app = launch()
+check("with its settings file broken, it still starts", wait_for(lambda: window_id() != "", 30))
+time.sleep(3)
+shot("4-broken-settings")
+check("…and saves nothing over the broken file", config.read_text() == broken)
+config.write_text(good)  # fixed by hand while it's open
+time.sleep(3)
+listed = sh(sys.executable, "-c", f"from couriercollie import config; from pathlib import Path; "
+            f"print(sorted(r.id for r in config.load(Path({str(config)!r})).repos))").stdout.strip()
+check("…and, fixed by hand, the file still lists your repos", listed == str(sorted(REPOS)), listed)
+app.terminate()
+check("…and quits normally", wait_for(lambda: app.poll() is not None, 15))
 log.close()
 warnings = [ln for ln in (OUT / f"{DISTRO}-app.log").read_text().splitlines()
             if any(w in ln.lower() for w in ("warning", "error", "traceback")) and "propagateSizeHints" not in ln]
