@@ -136,6 +136,11 @@ class ProjectInfo:
 _SSH_URL = re.compile(r"^(?:ssh://git@([^:/]+)(?::\d+)?/|git@([^:/]+):)(.+)$")
 
 
+# Sub-pages GitLab still serves without "/-/" in front, after a project's address.
+_GITLAB_PAGES = {"tree", "blob", "raw", "blame", "commits", "commit", "tags", "releases", "issues", "merge_requests",
+                 "branches", "compare", "pipelines", "wikis", "graphs", "network", "activity", "archive"}
+
+
 def parse_url(text: str) -> RepoRef:
     """Turn whatever the user pasted into a RepoRef. Accepts web URLs (with or without https://, extra path like
     /releases or /-/tags, a trailing .git) and git@host:owner/repo SSH addresses."""
@@ -172,6 +177,9 @@ def parse_url(text: str) -> RepoRef:
     parts = [p for p in path.split("/") if p]
     if domain == "github.com":
         parts = parts[:2]
+    elif cut := next((i for i, p in enumerate(parts) if i >= 2 and p in _GITLAB_PAGES), None):
+        # GitLab's older sub-page addresses, without "/-/" (it still serves them): …/project/tree/main.
+        parts = parts[:cut]
     if len(parts) < 2:
         raise ValueError("The address needs to include the owner and the project, e.g. github.com/owner/project")
     parts[-1] = parts[-1].removesuffix(".git")

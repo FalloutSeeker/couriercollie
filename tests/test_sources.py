@@ -38,6 +38,12 @@ class ParseUrlTest(unittest.TestCase):
                    "aeroshell/atp/aerothemeplasma")
         self.check("https://gitlab.com/veloren/veloren.git", "gitlab.com", "veloren/veloren")
         self.check("ssh://git@gitlab.com/group/sub/proj.git", "gitlab.com", "group/sub/proj")
+        # GitLab's older sub-pages, without "/-/" (it still serves them); a project that's called "releases" stays.
+        self.check("https://gitlab.com/gitlab-org/frontend/eslint-plugin/tree/main", "gitlab.com",
+                   "gitlab-org/frontend/eslint-plugin")
+        self.check("gitlab.com/o/p/releases/v1.0", "gitlab.com", "o/p")
+        self.check("invent.kde.org/system/dolphin/blob/master/README.md", "invent.kde.org", "system/dolphin")
+        self.check("gitlab.com/group/releases", "gitlab.com", "group/releases")
 
     def test_ports(self):
         # A self-hosted GitLab on a port of its own is asked there; the usual ports, and SSH's, aren't kept.
