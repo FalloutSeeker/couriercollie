@@ -168,7 +168,7 @@ rid = repo_at(diverged)
 if rid:
     d = update(rid)
     print(f"  update: {d['updateNote']}", flush=True)
-    check("Update leaves it, and says to combine them by hand", "commits of its own" in d["updateNote"],
+    check("Update leaves it, and says to combine them by hand", "commits of your own" in d["updateNote"],
           d["updateNote"])
     in_terminal(f"cd {diverged} && git pull --rebase")
     d = refresh(rid)

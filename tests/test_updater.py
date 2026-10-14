@@ -367,13 +367,20 @@ class PullTest(UpstreamCase):
         mine = git(self.clone, "rev-parse", "HEAD")
         self.assertEqual(updater.pull(str(self.clone), "main", []), (mine, mine, 0, self.start))
 
+    def test_not_in_the_middle_of_a_rebase(self):
+        self.push_upstream()
+        (self.clone / ".git" / "rebase-merge").mkdir()
+        with self.assertRaisesRegex(updater.UpdateError, "rebase is under way"):
+            updater.pull(str(self.clone), "main", [])
+        self.assertEqual(git(self.clone, "rev-parse", "HEAD"), self.start)
+
     def test_your_own_commits_are_never_combined(self):
         self.push_upstream()
         (self.clone / "b.txt").write_text("mine\n")
         git(self.clone, "add", ".")
         git(self.clone, "commit", "-q", "-m", "mine")
         mine = git(self.clone, "rev-parse", "HEAD")
-        with self.assertRaisesRegex(updater.UpdateError, "commits of its own"):
+        with self.assertRaisesRegex(updater.UpdateError, "commits of your own"):
             updater.pull(str(self.clone), "main", [])
         self.assertEqual(git(self.clone, "rev-parse", "HEAD"), mine)  # untouched
 

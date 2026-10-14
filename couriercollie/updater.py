@@ -98,8 +98,8 @@ def git_out(path: str, *args: str, timeout: int = 30) -> str:
 # line that says why looks like.
 _SAYS_NOTHING = re.compile(r"see the above|problem occurred during or after|has been aborted|abort, retry, ignore",
                            re.I)
-_SAYS_WHY = re.compile(r"error|fail|cannot|can't|couldn't|unable|conflict|nothing provides|not found|no such|"
-                       r"denied|signature|requires|broken|refus", re.I)
+_SAYS_WHY = re.compile(r"error|fail|cannot|can't|couldn't|could not|unable|conflict|nothing provides|not found|"
+                       r"no such|does not appear|denied|signature|requires|broken|refus", re.I)
 
 
 def _last_line(result: subprocess.CompletedProcess, program: str = "git") -> str:
@@ -229,8 +229,17 @@ def _explain(result: subprocess.CompletedProcess) -> UpdateError:
     """Why git refused, for the user. Its reason may come before its last line ("Aborting")."""
     said = (result.stderr + result.stdout).lower()
     if "not possible to fast-forward" in said or "diverging" in said:
-        return UpdateError("Your clone has commits of its own that aren\u2019t on the project\u2019s branch, so it "
-                           "wasn\u2019t changed. Pull it yourself in a terminal to choose how to combine them.")
+        # (Commits of yours, or the project rewrote its history: a force-push. Either way, yours to combine.)
+        return UpdateError("Your clone and the project\u2019s branch have gone separate ways (commits of your own, "
+                           "or the project rewrote its history), so it wasn\u2019t changed. Pull it yourself in a "
+                           "terminal to choose how to combine them.")
+    if "does not appear to be a git repository" in said:
+        return UpdateError("Your clone has no remote for the project (its \u201corigin\u201d is missing), so the "
+                           "update couldn\u2019t be downloaded. Add it (git remote add origin <the project\u2019s "
+                           "address>), then update again.")
+    if "would clobber existing tag" in said:
+        return UpdateError(f"The project moved a release tag your clone already has, so it wasn\u2019t changed: "
+                           f"{_last_line(result)}")
     if "overwritten" in said or "local changes" in said:
         return UpdateError("Files you changed in the clone are also changed by the update, so it wasn\u2019t "
                            "changed. Commit or stash your changes, then update again.")
@@ -245,6 +254,10 @@ def pull(path: str, branch: str, repo_ids: list[str]) -> tuple[str, str, int, st
     Refuses, with the reason, anything that isn't a plain fast-forward of the branch you're on."""
     as_root = _as_root(path)
     on = git_out(path, "symbolic-ref", "--short", "-q", "HEAD")
+    if any(Path(git_out(path, "rev-parse", "--absolute-git-dir") or path, d).exists()
+           for d in ("rebase-merge", "rebase-apply")):
+        raise UpdateError("A rebase is under way in your clone, so it wasn\u2019t changed. Finish it (git rebase "
+                          "--continue) or stop it (git rebase --abort), then update again.")
     if on != branch:
         where = f"on {on}" if on else "not on any branch"
         raise UpdateError(f"Your clone is {where}, not {branch}, so it wasn\u2019t changed. Switch it to {branch} "
@@ -313,7 +326,8 @@ def checkout_release(path: str, tag: str, repo_ids: list[str]) -> tuple[str, str
                           "(git switch -c <name>), then update again.")
     remote = _remote_for(path, repo_ids)
     ref = f"refs/tags/{tag}"
-    result = _run_steps(path, [["fetch", "--quiet", "--no-tags", remote, f"{ref}:{ref}"],
+    # (+: the project's tag, even if it moved since the clone last fetched it: the release is what it says now.)
+    result = _run_steps(path, [["fetch", "--quiet", "--no-tags", remote, f"+{ref}:{ref}"],
                                ["-c", "advice.detachedHead=false", "checkout", "--quiet", "--detach", ref]], as_root)
     if result.returncode != 0:
         raise _explain(result)
