@@ -365,6 +365,30 @@ def _reset_time(headers) -> datetime | None:
     return None
 
 
+def _error_answer(e, url, headers, cached, token, domain):
+    """What an error answer means (http_get_json): the cached answer, a retry without the login, or why not."""
+    if e.code == 304 and cached:
+        return cached["body"]
+    if e.code == 401 and token:
+        # The login no longer works (revoked on GitHub): carry on without it; Settings says so.
+        _drop_rejected_login()
+        return http_get_json(url, headers, _without_login=True)
+    if e.code == 404:
+        # GitHub and GitLab say "not found" in JSON. Any other website's 404 page means it's not one of them.
+        try:
+            json.loads(e.read() or b"null")
+        except (json.JSONDecodeError, OSError):
+            raise BadAnswer(f"{domain} sent an answer that isn’t from a GitHub or GitLab site.") from e
+        raise NotFound("Project not found. Check the address, and that the project is public.") from e
+    remaining = e.headers.get("x-ratelimit-remaining") or e.headers.get("ratelimit-remaining")
+    # GitHub's hourly limit is a 403 with nothing remaining; its "secondary" limit is a 403 with retry-after.
+    if e.code == 429 or (e.code == 403 and (remaining == "0" or e.headers.get("retry-after"))):
+        reset = _reset_time(e.headers)
+        when = f" Try again after {reset.astimezone():%H:%M}." if reset else " Try again later."
+        raise RateLimited(f"{domain} says too many requests were made.{when}", reset) from e
+    raise BadAnswer(f"{domain} answered with an error ({e.code}). Try again later.") from e
+
+
 def http_get_json(url: str, headers: dict | None = None, _without_login: bool = False):
     """GET a URL and parse the JSON answer. Follows redirects (sites redirect renamed projects)."""
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **(headers or {})})
@@ -388,26 +412,8 @@ def http_get_json(url: str, headers: dict | None = None, _without_login: bool = 
                 _keep(url, etag, data)
             return data
     except urllib.error.HTTPError as e:
-        if e.code == 304 and cached:
-            return cached["body"]
-        if e.code == 401 and token:
-            # The login no longer works (revoked on GitHub): carry on without it; Settings says so.
-            _drop_rejected_login()
-            return http_get_json(url, headers, _without_login=True)
-        if e.code == 404:
-            # GitHub and GitLab say "not found" in JSON. Any other website's 404 page means it's not one of them.
-            try:
-                json.loads(e.read() or b"null")
-            except (json.JSONDecodeError, OSError):
-                raise BadAnswer(f"{domain} sent an answer that isn’t from a GitHub or GitLab site.") from e
-            raise NotFound("Project not found. Check the address, and that the project is public.") from e
-        remaining = e.headers.get("x-ratelimit-remaining") or e.headers.get("ratelimit-remaining")
-        # GitHub's hourly limit is a 403 with nothing remaining; its "secondary" limit is a 403 with retry-after.
-        if e.code == 429 or (e.code == 403 and (remaining == "0" or e.headers.get("retry-after"))):
-            reset = _reset_time(e.headers)
-            when = f" Try again after {reset.astimezone():%H:%M}." if reset else " Try again later."
-            raise RateLimited(f"{domain} says too many requests were made.{when}", reset) from e
-        raise BadAnswer(f"{domain} answered with an error ({e.code}). Try again later.") from e
+        with e:  # (its connection closed after: one kept for each error would add up over days of checks)
+            return _error_answer(e, url, headers, cached, token, domain)
     except urllib.error.URLError as e:
         raise Unreachable(f"Couldn’t reach {domain}. Check your internet connection.") from e
     except http.client.HTTPException as e:  # the connection dropped partway through the answer

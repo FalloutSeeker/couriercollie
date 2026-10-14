@@ -52,6 +52,7 @@ class AppImageCase(unittest.TestCase):
 
     def tearDown(self):
         self.server.shutdown()
+        self.server.server_close()
         for k, v in self.saved_env.items():
             if v is None:
                 os.environ.pop(k, None)

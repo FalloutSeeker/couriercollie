@@ -475,6 +475,8 @@ def download(url: str, dest: Path, size: int | None, progress=None) -> str:
                 raise UpdateError(f"The download didn\u2019t finish: {done:,} of {total:,} bytes arrived. Try again.")
     except (OSError, urllib.error.URLError, http.client.HTTPException) as e:
         dest.unlink(missing_ok=True)
+        if isinstance(e, urllib.error.HTTPError):
+            e.close()  # (the error answer's connection)
         raise UpdateError(f"The download didn’t finish: {_download_problem(e)}") from e
     except UpdateError:
         dest.unlink(missing_ok=True)
