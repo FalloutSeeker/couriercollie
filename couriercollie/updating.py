@@ -340,7 +340,7 @@ class Updating:
                     f"Updated to {tag}." if app_id else f"Installed {tag} with Flatpak, for you (\u201c{found}\u201d).")
             if is_program:
                 link, verified, replaced = updater.install_program(repo_id, tag, asset, release.assets, wanted,
-                                                                    hints, progress)
+                                                                    hints, progress, replacing=here_link)
                 on_path = str(updater.bin_dir()) in os.environ.get("PATH", "").split(os.pathsep)
                 run = f" Run it as \u201c{link.name}\u201d." if on_path else \
                     f" Run it as {updater.shown(link)} ({updater.shown(updater.bin_dir())} isn\u2019t where your " \

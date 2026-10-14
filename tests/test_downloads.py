@@ -311,6 +311,24 @@ class ProgramTest(AppImageCase):
         self.assertEqual(caught.exception.choices, ["alpha", "beta"])
         self.assertEqual(self.install("v1", "two.tar.gz", wanted="beta")[0], updater.bin_dir() / "beta")
 
+    def test_a_renamed_program_is_asked_about_then_replaces_the_old(self):
+        # rtx became mise: asked which to run, then mise is installed and rtx's link and version go.
+        _Files.files["rtx-1.tar.gz"] = _archive("tar", {"rtx/rtx": (ELF + b"1", 0o755)})
+        _Files.files["mise-2.tar.gz"] = _archive("tar", {"mise/mise": (ELF + b"2", 0o755)})
+        old, _, _ = self.install("v1", "rtx-1.tar.gz", hints=("rtx",))
+        with self.assertRaises(updater.SeveralPrograms) as caught:
+            self.install("v2", "mise-2.tar.gz", wanted="rtx")
+        self.assertEqual(caught.exception.choices, ["mise"])
+        self.assertIn("no program called rtx", str(caught.exception))
+        data = _Files.files["mise-2.tar.gz"]
+        link, _, replaced = updater.install_program(
+            "github.com/a/tool", "v2", Asset("mise-2.tar.gz", self.url + "mise-2.tar.gz", len(data),
+                                             f"sha256:{hashlib.sha256(data).hexdigest()}"),
+            [], "mise", ["mise"], replacing=old)
+        self.assertEqual((link.name, link.read_bytes(), replaced), ("mise", ELF + b"2", True))
+        self.assertFalse(old.exists() or old.is_symlink())
+        self.assertEqual([p.name for p in (updater.programs_dir() / "github.com_a_tool").iterdir()], ["v2"])
+
     def test_an_archive_reaching_outside_its_folder_isnt_unpacked(self):
         _Files.files["evil.tar.gz"] = _archive("tar", {"../../escaped": (ELF, 0o755)})
         _Files.files["evil.zip"] = _archive("zip", {"../../escaped": (ELF, 0o755)})

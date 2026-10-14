@@ -610,9 +610,9 @@ UNPACKED_MAX_BYTES = 4 * 1024 ** 3
 class SeveralPrograms(UpdateError):
     """The archive has more than one program and nothing says which is the one to run. `choices` are their names."""
 
-    def __init__(self, choices: list[str]):
-        super().__init__(f"The archive has {len(choices)} programs ({', '.join(choices)}). Choose the one to run, "
-                         "then try again.")
+    def __init__(self, choices: list[str], text: str = ""):
+        super().__init__(text or f"The archive has {len(choices)} programs ({', '.join(choices)}). Choose the one to "
+                                 "run, then try again.")
         self.choices = choices
 
 
@@ -729,7 +729,10 @@ def choose_program(folder: Path, wanted: str, hints: list[str]) -> Path:
     if wanted:
         if named := [p for p in found if p.name == wanted]:
             return named[0]
-        raise UpdateError(f"The new version has no program called {wanted} any more.")
+        # Renamed (rtx became mise): which one runs now is yours to say.
+        names = sorted({p.name for p in found})
+        raise SeveralPrograms(names, f"The new version has no program called {wanted} any more. It has "
+                                     f"{', '.join(names)}: choose the one to run, then try again.")
     if len(found) == 1:
         return found[0]
     for hint in (h.lower().replace("-", "").replace("_", "") for h in hints if h):
@@ -740,11 +743,12 @@ def choose_program(folder: Path, wanted: str, hints: list[str]) -> Path:
 
 
 def install_program(repo_id: str, tag: str, asset, others: list, wanted: str = "", hints: list[str] = (),
-                    progress=None, get_text=fetch_text) -> tuple[Path, bool, bool]:
+                    progress=None, get_text=fetch_text, replacing: Path | None = None) -> tuple[Path, bool, bool]:
     """Downloads a release's archive, checks it, unpacks it into its own folder, points the program's link in
     bin_dir() at it, and removes the version it pointed at before. Returns (the link, whether the download was checked
     against a published checksum, whether it replaced a version). Never replaces a command in bin_dir() that it
-    didn't put there."""
+    didn't put there. `replacing`: the link installed before, if the program now has another name (rtx became
+    mise): removed with its version once the new one is in place."""
     home = programs_dir() / _folder_name(repo_id)
     home.mkdir(parents=True, exist_ok=True)
     part = home / f".{_folder_name(Path(asset.name).name)}.part"
@@ -781,6 +785,12 @@ def install_program(repo_id: str, tag: str, asset, others: list, wanted: str = "
         new_link.unlink(missing_ok=True)
         new_link.symlink_to(version / program.relative_to(unpacking))
         os.replace(new_link, link)  # in one step: the command always works, old or new
+        if replacing and replacing.name != link.name and replacing.is_symlink() \
+                and (was := replacing.resolve()).is_relative_to(home.resolve()):
+            replacing.unlink()  # (the old name's link, into the old version: both go)
+            before = was
+            if (folder := home / was.relative_to(home.resolve()).parts[0]) != version:
+                shutil.rmtree(folder, ignore_errors=True)
         for gone in {old, home / f".{_folder_name(tag)}.old"} - {None, version}:
             shutil.rmtree(gone, ignore_errors=True)  # only now: until here, the old version still ran
         return link, verified, before is not None
