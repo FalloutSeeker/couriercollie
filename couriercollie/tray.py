@@ -4,6 +4,7 @@ window quits. Needs a desktop that shows tray icons (on GNOME, the AppIndicator 
 """
 
 import ctypes
+from pathlib import Path
 
 from PySide6.QtCore import QObject, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
@@ -33,6 +34,13 @@ def app_icon() -> QIcon:
         for file in integration.icon_files():
             icon.addFile(str(file))
     return icon
+
+
+def window_icon() -> QIcon:
+    """couriercollie's logo for the window's title bar: black on a light one, white on a dark one (as beside the
+    list's title)."""
+    dark = QApplication.palette().window().color().lightness() < 128
+    return QIcon(str(Path(__file__).parent / "logo" / ("dark.png" if dark else "light.png")))
 
 
 def with_count(icon: QIcon, count: int) -> QIcon:
