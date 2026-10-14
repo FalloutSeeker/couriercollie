@@ -385,7 +385,6 @@ class Backend(QObject, Updating, Account):
         self._init_account()
         self._checking = False
         self._check_error = ""
-        self._notifications: list[QProcess] = []
         # The background checker writes the results file when the app isn't open; pick up changes made meanwhile.
         self._watcher = QFileSystemWatcher(self)
         self._state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -825,25 +824,9 @@ class Backend(QObject, Updating, Account):
         if window is not None and window.isVisible() and window.isActive():
             return
         names = [r.name for r in self._config.repos if r.id in fresh]
-        command = integration.notify_command(*integration.updates_message(names))
-        if not command:
-            return
-        process = QProcess(self)
-        self._notifications.append(process)
-
-        def finished(*_):
-            if process not in self._notifications:
-                return  # (a process that couldn't start reports that, and may report finishing too)
-            if bytes(process.readAllStandardOutput()).decode().strip() == "default":
-                self.activateRequested.emit()
-            self._notifications.remove(process)
-            process.deleteLater()
-
-        process.finished.connect(finished)
-        # One that can't start (notify-send gone) never finishes: without this it would be kept forever.
-        process.errorOccurred.connect(
-            lambda error: finished() if error == QProcess.ProcessError.FailedToStart else None)
-        process.start(command[0], command[1:])
+        # Shown on its own, as the background checker shows it: clicked, it starts couriercollie, which (open) brings
+        # this window forward, and (quit since) opens it. Nothing is kept here that quitting would cut short.
+        integration.notify_and_open_on_click(*integration.updates_message(names))
 
     def _update_badge(self):
         """The number of repos with updates, on the app's taskbar icon. Plasma removes it when the app closes."""
