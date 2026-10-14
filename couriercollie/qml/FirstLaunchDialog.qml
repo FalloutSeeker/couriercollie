@@ -29,6 +29,9 @@ Kirigami.Dialog {
     preferredWidth: Kirigami.Units.gridUnit * 30
     closePolicy: QQC2.Popup.NoAutoClose
     showCloseButton: false
+    // (Room for the slide it opens and closes with: at Kirigami's own limit, a short window had Qt and Kirigami
+    // fighting over where it goes.)
+    maximumHeight: applicationWindow().height - Kirigami.Units.gridUnit * 6
     standardButtons: Kirigami.Dialog.NoButton
 
     customFooterActions: [
