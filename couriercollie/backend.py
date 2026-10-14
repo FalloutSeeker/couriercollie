@@ -92,11 +92,13 @@ def _version_text(version: str) -> str:
 
 
 def _whole_number(value) -> int | None:
-    """A number from the window (which may arrive as 24.0), or None for anything else."""
+    """A whole number from the window, which may arrive as 24.0 (QML's numbers reach Python as floats) or as text
+    ("3"); None for anything else (2.5, -1, "nope")."""
     try:
-        return int(value)
+        number = float(value)
     except (TypeError, ValueError):
         return None
+    return int(number) if number.is_integer() and number >= 0 else None
 
 
 def _plus_hours(when: str, hours: int) -> str:
@@ -209,15 +211,6 @@ def _other_systems_note(d: Details) -> str:
     listed = _and(systems)
     builds = f"this project\u2019s builds are for {listed}" if listed else "none of this project\u2019s builds run here"
     return f"Not supported on this computer: {builds}. Only its versions are tracked."
-
-
-def _whole(value) -> int | None:
-    """A list key as QML gives it (a number, which reaches Python as 3.0) or as text ("3"); None if it isn't one."""
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    return int(number) if number.is_integer() and number >= 0 else None
 
 
 def _release_holding(repo: TrackedRepo, d: Details) -> str:
@@ -1364,7 +1357,7 @@ class Backend(QObject, Updating, Account):
     @Slot("QVariantList")
     def trackFound(self, keys):
         """Track the scan finds the user ticked. A find that looks like a tracked repo is linked to it, not added."""
-        keys = {k for k in map(_whole, keys) if k is not None}
+        keys = {k for k in map(_whole_number, keys) if k is not None}
         chosen = []
         for item in self._scan_items:
             if item["key"] not in keys or item["status"] in ("problem", "default"):
