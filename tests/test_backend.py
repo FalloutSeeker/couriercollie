@@ -1376,6 +1376,7 @@ class CheckAgainTest(unittest.TestCase):
             self.assertEqual(len(pending), 1)
             work, done = pending.pop()
             done(work(), None)
+            self.assertTrue(b.checking)  # (straight on: never "not checking" in between)
             app.processEvents()
             self.assertEqual(len(pending), 1)  # once more…
             work, done = pending.pop()
