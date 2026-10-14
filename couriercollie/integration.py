@@ -223,6 +223,29 @@ def socket_path() -> Path:
     return runtime_dir() / f"{APP_ID}.socket"
 
 
+_HELD: list = []  # (the lock's open file, while this copy is the one running)
+
+
+def claim_running() -> bool:
+    """Whether this copy is the one running: it holds a lock the others can't take until it exits (however it exits:
+    the system lets go). Two started at once, only one opens a window."""
+    import fcntl
+
+    path = runtime_dir() / f"{APP_ID}.lock"
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        f = open(path, "a")
+    except OSError:
+        return True  # (can't tell: as before, the socket alone decides)
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.close()
+        return False
+    _HELD.append(f)
+    return True
+
+
 def tell_running_app(message: str) -> bool:
     """Send "show" or "check" to the running app, or "ping" (nothing; whether it's open). False if it isn't running."""
     try:

@@ -109,8 +109,16 @@ def main() -> int:
 
     from . import integration
 
-    # Already open: bring that window to the front instead of opening a second one. (At login, leave it be.)
-    if integration.tell_running_app("ping" if at_login else "show"):
+    # Already open: bring that window to the front instead of opening a second one. (At login, leave it be.) Another
+    # copy just starting: once it's open, the same; if it stops before, this one goes on.
+    import time
+
+    message = "ping" if at_login else "show"
+    while not integration.claim_running():
+        if integration.tell_running_app(message):
+            return 0
+        time.sleep(0.2)
+    if integration.tell_running_app(message):
         return 0
     integration.install_menu_entry()
 
