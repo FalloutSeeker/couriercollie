@@ -721,3 +721,37 @@ class DesktopQuoteTest(unittest.TestCase):
         # A lone % on an Exec line is a field code: a folder named "100% apps" must be written "100%% apps".
         self.assertEqual(updater._desktop_quote(Path("/home/me/100% apps/App.AppImage")),
                          '"/home/me/100%% apps/App.AppImage"')
+
+
+class QuitWhileUpdatingTest(AppImageCase):
+    """Quit while an install runs: it finishes first, and what it did is recorded (not "Not installed")."""
+
+    def test_finished_and_recorded(self):
+        import time
+
+        from PySide6.QtCore import QCoreApplication
+
+        from couriercollie.backend import Backend
+
+        app = QCoreApplication.instance() or QCoreApplication([])
+        path, rid = Path(self.dir.name) / "repos.toml", "github.com/a/app"
+        config.save(config.Config(repos=[config.TrackedRepo(
+            id=rid, name="App", url="", host="github", asset_pattern="App-*-x86_64.AppImage", kind="AppImage",
+            installed="-")]), path)
+        release = Release("v2.0", "v2.0", None, False, "", "", [self.asset()])
+        self.addCleanup(setattr, sources, "releases", sources.releases)
+        sources.releases = lambda *a, **k: [release]
+        slow = updater.install_appimage
+
+        def slowly(*a, **k):
+            time.sleep(0.5)  # (a download under way when Quit is clicked)
+            return slow(*a, **k)
+        self.addCleanup(setattr, updater, "install_appimage", slow)
+        updater.install_appimage = slowly
+        b = Backend(path)  # its own worker thread, as in the app
+        b.updateRepo(rid)
+        app.processEvents()
+        self.assertIn(rid, b._updating)
+        b.finish_updates()  # Quit: the app's event loop is over
+        b.shutdown()
+        self.assertEqual(config.load(path).repos[0].installed, "v2.0")

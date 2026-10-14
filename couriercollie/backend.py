@@ -15,7 +15,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from PySide6.QtCore import Property, QFileSystemWatcher, QObject, QProcess, QTimer, Signal, Slot, qVersion
+from PySide6.QtCore import (Property, QEventLoop, QFileSystemWatcher, QObject, QProcess, QTimer, Signal, Slot,
+                            qVersion)
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
@@ -452,6 +453,21 @@ class Backend(QObject, Updating, Account):
                     repo.source, repo.local_path = config.SOURCE_SCANNED, packages.place(kind, "couriercollie")
             self._config.repos.insert(0, repo)
         self._save()
+
+    def finish_updates(self):
+        """Quitting while something updates (Quit in the tray, or the window closed): it's left to finish first, out of
+        sight, so what it did is recorded. Cutting a package manager or a clone short would leave it half done, and the
+        work goes on anyway; without this, the app would forget it (an install would still say "Not installed")."""
+        if not self._updating:
+            return
+        loop = QEventLoop()
+
+        def over():
+            if not self._updating:
+                loop.quit()
+        self.reposChanged.connect(over)
+        loop.exec()
+        self.reposChanged.disconnect(over)
 
     def shutdown(self):
         self._signin_cancel.set()  # a sign-in waiting for its code to be entered stops

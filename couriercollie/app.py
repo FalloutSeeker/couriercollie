@@ -144,7 +144,7 @@ def main() -> int:
     engine.load(QUrl.fromLocalFile(str(QML_DIR / "Main.qml")))
     if not engine.rootObjects():
         return 1
-    tray = Tray(app, backend, engine.rootObjects()[0])  # noqa: F841 - lives as long as the app
+    tray = Tray(app, backend, engine.rootObjects()[0])  # lives as long as the app
 
     # Listen for a second launch ("show") and the background checker ("check").
     server = QLocalServer()
@@ -162,5 +162,7 @@ def main() -> int:
 
     code = app.exec()
     server.close()
+    tray.put_away()
+    backend.finish_updates()  # (out of sight: what's updating finishes, and is recorded)
     backend.shutdown()
     return code

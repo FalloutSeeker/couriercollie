@@ -88,6 +88,10 @@ class Tray(QObject):
         if not visible:
             QTimer.singleShot(1000, _give_back_memory)
 
+    def put_away(self):
+        """Quitting: the icon goes at once (what's still updating finishes out of sight)."""
+        self._tray.hide()
+
     @property
     def shown(self) -> bool:
         return self._tray.isVisible()
