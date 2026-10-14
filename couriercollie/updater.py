@@ -317,10 +317,17 @@ def checkout_release(path: str, tag: str, repo_ids: list[str]) -> tuple[str, str
 
 def install_scripts(path: str) -> list[str]:
     """Install, setup and update scripts in the clone's top folder or its scripts/ folder, by name ("setup.sh",
-    "scripts/setup.sh")."""
-    folder = Path(path)
-    return [n for n in INSTALL_SCRIPTS
-            if (folder / n).is_file() and (folder / n).stat().st_size <= SCRIPT_MAX_BYTES]
+    "scripts/setup.sh"). Not one that's a link to a file outside the clone: a change there would go unseen."""
+    folder = Path(path).resolve()
+    found = []
+    for n in INSTALL_SCRIPTS:
+        try:
+            file = (folder / n).resolve()
+            if file.is_relative_to(folder) and file.is_file() and file.stat().st_size <= SCRIPT_MAX_BYTES:
+                found.append(n)
+        except OSError:
+            continue
+    return found
 
 
 def _interpreter(script: Path, name: str = "") -> list[str]:
@@ -329,8 +336,11 @@ def _interpreter(script: Path, name: str = "") -> list[str]:
     relative = f"./{name or script.name}"
     if os.access(script, os.X_OK):
         return [relative]
-    with script.open("rb") as f:
-        first = f.readline().decode("utf-8", "replace").strip()
+    try:
+        with script.open("rb") as f:
+            first = f.readline().decode("utf-8", "replace").strip()
+    except OSError:  # (gone since it was found)
+        return ["sh", relative]
     if first.startswith("#!") and (words := shlex.split(first[2:])):
         return [*words, relative]
     return ["sh", relative]
@@ -662,11 +672,16 @@ def _unpack(archive: Path, into: Path, name: str = "program") -> None:
     if not tarfile.is_tarfile(archive) and (opener := _compressed(archive)):
         # One file compressed on its own (rust-analyzer's "…-linux-gnu.gz"): a program, if that's what it holds.
         program = into / name
-        with opener(archive) as source, program.open("wb") as out:
-            while chunk := source.read(CHUNK):
-                if out.tell() + len(chunk) > UNPACKED_MAX_BYTES:
-                    raise UpdateError("The file unpacks to more than 4 GB, so it wasn’t unpacked.")
-                out.write(chunk)
+        try:
+            with opener(archive) as source, program.open("wb") as out:
+                while chunk := source.read(CHUNK):
+                    if out.tell() + len(chunk) > UNPACKED_MAX_BYTES:
+                        raise UpdateError("The file unpacks to more than 4 GB, so it wasn’t unpacked.")
+                    out.write(chunk)
+        except UpdateError:
+            raise
+        except Exception as e:  # noqa: BLE001 - cut short or damaged: each format says it its own way (xz, zstd)
+            raise UpdateError(f"{archive.name} is damaged and couldn’t be unpacked. Try again later.") from e
         with program.open("rb") as f:
             if f.read(4) != b"\x7fELF":
                 raise UpdateError(f"{archive.name} doesn’t hold a Linux program, so it wasn’t installed.")

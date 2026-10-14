@@ -144,6 +144,7 @@ class Updating:
         self._finished: dict[str, int] = {}
         self._load_after: set[str] = set()  # pages to load again once their update is done
         self._approved: dict[str, tuple] = {}  # whether each step is still as approved, for the page
+        self._reviewed: dict[tuple[str, str], str] = {}  # each step as the window last showed it (reviewStep)
 
     def _here_now(self, repo_id: str):
         """Updated or installed: it's on this computer now, whatever the page found before ("Not found")."""
@@ -380,8 +381,17 @@ class Updating:
         """The clone was just updated here. A running program doesn't use the new files yet: its approved step runs
         now, finishing the job. If the update changed what it runs, the page asks first."""
         self._steps.pop(repo.id, None)  # the last run was for the version before: it says nothing about this one
+        if d := self._details.get(repo.id):  # what it could run, as the update left it
+            d.install_scripts, d.builds = updater.install_scripts(repo.local_path), applying.builds(repo.local_path)
         self._changed(repo.id)
-        if repo.apply_command and self._step_still_approved(repo):
+        if repo.apply_command and (gone := applying.missing(repo.local_path, repo.apply_command)):
+            # Removed or renamed by the update: nothing to run, and nothing to look at again.
+            _kind, text = self._update_notes.get(repo.id, ("done", ""))
+            name = gone[0].removeprefix("./")
+            self._update_notes[repo.id] = ("warning", f"{text} {name} is no longer in the clone, so nothing ran "
+                                                      "after the download.".strip())
+            self.detailsChanged.emit(repo.id)
+        elif repo.apply_command and self._step_still_approved(repo):
             self.runStep(repo.id)
         elif repo.apply_command:
             self.askStep.emit(repo.id, "changed")
@@ -436,6 +446,8 @@ class Updating:
         repo = self._config.find(repo_id)
         if not repo or not _is_clone(repo):
             return ""
+        # What's shown is what approving approves: changed after, it's asked about again before it runs.
+        self._reviewed[(repo_id, command.strip())] = applying.fingerprint(repo.local_path, command.strip())
         return applying.review_text(repo.local_path, command.strip())
 
     @Slot(str, result="QVariantMap")
@@ -455,7 +467,8 @@ class Updating:
         if not repo or not _is_clone(repo) or not (command := command.strip()) \
                 or command not in (c["command"] for c in self._step_choices(repo, self._details.get(repo_id))):
             return
-        repo.apply_command, repo.apply_approved = command, applying.fingerprint(repo.local_path, command)
+        shown = self._reviewed.pop((repo_id, command), None)  # (as the window showed it, if it did)
+        repo.apply_command, repo.apply_approved = command, shown or applying.fingerprint(repo.local_path, command)
         repo.apply_skip = False
         self._changed(repo_id)
 

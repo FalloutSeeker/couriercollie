@@ -788,6 +788,20 @@ class CompressedProgramUnpackTest(unittest.TestCase):
         with self.assertRaisesRegex(updater.UpdateError, "doesn’t hold a Linux program"):
             updater._unpack(archive, self.root / "out", "tool")
 
+    def test_a_damaged_one_says_so(self):
+        import gzip
+
+        archive = self.root / "tool-linux-x86_64.gz"
+        archive.write_bytes(gzip.compress(ELF * 100)[:40])  # cut short
+        with self.assertRaisesRegex(updater.UpdateError, "is damaged"):
+            updater._unpack(archive, self.root / "out", "tool")
+        import lzma
+
+        damaged = self.root / "tool-linux-x86_64.xz"
+        damaged.write_bytes(lzma.compress(ELF * 100)[:30] + b"garbage")
+        with self.assertRaisesRegex(updater.UpdateError, "is damaged"):
+            updater._unpack(damaged, self.root / "out2", "tool")
+
     def test_a_tar_gz_is_still_an_archive(self):
         archive = self.root / "tool.tar.gz"
         (self.root / "src").mkdir()

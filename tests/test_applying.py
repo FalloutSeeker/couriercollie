@@ -284,3 +284,63 @@ class ReadmeOutsideTest(unittest.TestCase):
             (Path(outside) / "secret.md").write_text("## Install\n\nthe secret\n")
             (Path(folder) / "README.md").symlink_to(Path(outside) / "secret.md")
             self.assertEqual(applying.readme_section(folder), ("", ""))
+
+
+class CoveredFilesTest(unittest.TestCase):
+    """What a step's approval covers, whatever kind of file the step uses (applying.named_files)."""
+
+    def clone(self, files: dict[str, str | bytes]) -> str:
+        folder = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, folder)
+        for name, text in files.items():
+            file = Path(folder) / name
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_bytes(text if isinstance(text, bytes) else text.encode())
+        subprocess.run(["git", "init", "-q", folder], check=True)
+        subprocess.run(["git", "-C", folder, "add", "."], check=True)
+        return folder
+
+    def covered(self, folder: str, command: str = "/bin/sh ./install.sh") -> set[str]:
+        return {str(f.relative_to(Path(folder).resolve())) for f in applying.named_files(folder, command)}
+
+    def test_sourced_and_run_files_of_any_kind(self):
+        folder = self.clone({
+            "install.sh": ". ./scripts/common\nsource build.conf\nbash ./tools/post\npython3 -m tools.inst\nmake -f rules.mk\n",
+            "scripts/common": "echo common\n", "build.conf": "PREFIX=/usr\n", "tools/post": "echo post\n",
+            "tools/inst.py": "print('inst')\n", "rules.mk": "include extra.mk\n", "extra.mk": "all:\n\techo\n"})
+        self.assertEqual(self.covered(folder), {"install.sh", "scripts/common", "build.conf", "tools/post",
+                                                "tools/inst.py", "rules.mk", "extra.mk"})
+
+    def test_a_change_to_a_sourced_file_is_a_change_to_the_step(self):
+        folder = self.clone({"install.sh": ". ./scripts/common\n", "scripts/common": "echo one\n"})
+        before = applying.fingerprint(folder, "/bin/sh ./install.sh")
+        (Path(folder) / "scripts/common").write_text("rm -rf ~\n")
+        self.assertNotEqual(applying.fingerprint(folder, "/bin/sh ./install.sh"), before)
+
+    def test_a_big_file_is_covered_and_said_to_be(self):
+        folder = self.clone({"install.sh": "sh ./payload.sh\n", "payload.sh": b"#" * (applying.FILE_MAX_BYTES + 10)})
+        self.assertIn("payload.sh", self.covered(folder))
+        self.assertIn("too big to show here", applying.review_text(folder, "/bin/sh ./install.sh"))
+
+    def test_not_documentation_pictures_or_untracked_files(self):
+        folder = self.clone({"install.sh": "cat README.md docs/guide.md\ncp logo.png ~/\n./build/out\n",
+                             "README.md": "x", "docs/guide.md": "x", "logo.png": b"\x89PNG"})
+        (Path(folder) / "build").mkdir()
+        (Path(folder) / "build/out").write_text("left by a build\n")  # (not tracked)
+        self.assertEqual(self.covered(folder), {"install.sh"})
+
+    def test_a_long_word_is_data_and_quick(self):
+        import time
+
+        folder = self.clone({"install.sh": "echo " + "ab" * 50_000 + "\n"})
+        start = time.monotonic()
+        self.assertEqual(self.covered(folder), {"install.sh"})
+        self.assertLess(time.monotonic() - start, 2)
+
+
+class MissingTest(unittest.TestCase):
+    def test_the_scripts_a_command_runs_that_are_gone(self):
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder) / "setup.sh").write_text("echo\n")
+            self.assertEqual(applying.missing(folder, "/bin/sh ./install.sh"), ["./install.sh"])
+            self.assertEqual(applying.missing(folder, "sh ./setup.sh"), [])

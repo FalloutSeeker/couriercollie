@@ -100,11 +100,11 @@ _NOT_STEPS = re.compile(r"\b(notes?|news|changelog|log|history|schedule[ds]?|man
 _NAME_WORD = re.compile(r"[a-z0-9]{3,}")  # a word of the project's name ("powerlevel10k")
 # What isn't the README's words: pictures and badges ("![…](…)", "<img …>"), HTML tags and comments; a link keeps its
 # words ("[Manual Install](#manual-install)" is "Manual Install").
-_TARGET = r"(\([^)]*\)|\[[^\]]*\])"  # a link's address: "(https://…)", or "[name]" defined elsewhere
-_PICTURE = re.compile(rf"\[?!\[[^\]]*\]{_TARGET}(\]{_TARGET})?|<img\b[^>]*>", re.I)
-_COMMENT = re.compile(r"<!--.*?-->", re.S)
-_TAG = re.compile(r"</?[a-z][^>]*>", re.I)
-_LINK = re.compile(rf"\[([^\]]*)\]{_TARGET}")
+# (Each within a line, and of a bounded length: a README written to make them slow can't.)
+_TARGET = r"(\([^)\n]{0,2048}\)|\[[^\]\n]{0,256}\])"  # a link's address: "(https://…)", or "[name]" defined elsewhere
+_PICTURE = re.compile(rf"\[?!\[[^\]\n]{{0,256}}\]{_TARGET}(\]{_TARGET})?|<img\b[^>\n]{{0,2048}}>", re.I)
+_TAG = re.compile(r"</?[a-z][^>\n]{0,2048}>", re.I)
+_LINK = re.compile(rf"\[([^\]\n]{{0,256}})\]{_TARGET}")
 # A paragraph that starts like one ("To update: …", "To install it, …").
 _STARTS = re.compile(r"^\W*(to (update|upgrade|install)|updating|upgrading|installing)\b", re.I)
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
@@ -167,9 +167,35 @@ def _words(title: str) -> str:
     return " ".join(_LINK.sub(r"\1", _TAG.sub("", _PICTURE.sub("", title))).split())
 
 
+def _without_comments(text: str) -> str:
+    """Text without HTML comments ("<!-- … -->"); one never closed hides the rest, as it would on the site."""
+    parts, at = [], 0
+    while (start := text.find("<!--", at)) != -1:
+        parts.append(text[at:start])
+        end = text.find("-->", start + 4)
+        if end == -1:
+            return "".join(parts)
+        at = end + 3
+    return "".join(parts) + text[at:]
+
+
+def no_pictures(text: str) -> str:
+    """Markdown that can't show a picture: shown, one would be downloaded from wherever it's hosted, whoever wrote
+    it. Outside code blocks, every HTML tag goes (<img>, and "background=" on anything), and every "![" is a plain
+    "[" (whatever follows: "![a [b] c](…)", "![logo]" defined elsewhere). Code blocks are left as written."""
+    lines, in_code = [], False
+    for line in _without_comments(text).splitlines():
+        if _FENCE.match(line):
+            in_code = not in_code
+        elif not in_code:
+            line = _TAG.sub("", line).replace("![", "[")
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def _cleaned(text: str) -> str:
-    """A section without its badges, pictures and HTML comments (clutter, and pictures from anywhere)."""
-    text = _PICTURE.sub("", _COMMENT.sub("", text))
+    """A section without its badges, pictures and HTML (clutter, and pictures from anywhere)."""
+    text = no_pictures(_PICTURE.sub("", _without_comments(text)))
     return "\n".join(line for line in text.splitlines() if line.strip() not in ("[]", "()")) if text else ""
 
 
@@ -200,9 +226,17 @@ def _section(text: str, kind: str = ".md", project: str = "") -> tuple[str, str]
         headings[0] = (headings[0][0], 1, "")  # the README's title ("Luke's build of dwm"), everything under it
     biggest = min((lv for _i, lv, t in headings if _INSTALL.search(t)), default=9)  # of the install headings
     names = set(_NAME_WORD.findall(project.lower()))
+    # Each heading's parent (the nearest bigger one before it), and where its section ends (the next as big after
+    # it): in one pass each, as a README may have thousands of headings.
+    parents, ends, stack = [], [len(lines)] * len(headings), []
+    for n, (i, level, title) in enumerate(headings):
+        while stack and headings[stack[-1]][1] >= level:
+            ends[stack.pop()] = i
+        parents.append(headings[stack[-1]][2] if stack else "")
+        stack.append(n)
     found = []
     for n, (i, level, title) in enumerate(headings):
-        parent = next((t for _j, lv, t in reversed(headings[:n]) if lv < level), "")
+        parent = parents[n]
         if (rank := _rank(title, parent)) is None:
             continue
         # In the README, an update heading under a bigger install heading is about updating something else ("Updating
@@ -210,7 +244,7 @@ def _section(text: str, kind: str = ".md", project: str = "") -> tuple[str, str]
         if rank == 0 and project and level > biggest and len(title.split()) > 1 and not _UPDATE.search(parent) \
                 and not names & set(_NAME_WORD.findall(title.lower())):
             continue
-        end = next((j for j, lv, _t in headings[n + 1:] if lv <= level), len(lines))
+        end = ends[n]
         body = lines[i + 1:end]
         if body and (_UNDERLINE.match(body[0]) or _RST_UNDERLINE.match(body[0])):  # (an underlined heading's own line)
             body = body[1:]
@@ -310,7 +344,8 @@ def suggestions(path: str, scripts: list[str], built: list[Build] | None = None)
 
     found = []
     for name in scripts:
-        found.append(Suggestion(f"Run {name}", shlex.join(_interpreter(Path(path) / name, name)), name))
+        if (Path(path) / name).is_file():  # (not one gone since the clone was last read)
+            found.append(Suggestion(f"Run {name}", shlex.join(_interpreter(Path(path) / name, name)), name))
     if built and not scripts:  # (a project's own install script is its way: it may build more than this folder)
         found.append(Suggestion("Rebuild and install it", " && ".join(build_command(b) for b in built), "the rebuild"))
     return found
@@ -329,16 +364,25 @@ _IMPLIED = {
 }
 
 
-# A word in a script that may name another file it runs: "lib/common.sh", "./install-services.sh", or
-# "$SCRIPT_DIR/install-services.sh" (each tail of it is tried: "install-services.sh").
-_PATH_WORD = re.compile(r"[\w.+-]*(?:/[\w.+-]+)+|[\w.+-]+\.(?:sh|bash|zsh|py|pl|rb)\b")
-_SCRIPT_SUFFIXES = (".sh", ".bash", ".zsh", ".py", ".pl", ".rb")
-NAMED_MAX = 200  # files followed from one step, at most
+# What a step covers (named_files): the clone's files its command names, and those the files it runs name in turn,
+# read word by word ("lib/common", "./install-services.sh", "$SCRIPT_DIR/install-services.sh": each ending of a
+# path is tried). Any kind of file: a sourced "build.conf" or "scripts/common" is as much the step as a script is.
+_SPLIT = re.compile(r"[\s'\"`;|&()<>=,{}\[\]]+")
+WORD_MAX = 512  # longer words are data (a payload, a key), never a file's name: not looked at
+_SCRIPT_SUFFIXES = (".sh", ".bash", ".zsh", ".py", ".pl", ".rb", ".mk")
+# Words after which a file is read as commands, whatever it looks like: sourced, run by an interpreter, included.
+_RUNS_NEXT = {".", "source", "sh", "bash", "zsh", "dash", "ksh", "python", "python3", "perl", "ruby", "node", "exec",
+              "include", "-include", "-f"}
+# Files never run or read as settings, which change often (documentation, pictures, fonts): not covered, so a step
+# isn't asked about again for them.
+_NOT_COMMANDS = re.compile(r"\.(md|markdown|rst|txt|adoc|org|html?|pdf|png|jpe?g|gif|svg|webp|ico|xcf|ttf|otf|woff2?)$"
+                           r"|^(license|licence|copying|authors|changelog|readme)(\.\w+)?$", re.I)
+NAMED_MAX = 200  # files covered by one step, at most
 ENDING_MAX = 3  # files found by how a name ends, at most, for one name
 
 
 def _is_script(file: Path) -> bool:
-    if file.suffix in _SCRIPT_SUFFIXES:
+    if file.suffix in _SCRIPT_SUFFIXES or file.name in ("Makefile", "makefile", "GNUmakefile"):
         return True
     try:
         with file.open("rb") as f:
@@ -349,7 +393,7 @@ def _is_script(file: Path) -> bool:
 
 def _usable(file: Path, root: Path) -> bool:
     try:
-        return file.is_relative_to(root) and file.is_file() and file.stat().st_size <= FILE_MAX_BYTES
+        return file.is_relative_to(root) and file.is_file()
     except OSError:
         return False
 
@@ -363,26 +407,47 @@ def _tracked(root: Path) -> list[str]:
     return [p for p in out.stdout.decode(errors="replace").split("\0") if p] if out.returncode == 0 else []
 
 
-def _scripts_it_runs(file: Path, root: Path, tracked: list[str]) -> tuple[list[Path], list[Path]]:
-    """The clone's other scripts this file names: those it runs or sources (and whatever else it names that's a
-    script: following too many costs only a question too many, after an update that changes one). Returns those
-    named outright, then those found by how a name behind a variable ends ("$DIR/lib/common.sh"): among the clone's
-    files, inside this script's own folder first; never more than a few (a name that ends like many vendored files
-    says nothing about which)."""
+def _file_words(file: Path) -> list[tuple[str, bool]]:
+    """Each word of a text file that may name a file, and whether it's read as commands (after "source", "bash"…);
+    "python3 -m tools.inst" names tools/inst.py. Words too long to be a name are left out."""
     try:
+        if file.stat().st_size > FILE_MAX_BYTES:
+            return []  # (covered, but not read for more)
         text = file.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return [], []
+        return []
+    found = []
+    for line in text.splitlines():
+        words = [w for w in _SPLIT.split(line) if w]
+        for k, word in enumerate(words):
+            if len(word) > WORD_MAX or "://" in word or not any(c.isalnum() for c in word):
+                continue
+            before = words[k - 1] if k else ""
+            if before == "-m" and k > 1 and words[k - 2].startswith("python") and "/" not in word:
+                found += [(word.replace(".", "/") + ".py", True), (word.replace(".", "/") + "/__main__.py", True)]
+            else:
+                found.append((word, before in _RUNS_NEXT))
+    return found
+
+
+def _named_by(file: Path, root: Path, tracked: set[str]) -> tuple[list[tuple[Path, bool]], list[Path]]:
+    """The clone's files this one names: (file, whether to read it for more), those named outright (by path, from
+    this file's folder or the clone's), then scripts found by how a name behind a variable ends ("$DIR/lib/common.sh"),
+    inside this file's own folder first and never more than a few (a name that ends like many vendored files says
+    nothing about which). Only files git tracks: not what a build left."""
     named, ending = [], []
     near = str(file.parent.relative_to(root)) if file.parent != root else ""
-    for word in sorted(set(_PATH_WORD.findall(text))):
+    for word, runs in dict.fromkeys(_file_words(file)):
         parts = word.split("/")
         tails = [t for i in range(len(parts)) if (t := "/".join(parts[i:]))]
-        here = next((c for t in tails for b in (file.parent, root)
-                     if _usable(c := (b / t).resolve(), root) and _is_script(c)), None)
+        here = next((c for t in tails for b in (file.parent, root) if _usable(c := (b / t).resolve(), root)
+                     and (not tracked or c.relative_to(root).as_posix() in tracked)
+                     and not _NOT_COMMANDS.search(c.name)), None)
         if here:
-            named.append(here)
+            named.append((here, runs or _is_script(here)))
             continue
+        if "/" not in word and not word.endswith(_SCRIPT_SUFFIXES):
+            continue  # (a plain word: not a name behind a variable)
         for tail in tails:  # the longest ending that names any of the clone's files
             ends = [t for t in tracked if t == tail or t.endswith("/" + tail)]
             if not ends:
@@ -396,8 +461,9 @@ def _scripts_it_runs(file: Path, root: Path, tracked: list[str]) -> tuple[list[P
 
 def named_files(path: str, command: str) -> list[Path]:
     """What approving the command covers: the clone's files it names (a script), those the tools it runs read
-    without being told (make's Makefile), and the scripts those run or source in turn. A change to any of them is
-    shown before the step runs again."""
+    without being told (make's Makefile), and the files those name in turn (a sourced "build.conf", a script it runs,
+    a Makefile's include), followed into those that are commands. A change to any of them is shown before the step
+    runs again."""
     try:
         words = shlex.split(command)
     except ValueError:
@@ -410,26 +476,48 @@ def named_files(path: str, command: str) -> list[Path]:
         file = (root / word).resolve()
         if _usable(file, root) and file not in files:
             files.append(file)
-    tracked, later = _tracked(root), []
-    for file in files:  # (grows as it goes: what those run, in turn)
-        named, ending = _scripts_it_runs(file, root, tracked)
-        files.extend(f for f in dict.fromkeys(named) if f not in files and len(files) < NAMED_MAX)
+    tracked, later, read = set(_tracked(root)), [], set(files)
+    queue = list(files)
+    while queue:  # (what those name, in turn: files named outright first, then those found by how they end)
+        file = queue.pop(0)
+        named, ending = _named_by(file, root, tracked)
+        for found, runs in named:
+            if found not in files and len(files) < NAMED_MAX:
+                files.append(found)
+            if runs and found not in read:
+                read.add(found)
+                queue.append(found)
         later.extend(ending)
-        if file is files[-1]:  # named outright: all followed; now those found by how they end, and what they run
-            files.extend(f for f in dict.fromkeys(later) if f not in files and len(files) < NAMED_MAX)
+        if not queue:
+            for found in dict.fromkeys(later):
+                if found not in files and len(files) < NAMED_MAX:
+                    files.append(found)
+                    read.add(found)
+                    queue.append(found)
             later = []
     return files
+
+
+def missing(path: str, command: str) -> list[str]:
+    """The clone's files the command runs that aren't there any more ("./install.sh", removed by an update)."""
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return []
+    root = Path(path).resolve()
+    return [w for w in words if w.startswith("./") and not (root / w).resolve().is_file()]
 
 
 def fingerprint(path: str, command: str) -> str:
     """What was approved: the command, and the content of the files it names."""
     digest, root = hashlib.sha256(command.encode()), Path(path).resolve()
     for file in named_files(path, command):
+        digest.update(b"\0" + str(file.relative_to(root)).encode() + b"\0")
         try:
-            content = file.read_bytes()
+            with file.open("rb") as f:
+                digest.update(hashlib.file_digest(f, "sha256").digest())  # (in parts: a big file too)
         except OSError:
-            content = b"\0unreadable"  # (so it becoming readable again is a change too)
-        digest.update(b"\0" + str(file.relative_to(root)).encode() + b"\0" + content)
+            digest.update(b"\0unreadable")  # (so it becoming readable again is a change too)
     return digest.hexdigest()
 
 
@@ -439,7 +527,10 @@ def review_text(path: str, command: str) -> str:
     parts = [command]
     for file in named_files(path, command):
         try:
-            text = file.read_text(encoding="utf-8", errors="replace")
+            size = file.stat().st_size
+            text = (f"# ({size / 1024 ** 2:.1f} MB: too big to show here. It\u2019s covered all the same: a change to "
+                    "it is shown before the step runs again.)\n" if size > FILE_MAX_BYTES
+                    else file.read_text(encoding="utf-8", errors="replace"))
         except OSError as e:
             text = f"# (couldn\u2019t be read: {e.strerror or e})\n"
         parts.append(f"\n# ---- {file.relative_to(root)} ----\n" + text)

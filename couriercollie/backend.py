@@ -131,15 +131,16 @@ def _date_text(date: datetime | None) -> str:
     return f"{date.astimezone():%-d %b %Y}" if date else ""
 
 
-_MD_IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)[^)]*\)")
-_HTML_IMAGE = re.compile(r"<img\b[^>]*?src=[\"']([^\"']+)[\"'][^>]*>", re.I)
+_MD_IMAGE = re.compile(r"!\[([^\]\n]{0,256})\]\(([^)\s]{1,2048})[^)\n]{0,256}\)")
+_HTML_IMAGE = re.compile(r"<img\b[^>\n]{0,1024}?src=[\"']([^\"'\n]{1,2048})[\"'][^>\n]{0,1024}>", re.I)
 
 
 def _without_images(notes: str) -> str:
     """Release notes with each picture replaced by a link to it: the window would otherwise download every picture in
     them from wherever it's hosted, just for opening the notes."""
     notes = _MD_IMAGE.sub(lambda m: f"[picture: {m.group(1) or 'image'}]({m.group(2)})", notes)
-    return _HTML_IMAGE.sub(lambda m: f"[picture]({m.group(1)})", notes)
+    notes = _HTML_IMAGE.sub(lambda m: f"[picture]({m.group(1)})", notes)
+    return applying.no_pictures(notes)  # (and any other way of showing one: none is downloaded)
 
 
 def _set_baseline(repo: TrackedRepo, d: Details) -> bool:

@@ -197,6 +197,10 @@ Kirigami.ScrollablePage {
         readonly property var chosen: choices[Math.min(choice, choices.length - 1)] || ({ label: "", command: "", what: "" })
         readonly property string name: page.repo.name || ""
         property var readme: ({ heading: "", text: "" })
+        // The height the script and the README's steps share: what the window has left after the dialog's title, text
+        // and buttons. Kept within it, the dialog never needs a scrollbar of its own (which, narrowing the text and
+        // so changing its height, would loop).
+        readonly property real room: Math.max(Kirigami.Units.gridUnit * 4, applicationWindow().height - Kirigami.Units.gridUnit * 13)
 
         function ask(why) {
             stepDialog.why = why;
@@ -275,7 +279,8 @@ Kirigami.ScrollablePage {
             QQC2.ScrollView {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Math.min(reviewText.implicitHeight,
-                                                 Kirigami.Units.gridUnit * (stepDialog.readme.text !== "" ? 14 : 20))
+                                                 Kirigami.Units.gridUnit * (stepDialog.readme.text !== "" ? 14 : 20),
+                                                 stepDialog.room * (stepDialog.readme.text !== "" ? 0.55 : 1))
 
                 QQC2.TextArea {
                     id: reviewText
@@ -308,13 +313,16 @@ Kirigami.ScrollablePage {
                     id: readmeScroll
 
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(readmeText.implicitHeight, Kirigami.Units.gridUnit * 12)
+                    Layout.preferredHeight: Math.min(readmeText.implicitHeight, Kirigami.Units.gridUnit * 12,
+                                                     stepDialog.room * 0.45 - Kirigami.Units.gridUnit * 2)
                     contentWidth: availableWidth
 
                     QQC2.Label {
                         id: readmeText
 
-                        width: readmeScroll.availableWidth
+                        // Room for the scrollbar always: were the width to change when it appears, so would the height
+                        // that decides whether it does (a loop).
+                        width: readmeScroll.width - Kirigami.Units.gridUnit
                         text: stepDialog.readme.text
                         textFormat: Text.MarkdownText
                         wrapMode: Text.Wrap

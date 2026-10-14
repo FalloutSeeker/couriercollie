@@ -70,6 +70,12 @@ class AfterUpdatingTest(UpstreamCase):
         self.backend = Backend(self.path)
         self.backend._run = lambda work, done: done(*UpdateClickedTest._attempt(work))
         self.backend._details[self.id] = Details(state="ready", default_branch="main", install_scripts=["deploy.sh"])
+        # (Its install script is called deploy.sh: one the app looks for, here, as it reads the clone again after an
+        # update.)
+        from couriercollie import updater
+
+        self.addCleanup(setattr, updater, "INSTALL_SCRIPTS", updater.INSTALL_SCRIPTS)
+        updater.INSTALL_SCRIPTS = (*updater.INSTALL_SCRIPTS, "deploy.sh")
 
     def tearDown(self):
         self.backend.shutdown()
@@ -128,6 +134,28 @@ class AfterUpdatingTest(UpstreamCase):
         self.assertEqual(self.backend.readmeSteps(self.id), {"heading": "Updating", "text": "Pull, then run deploy.sh."})
         self.assertEqual(self.backend.readmeSteps("github.com/not/tracked"), {"heading": "", "text": ""})
 
+    def test_its_script_removed_by_the_update(self):
+        # The update deletes deploy.sh: nothing runs, the page says why, and nothing's asked about a file that's gone.
+        asks = self.asked()
+        self.approved("/bin/sh ./deploy.sh")
+        git(self.other, "rm", "-q", "deploy.sh")
+        git(self.other, "commit", "-q", "-m", "no more deploy script")
+        self.update()
+        d = self.details()
+        self.assertEqual(asks, [])
+        self.assertIn("deploy.sh is no longer in the clone", d["updateNote"])
+        self.assertEqual(d["stepResult"], "")
+        self.assertEqual(d["stepChoices"], [{"label": "/bin/sh ./deploy.sh", "command": "/bin/sh ./deploy.sh",
+                                             "what": "the step"}])  # (only the step as approved: no other choice)
+
+    def test_approving_approves_what_was_shown(self):
+        # The window shows deploy.sh; it's edited before Run is clicked: what was shown is approved, so the edit is
+        # asked about before it runs.
+        self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")
+        (self.clone / "deploy.sh").write_text("#!/bin/sh\necho changed behind the window\n")
+        self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
+        self.assertFalse(self.backend._step_still_approved(self.repo()))
+
     def test_only_download(self):
         asks = self.asked()
         self.update()
@@ -157,6 +185,7 @@ class AfterUpdatingTest(UpstreamCase):
         self.backend.runStep(self.id)  # refused until approved again
         self.assertEqual(self.details()["stepResult"], "")
         (self.clone / "deploy.sh").write_text("#!/bin/sh\necho reviewed\n")  # (made harmless for the test)
+        self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")  # shown again as it is now (what's approved)
         self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
         self.backend.runStep(self.id)
         self.assertEqual((self.details()["stepResult"], self.details()["stepChanged"]), ("applied", False))
