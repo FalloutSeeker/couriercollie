@@ -158,12 +158,14 @@ if KIND:
     check("…and the list doesn't say it's up to date", row["checkText"] != "Up to date", row["checkText"])
     # An older version, installed by hand from its release.
     rels = [r for r in sources.newest_releases(sources.RepoRef("github.com", "charmbracelet/skate"), "github", 5, False)]
-    old = next(a for a in rels[1].assets if re.search(r"(x86_64\.rpm|amd64\.deb)$", a.name))
+    mine = r"x86_64\.rpm$" if KIND == assets.KIND_RPM else r"amd64\.deb$"  # (this distro's kind)
+    old = next(a for a in rels[1].assets if re.search(mine, a.name))
     sh(f"curl -sL -o /tmp/{old.name} {old.url}")
     install = {"fedora": f"dnf install -y -q /tmp/{old.name}", "opensuse": f"zypper -q -n install --allow-unsigned-rpm /tmp/{old.name}",
                "ubuntu": f"apt-get install -y -qq /tmp/{old.name}", "debian": f"apt-get install -y -qq /tmp/{old.name}"}[DISTRO]
     print(f"  $ install {old.name} by hand", flush=True)
-    sh(install)
+    if out := sh(install):
+        print("    " + out.replace("\n", "\n    ")[-600:], flush=True)
     d, row = says(skate, "after Refresh") if refresh(skate) else (None, None)
     shot("package-older-by-hand")
     check(f"the older version installed by hand is read ({rels[1].tag})", assets.same_version(d["versionText"], rels[1].tag)

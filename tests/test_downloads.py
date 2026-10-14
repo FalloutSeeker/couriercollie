@@ -240,6 +240,17 @@ class TestVersionsTest(AppImageCase):
         self.backend.updateRepo(self.id)
         self.assertEqual(config.load(self.path).repos[0].installed, "v3.0-beta")
 
+    def test_not_found_until_installed_again(self):
+        # Its page found it gone (removed by hand); Install puts it back: the page says so without a Refresh.
+        from couriercollie.backend import Details
+
+        release = Release("v2.0", "v2.0", None, False, "", "", [self.asset()])
+        self.backend._details[self.id] = Details(state="ready", releases=[release], local_missing=True)
+        self.assertTrue(self.backend.details(self.id)["localMissing"])
+        self.backend.updateRepo(self.id)
+        d = self.backend.details(self.id)
+        self.assertEqual((d["localMissing"], d["updateNoteKind"]), (False, "done"))
+
     def test_only_test_versions_and_they_arent_shown(self):
         sources.releases = lambda ref, host, **_: [Release("v3.0-beta", "v3.0-beta", None, True, "", "", [self.asset()])]
         self.backend.updateRepo(self.id)

@@ -144,6 +144,11 @@ class Updating:
         self._finished: dict[str, int] = {}
         self._load_after: set[str] = set()  # pages to load again once their update is done
 
+    def _here_now(self, repo_id: str):
+        """Updated or installed: it's on this computer now, whatever the page found before ("Not found")."""
+        if d := self._details.get(repo_id):
+            d.local_missing = False
+
     def _done_updating(self, repo_id: str):
         """An update (or its step) for this repo is over."""
         self._updating.discard(repo_id)
@@ -190,6 +195,7 @@ class Updating:
             if repo and error:
                 self._update_notes[repo_id] = ("error", self._error_text(error))
             elif repo and by_branch:
+                self._here_now(repo_id)
                 _before, after, count = result
                 self._pulled(repo, branch, after)
                 self._update_notes[repo_id] = ("done", "Already up to date." if not count else "Pulled 1 new commit."
@@ -197,6 +203,7 @@ class Updating:
                 if count:
                     self._updated_here(repo)
             elif repo:
+                self._here_now(repo_id)
                 _before, left = result
                 repo.installed = tag
                 self._version_changed(repo)
@@ -240,6 +247,7 @@ class Updating:
             if repo and error:
                 self._update_notes[repo_id] = ("error", self._error_text(error))
             elif repo:
+                self._here_now(repo_id)
                 folder, head, scripts = result
                 # From now on it's a clone like one a scan found.
                 repo.source, repo.local_path, repo.kind, repo.asset_pattern = \
@@ -351,6 +359,7 @@ class Updating:
                 if isinstance(error, updater.SeveralPrograms):
                     self._program_choices[repo_id] = error.choices
             elif repo:
+                self._here_now(repo_id)
                 tag, where, verified, what = result
                 # From now on its version is read from where it is, like one a scan found.
                 repo.source, repo.local_path, repo.installed = config.SOURCE_SCANNED, where, tag
