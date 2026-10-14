@@ -40,7 +40,19 @@ def window_icon() -> QIcon:
     """couriercollie's logo for the window's title bar: black on a light one, white on a dark one (as beside the
     list's title)."""
     dark = QApplication.palette().window().color().lightness() < 128
-    return QIcon(str(Path(__file__).parent / "logo" / ("dark.png" if dark else "light.png")))
+    logo = QPixmap(str(Path(__file__).parent / "logo" / ("dark.png" if dark else "light.png")))
+    # At each size a desktop asks for, square (as window icons are), the logo centered: given only its one large
+    # size, some X11 desktops drop it, and the window has none.
+    icon = QIcon()
+    for size in (*_SIZES, 128, 256):
+        square = QPixmap(size, size)
+        square.fill(Qt.GlobalColor.transparent)
+        fitted = logo.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        painter = QPainter(square)
+        painter.drawPixmap((size - fitted.width()) // 2, (size - fitted.height()) // 2, fitted)
+        painter.end()
+        icon.addPixmap(square)
+    return icon
 
 
 def with_count(icon: QIcon, count: int) -> QIcon:
