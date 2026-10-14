@@ -1,4 +1,4 @@
-"""The tray icon, while "Keep running in the tray" is on (Settings): the number of updates, and Open, Check Now and
+"""The tray icon, while "Enable tray icon" is on (Settings): the number of updates, and Open, Check Now and
 Quit. Closing the window then leaves couriercollie running here; with it off there's no tray icon, and closing the
 window quits. Needs a desktop that shows tray icons (on GNOME, the AppIndicator extension).
 """
@@ -62,7 +62,7 @@ def tooltip(count: int) -> str:
 
 
 class Tray(QObject):
-    """Shown while "Keep running in the tray" is on and the desktop has a tray; follows the settings and checks."""
+    """Shown while "Enable tray icon" is on and the desktop has a tray; follows the settings and checks."""
 
     def __init__(self, app: QApplication, backend, window):
         super().__init__(app)

@@ -57,8 +57,8 @@ Kirigami.ScrollablePage {
             Layout.fillWidth: true
             Layout.maximumWidth: Kirigami.Units.gridUnit * 24
             text: page.s.autoCheck
-                ? "With notifications off, updates still show in the app and as a number on its taskbar icon."
-                : "Nothing runs in the background. Use “Check now” in the main window."
+                ? "Updates also show in the app and as a number on its taskbar icon."
+                : "Nothing runs in the background. Use Check Now in the main window."
             wrapMode: Text.Wrap
             opacity: 0.7
         }
@@ -83,7 +83,7 @@ Kirigami.ScrollablePage {
             Kirigami.FormData.label: "Tray:"
             // Can always be turned off; on only where the desktop shows tray icons.
             enabled: page.s.trayAvailable || page.s.keepInTray
-            text: "Keep running in the tray when the window is closed"
+            text: "Enable tray icon"
             checked: page.s.keepInTray
             onToggled: backend.updateSettings({ keepInTray: checked })
         }
@@ -92,10 +92,10 @@ Kirigami.ScrollablePage {
             Layout.fillWidth: true
             Layout.maximumWidth: Kirigami.Units.gridUnit * 24
             text: !page.s.trayAvailable
-                ? "Your desktop doesn’t show tray icons. On GNOME, the AppIndicator extension adds them."
+                ? "Your desktop doesn’t show tray icons. On GNOME, install the AppIndicator extension."
                 : page.s.keepInTray
-                ? "The tray icon shows the number of updates. Quit from its menu." + (page.s.startAtLogin ? " At login, couriercollie starts in the tray." : "")
-                : "Neither is needed for automatic checks, which run with couriercollie closed."
+                ? "Closing the window keeps couriercollie in the tray. Quit from the tray icon’s menu." + (page.s.startAtLogin ? " At login, it starts in the tray." : "")
+                : "Closing the window quits couriercollie. Automatic checks still run."
             wrapMode: Text.Wrap
             opacity: 0.7
         }
