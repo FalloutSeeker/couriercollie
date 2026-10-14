@@ -638,6 +638,10 @@ class Backend(QObject, Updating, Account):
                 self._check_error = self._error_text(error)
             else:
                 self._checks, fresh = result
+                # (Not for repos removed while it ran.)
+                tracked = {r.id for r in self._config.repos}
+                self._checks.results = {k: v for k, v in self._checks.results.items() if k in tracked}
+                fresh = [i for i in fresh if i in tracked]
                 # While it ran, a repo may have been updated, or its page found a newer result: the check's result is
                 # for the version it had then. The page's is kept; an update's is redone for the version it has now
                 # (no request), and isn't announced.
@@ -771,6 +775,10 @@ class Backend(QObject, Updating, Account):
         before = self._config.settings
         self._config = config.merge(self._synced, self._config, theirs)
         self._synced = theirs
+        gone = {*self._details, *self._update_notes, *self._steps} - {r.id for r in self._config.repos}
+        for repo_id in gone:  # removed by the edit: what was kept for their pages goes
+            for kept in (self._details, self._update_notes, self._steps):
+                kept.pop(repo_id, None)
         s = self._config.settings
         if not self._started:
             self._start()  # broken since the app started: what it does at start, now

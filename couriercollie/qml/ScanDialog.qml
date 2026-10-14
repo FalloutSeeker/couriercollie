@@ -56,7 +56,8 @@ Kirigami.Dialog {
     padding: Kirigami.Units.largeSpacing
     preferredWidth: Kirigami.Units.gridUnit * 36
     // A fixed height: the list can be long, and scrolls inside the dialog.
-    preferredHeight: Kirigami.Units.gridUnit * 30
+    // Never taller than the window (a dialog taller than it can't be centred, and Kirigami loops trying).
+    preferredHeight: Math.min(Kirigami.Units.gridUnit * 30, applicationWindow().height - Kirigami.Units.gridUnit * 4)
     standardButtons: Kirigami.Dialog.NoButton
 
     customFooterActions: [

@@ -950,7 +950,7 @@ Kirigami.ScrollablePage {
             QQC2.CheckBox {
                 visible: page.followsReleases
                 text: "Show test versions"
-                checked: page.repo.prereleases
+                checked: page.repo.prereleases === true
                 onToggled: backend.setPrereleases(page.repoId, checked)
             }
 

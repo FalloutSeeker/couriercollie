@@ -92,6 +92,19 @@ Kirigami.ApplicationWindow {
             firstLaunch.open();
     }
 
+    // The repo whose page is open left the list (removed by a hand edit of the settings file, say): its page goes.
+    Connections {
+        function onReposChanged() {
+            if (root.currentRepoId !== "" && !backend.repo(root.currentRepoId).id)
+                Qt.callLater(() => {
+                    if (root.currentRepoId !== "" && !backend.repo(root.currentRepoId).id)
+                        root.closeRepo();
+                });
+        }
+
+        target: backend
+    }
+
     // A second launch, or a click on an update notification: bring this window to the front.
     Connections {
         function onActivateRequested() {

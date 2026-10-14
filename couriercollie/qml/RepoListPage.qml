@@ -87,7 +87,7 @@ Kirigami.ScrollablePage {
 
         icon.name: "list-add"
         text: "Add…"
-        shortcut: StandardKey.New
+        shortcut: "Ctrl+N"  // (StandardKey.New is two keys on KDE; a menu item can show only one)
         displayHint: Kirigami.DisplayHint.KeepVisible  // (as Check Now)
         onTriggered: applicationWindow().showAddDialog()
     }
