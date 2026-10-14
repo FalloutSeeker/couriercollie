@@ -211,6 +211,15 @@ def _other_systems_note(d: Details) -> str:
     return f"Not supported on this computer: {builds}. Only its versions are tracked."
 
 
+def _whole(value) -> int | None:
+    """A list key as QML gives it (a number, which reaches Python as 3.0) or as text ("3"); None if it isn't one."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return int(number) if number.is_integer() and number >= 0 else None
+
+
 def _release_holding(repo: TrackedRepo, d: Details) -> str:
     """For an AppImage on disk: the release whose file it is, by its exact name ("" if none says). Its name's version
     can be something else ("Tool-ubuntu22.04-x86_64.AppImage", or a file not renamed for the release): the tag it
@@ -1355,7 +1364,7 @@ class Backend(QObject, Updating, Account):
     @Slot("QVariantList")
     def trackFound(self, keys):
         """Track the scan finds the user ticked. A find that looks like a tracked repo is linked to it, not added."""
-        keys = {int(k) for k in keys if str(k).isdigit()}
+        keys = {k for k in map(_whole, keys) if k is not None}
         chosen = []
         for item in self._scan_items:
             if item["key"] not in keys or item["status"] in ("problem", "default"):

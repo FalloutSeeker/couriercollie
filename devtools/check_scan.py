@@ -29,8 +29,17 @@ def after_scan():
     h.shot("scan-1-results")
 
 
+def press_track_selected():
+    from PySide6.QtCore import QObject
+
+    count = h.win.findChild(QObject, "scanDialog").property("pickedCount")
+    h.press("scanDialog", f"Track Selected ({count})")
+
+
 def all_ticked():
-    return all((h.find("found:" + i["address"]) or [0, 0, False])[2] for i in b.scanItems if i["status"] != "problem")
+    # (Not a problem, nor couriercollie itself: "Added by default", it can't be ticked.)
+    return all((h.find("found:" + i["address"]) or [0, 0, False])[2] for i in b.scanItems
+               if i["status"] not in ("problem", "default"))
 
 
 h.run([
@@ -51,8 +60,9 @@ h.run([
     (300, lambda: h.check("Select none clears them", not any(
         (h.find("found:" + i["address"]) or [0, 0, False])[2] for i in b.scanItems))),
     (0, lambda: h.click("selectAll")),
-    (300, lambda: b.trackFound([i["key"] for i in b.scanItems])),
-    (500, lambda: h.check("tracked without duplicates",
+    (300, press_track_selected),  # (the window's own button: QML hands its keys over as numbers, 3.0)
+    (500, lambda: h.check("Track Selected tracks them", len(b._config.repos) > before, f"{before} -> {len(b._config.repos)}")),
+    (0, lambda: h.check("tracked without duplicates",
                           len({r.id.lower() for r in b._config.repos}) == len(b._config.repos))),
     (0, lambda: print(f"  repos before: {before}, after: {len(b._config.repos)}")),
     (0, lambda: [print(f"  {r.source:8} {r.name:28} {r.id}  aliases={r.aliases}") for r in b._config.repos]),
