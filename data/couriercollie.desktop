@@ -7,4 +7,4 @@ Exec=couriercollie
 TryExec=couriercollie
 Icon=couriercollie
 Terminal=false
-Categories=System;Utility;
+Categories=System;

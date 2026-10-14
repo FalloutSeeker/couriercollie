@@ -68,7 +68,7 @@ def menu_entry_text(launcher: str | Path = LAUNCHER) -> str:
         f"TryExec={launcher}\n"
         f"Icon={ICON}\n"
         "Terminal=false\n"
-        "Categories=System;Utility;\n"
+        "Categories=System;\n"
     )
 
 
@@ -99,7 +99,9 @@ def install_menu_entry() -> bool:
     path, text = menu_entry_path(), menu_entry_text()
     try:
         if INSTALLED:
-            if path.is_file() and path.read_text(encoding="utf-8").rstrip().endswith("Categories=System;Utility;") \
+            # (Categories as written now, and before.)
+            if path.is_file() and path.read_text(encoding="utf-8").rstrip().endswith(
+                    ("Categories=System;", "Categories=System;Utility;")) \
                     and "/run.sh" in path.read_text(encoding="utf-8"):
                 path.unlink()
             return False
