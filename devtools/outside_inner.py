@@ -161,7 +161,7 @@ if KIND:
     mine = r"x86_64\.rpm$" if KIND == assets.KIND_RPM else r"amd64\.deb$"  # (this distro's kind)
     old = next(a for a in rels[1].assets if re.search(mine, a.name))
     sh(f"curl -sL -o /tmp/{old.name} {old.url}")
-    install = {"fedora": f"dnf install -y -q /tmp/{old.name}", "opensuse": f"zypper -q -n install --allow-unsigned-rpm /tmp/{old.name}",
+    install = {"fedora": f"dnf install -y -q /tmp/{old.name}", "opensuse": f"zypper -q -n --no-gpg-checks install --allow-unsigned-rpm /tmp/{old.name}",
                "ubuntu": f"apt-get install -y -qq /tmp/{old.name}", "debian": f"apt-get install -y -qq /tmp/{old.name}"}[DISTRO]
     print(f"  $ install {old.name} by hand", flush=True)
     if out := sh(install):
