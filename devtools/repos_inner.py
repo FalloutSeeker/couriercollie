@@ -4,7 +4,11 @@ a while ago), checked by running what was installed, then updated to the newest 
 a renamed project, one built for other systems, one with no releases, an archived one, and a site that isn't
 supported. Prints PASS/FAIL lines.
 
-    python3 repos_inner.py DISTRO [all|core]
+    python3 repos_inner.py DISTRO [all|core|odd]
+
+"odd": projects whose releases are laid out unusually (a moving tag beside numbered ones, date tags, a bare program
+file or a lone .gz, checksums in .DIGEST, signed or SHA2-256SUMS files, releases in a separate repo, an AppImage
+whose name has no version), instead of the usual set.
 """
 
 import os
@@ -164,6 +168,43 @@ def x86(*extra):
     return prefer(*extra, r"x86_64.*linux.*musl.*\.tar\.gz$", r"x86_64.*linux.*\.tar\.gz$", r"linux.*x86_64.*\.tar\.gz$",
                   r"(amd64|x86_64).*\.tar\.(gz|xz)$")
 
+
+def named(repo):
+    """The version in the installed file's name (an app that can't say its own without a screen)."""
+    return version_in(Path(repo.local_path).name) if repo.local_path else "missing"
+
+
+def in_place(repo):
+    """For an app whose own version says nothing (appimagetool's every build is "continuous"): the release recorded,
+    if its file is there."""
+    return repo.installed if repo.local_path and Path(repo.local_path).is_file() else "missing"
+
+
+def dated(*args):
+    """A version that's a date (rust-analyzer's tags): the date it says it was built."""
+    def version(repo):
+        m = re.search(r"\d{4}-\d{2}-\d{2}", run(repo.local_path, *args) if repo.local_path else "")
+        return m.group(0) if m else "missing"
+    return version
+
+
+if SET == "odd":
+    print(f"=== {DISTRO}: projects with unusual releases", flush=True)
+    for args in [
+        ("https://github.com/AppImage/appimagetool", prefer(r"appimagetool-x86_64\.AppImage$"), in_place),
+        ("https://github.com/keepassxreboot/keepassxc", prefer(r"x86_64\.AppImage$"), named),
+        ("https://github.com/rust-lang/rust-analyzer", prefer(r"x86_64-unknown-linux-gnu\.gz$"), dated("--version")),
+        ("https://github.com/syncthing/syncthing", prefer(r"syncthing-linux-amd64-.*\.tar\.gz$"), program("--version")),
+        ("https://github.com/jqlang/jq", prefer(r"^jq-linux-amd64$"), program("--version")),
+        ("https://github.com/yt-dlp/yt-dlp", prefer(r"^yt-dlp_linux$"), program("--version")),
+        ("https://github.com/obsidianmd/obsidian-releases", prefer(r"^Obsidian-[\d.]+\.AppImage$"), named),
+        ("https://github.com/neovide/neovide", prefer(r"^neovide\.AppImage$"), appimage("--version")),
+    ]:
+        project(*args)
+    print(f"=== {DISTRO}: {len(failures)} failures", flush=True)
+    for f in failures:
+        print("  - " + f, flush=True)
+    sys.exit(1 if failures else 0)
 
 print(f"=== {DISTRO}: programs", flush=True)
 programs = [

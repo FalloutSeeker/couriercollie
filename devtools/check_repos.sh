@@ -5,6 +5,7 @@
 # Downloads about 400 MB a distro for the full set. Nothing is installed on this computer; the containers are removed.
 #
 #     devtools/check_repos.sh [fedora|opensuse|ubuntu|debian|arch …]
+#     SET=odd devtools/check_repos.sh …    (projects with unusual releases instead: devtools/repos_inner.py)
 set -eu
 cd "$(dirname "$0")/.."
 work=$(mktemp -d)
@@ -18,8 +19,11 @@ grep -oE "github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+" devtools/repos_inner.py |
 echo "vercel/hyper" >> "$work/allow"  # where zeit/hyper went
 git ls-files -z | xargs -0 tar -cf "$work/app.tar"  # the app as committed and staged here
 distros=${*:-fedora opensuse ubuntu debian arch}
-devtools/build_package.sh $(echo "$distros" | tr ' ' '\n' | sed 's/^ubuntu$/debian/' | sort -u) >/dev/null
-cp dist/* "$work/"
+# PREBUILT=folder: packages built already (say, from a clone, while another check builds here).
+if [ -n "${PREBUILT:-}" ]; then cp "$PREBUILT"/* "$work/"; else
+    devtools/build_package.sh $(echo "$distros" | tr ' ' '\n' | sed 's/^ubuntu$/debian/' | sort -u) >/dev/null
+    cp dist/* "$work/"
+fi
 chmod -R a+rX "$work"
 version=$(python3 -c 'import couriercollie; print(couriercollie.__version__)')
 
@@ -37,17 +41,17 @@ apt="apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq
 for distro in $distros; do
     case $distro in
         fedora) run fedora registry.fedoraproject.org/fedora:44 \
-            "dnf install -y -q /work/couriercollie-$version-1.fc*.noarch.rpm git curl" all & ;;
+            "dnf install -y -q /work/couriercollie-$version-1.fc*.noarch.rpm git curl" ${SET:-all} & ;;
         opensuse) run opensuse registry.opensuse.org/opensuse/tumbleweed:latest \
             "zypper -q --non-interactive install --allow-unsigned-rpm /work/couriercollie-$version-1.noarch.rpm git curl" \
-            core & ;;
+            ${SET:-core} & ;;
         ubuntu) run ubuntu docker.io/library/ubuntu:26.04 \
-            "$apt /work/couriercollie_${version}_all.deb git curl ca-certificates" all & ;;
+            "$apt /work/couriercollie_${version}_all.deb git curl ca-certificates" ${SET:-all} & ;;
         debian) run debian docker.io/library/debian:13 \
-            "$apt /work/couriercollie_${version}_all.deb git curl ca-certificates" core & ;;
+            "$apt /work/couriercollie_${version}_all.deb git curl ca-certificates" ${SET:-core} & ;;
         arch) run arch docker.io/library/archlinux:latest \
             "pacman -Sy --noconfirm && pacman -U --noconfirm /work/couriercollie-$version-1-any.pkg.tar.zst && pacman -S --noconfirm --needed git curl" \
-            core & ;;
+            ${SET:-core} & ;;
     esac
     pids="${pids:-} $!"
 done
