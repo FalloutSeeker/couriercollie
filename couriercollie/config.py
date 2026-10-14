@@ -181,6 +181,10 @@ def load(path: Path | None = None) -> Config:
 def loads(text: str, path: Path | None = None) -> Config:
     """The settings from the file's text (load); `path` is for the message if it's broken."""
     try:
+        if not text.strip():
+            # (Never written so by the app: a save cut short, or a file emptied by something else. Read as "no
+            # repos", it would remove them all.)
+            raise TypeError("it\u2019s empty")
         data = tomllib.loads(text)
         settings_data, repos_data = data.get("settings", {}), data.get("repos", [])
         if not isinstance(settings_data, dict) or not isinstance(repos_data, list) \

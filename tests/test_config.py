@@ -99,6 +99,14 @@ class ConfigTest(unittest.TestCase):
             config.load(self.path)
         self.assertEqual(self.path.read_text(), "this is [not toml")
 
+    def test_an_emptied_file_is_broken_not_an_empty_list(self):
+        # (A save cut short, or something else emptied it: read as "no repos", it would remove them all.)
+        self.path.parent.mkdir(parents=True)
+        for text in ("", "\n  \n"):
+            self.path.write_text(text)
+            with self.assertRaises(ConfigError):
+                config.load(self.path)
+
     def test_find_any_matches_aliases_and_ignores_case(self):
         cfg = Config(repos=[TrackedRepo(id="gitgud.io/aeroshell/atp/aerothemeplasma", name="A", url="", host="gitlab",
                                         aliases=["gitgud.io/wackyideas/aerothemeplasma"])])
