@@ -1,5 +1,7 @@
 # couriercollie
 
+⚠️ **Beta:** couriercollie still needs testing and feedback from more users. Please report problems with Send Feedback (in Settings) or as a [GitHub issue](https://github.com/FalloutSeeker/couriercollie/issues).
+
 Inspired by [Obtainium](https://github.com/ImranR98/Obtainium), keep the software you got from GitHub and GitLab up to date, in one simple window.
 
 <p align="center">
