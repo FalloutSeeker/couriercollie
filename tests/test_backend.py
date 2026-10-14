@@ -1243,6 +1243,7 @@ class RestartTest(unittest.TestCase):
         # Run from a clone (run.sh), it follows the clone's branch: your version is a commit, never "0.6.0".
         repo = self.backend._config.find(Backend.MYSELF)
         repo.follow, repo.branch, repo.kind, repo.source, repo.local_path = "branch", "main", "git", "scanned", self.dir.name
+        (Path(self.dir.name) / ".git").mkdir(exist_ok=True)
         repo.installed = self.backend._started_at = "a" * 40
         self.assertFalse(self.backend.details(Backend.MYSELF)["restartNeeded"])
         repo.installed = "b" * 40  # pulled while running
@@ -1297,3 +1298,21 @@ class PartOfTest(unittest.TestCase):
             # Only when the script says so: a clone that just happens to be inside another's folder is its own.
             (aero / "install.sh").write_text("echo hello\n")
             self.assertEqual(b.details("gitgud.io/aeroshell/smod")["partOf"], "")
+
+
+class IsCloneTest(unittest.TestCase):
+    def test_an_installed_download_following_a_branch_isnt_a_clone(self):
+        # (Its path is the program: git can't update it, and switching back to releases makes it a download again.)
+        from couriercollie.updating import _is_clone
+
+        with tempfile.TemporaryDirectory() as d:
+            program, clone = Path(d) / "App-1.0.0-x86_64.AppImage", Path(d) / "project"
+            program.write_text("x")
+            (clone / ".git").mkdir(parents=True)
+
+            def repo(path):
+                return TrackedRepo(id="github.com/a/b", name="b", url="", host="github", kind="git",
+                                   source=config.SOURCE_SCANNED, local_path=str(path))
+            self.assertFalse(_is_clone(repo(program)))
+            self.assertTrue(_is_clone(repo(clone)))
+            self.assertTrue(_is_clone(repo(Path(d) / "gone")))  # (its page says it's gone)

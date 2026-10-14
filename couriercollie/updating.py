@@ -59,8 +59,13 @@ def _head(repo: TrackedRepo, d: Details) -> str:
 
 
 def _is_clone(repo: TrackedRepo) -> bool:
-    """A git clone on this computer: found by a scan, or made by Install."""
-    return repo.source == config.SOURCE_SCANNED and repo.kind == assets.KIND_GIT and bool(repo.local_path)
+    """A git clone on this computer: found by a scan, or made by Install. (Not an installed download following a
+    branch for a while: its path is the program, which git can't update. A clone that's gone still counts: its page
+    says so.)"""
+    if repo.source != config.SOURCE_SCANNED or repo.kind != assets.KIND_GIT or not repo.local_path:
+        return False
+    path = Path(repo.local_path)
+    return not path.exists() or (path / ".git").exists()
 
 
 def _is_appimage(repo: TrackedRepo) -> bool:
