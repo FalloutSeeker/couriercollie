@@ -846,9 +846,10 @@ elif PHASE == "package":
 else:
     run(restart)
 warnings = [m for m in h.messages if "oxygen" not in m.lower() and "breeze-internal" not in m]  # (icons: container)
-# Kirigami's own, inside its own files, which some distros' versions log (Ubuntu's toolbar, when the actions change,
-# "Could not create delegate for ToolBarLayout"): noted, not failed. Anything that starts in couriercollie's code fails.
-theirs = [m for m in warnings if m.startswith("qrc:/qt/qml/org/kde/kirigami/")
+# KDE's own, inside its own files (Kirigami, and KDE's style), which some distros' versions log (Ubuntu's toolbar when
+# the actions change, "Could not create delegate for ToolBarLayout"; Debian's menus): noted, not failed. Anything
+# that starts in couriercollie's code fails.
+theirs = [m for m in warnings if m.startswith("qrc:/qt/qml/org/kde/")
           or m.startswith("Could not create delegate for ToolBarLayout")]
 warnings = [m for m in warnings if m not in theirs]
 if theirs:
