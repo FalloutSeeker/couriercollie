@@ -16,6 +16,11 @@ class BackendTest(unittest.TestCase):
     """The window's actions, using saved GitHub answers instead of the network."""
 
     def setUp(self):
+        # (A Fedora computer, whatever runs the tests: which release files suit it depends on its package manager.)
+        from couriercollie import assets
+
+        self.addCleanup(setattr, assets, "PACKAGE_TOOLS", assets.PACKAGE_TOOLS)
+        assets.PACKAGE_TOOLS = {"dnf", "flatpak"}
         self.dir = tempfile.TemporaryDirectory()
         self.path = Path(self.dir.name) / "repos.toml"
         cfg = config.Config(repos=[

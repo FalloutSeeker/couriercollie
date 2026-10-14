@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -332,7 +333,8 @@ class VersionOnDiskTest(unittest.TestCase):
 
     def test_gone(self):
         self.assertEqual(scan.version_on_disk(str(self.root / "deleted")), ("", False))
-        self.assertEqual(scan.version_on_disk("RPM package \u201cno-such-package-xyz\u201d"), ("", False))
+        if shutil.which("rpm"):  # (without rpm, whether it's installed can't be told: not "gone")
+            self.assertEqual(scan.version_on_disk("RPM package \u201cno-such-package-xyz\u201d"), ("", False))
 
 
 def info(repo_id, host="gitlab", name="", description=""):
