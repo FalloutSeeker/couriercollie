@@ -102,7 +102,7 @@ Scan folders are your home folder, `/opt`, `/usr/local` and `/srv` by default; c
 **Which distros?** It's built and tested mainly on Fedora KDE. openSUSE, Ubuntu, Debian, Arch and GNOME are
 supported, but need feedback (Settings → Send Feedback…).
 
-**Start over:** `./run.sh --reset` brings the welcome screen back. Your old settings are kept as a dated backup.
+**Start over:** `./run.sh --reset` or `couriercollie --reset` brings the welcome screen back. Your old settings are kept as a dated backup.
 
 **Uninstall:** remove the package (e.g. `sudo dnf remove couriercollie`), or delete the folder if you ran it from
 source. Background checks stop on their own. To remove everything, also delete `~/.config/couriercollie`,
