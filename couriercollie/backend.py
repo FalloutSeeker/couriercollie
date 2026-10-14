@@ -1404,6 +1404,7 @@ class Backend(QObject, Updating, Account):
                 else:
                     QTimer.singleShot(0, lambda: self.loadDetails(repo_id, True))
                 return
+            self._approved.pop(repo_id, None)  # (the step's scripts read again, too)
             if error:
                 self._details[repo_id] = Details(state="error", error=self._error_text(error))
             else:
@@ -1623,7 +1624,7 @@ class Backend(QObject, Updating, Account):
             "step": repo.apply_command,
             "stepWhat": mine["what"] if mine else "",
             "stepSkip": repo.apply_skip,
-            "stepChanged": bool(repo.apply_command) and not self._step_still_approved(repo),
+            "stepChanged": bool(repo.apply_command) and not self._step_still_approved(repo, fresh=False),
             # Update asks first what to run (or Only Download): there's something to choose, and it hasn't been.
             "updateAsks": bool(choices) and not repo.apply_command and not repo.apply_skip,
             "stepRunning": bool(run and run.running),

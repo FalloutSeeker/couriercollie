@@ -121,7 +121,8 @@ _IMPLIED = {
 # "$SCRIPT_DIR/install-services.sh" (each tail of it is tried: "install-services.sh").
 _PATH_WORD = re.compile(r"[\w.+-]*(?:/[\w.+-]+)+|[\w.+-]+\.(?:sh|bash|zsh|py|pl|rb)\b")
 _SCRIPT_SUFFIXES = (".sh", ".bash", ".zsh", ".py", ".pl", ".rb")
-NAMED_MAX = 50  # files followed from one step, at most
+NAMED_MAX = 200  # files followed from one step, at most
+ENDING_MAX = 3  # files found by how a name ends, at most, for one name
 
 
 def _is_script(file: Path) -> bool:
@@ -150,30 +151,35 @@ def _tracked(root: Path) -> list[str]:
     return [p for p in out.stdout.decode(errors="replace").split("\0") if p] if out.returncode == 0 else []
 
 
-def _scripts_it_runs(file: Path, root: Path, tracked: list[str]) -> list[Path]:
+def _scripts_it_runs(file: Path, root: Path, tracked: list[str]) -> tuple[list[Path], list[Path]]:
     """The clone's other scripts this file names: those it runs or sources (and whatever else it names that's a
-    script: following too many costs only a question too many, after an update that changes one). A name behind a
-    variable ("$DIR/lib/common.sh") is found by how it ends, among the clone's files."""
+    script: following too many costs only a question too many, after an update that changes one). Returns those
+    named outright, then those found by how a name behind a variable ends ("$DIR/lib/common.sh"): among the clone's
+    files, inside this script's own folder first; never more than a few (a name that ends like many vendored files
+    says nothing about which)."""
     try:
         text = file.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return []
-    found = []
+        return [], []
+    named, ending = [], []
+    near = str(file.parent.relative_to(root)) if file.parent != root else ""
     for word in sorted(set(_PATH_WORD.findall(text))):
         parts = word.split("/")
         tails = [t for i in range(len(parts)) if (t := "/".join(parts[i:]))]
         here = next((c for t in tails for b in (file.parent, root)
                      if _usable(c := (b / t).resolve(), root) and _is_script(c)), None)
         if here:
-            found.append(here)
+            named.append(here)
             continue
         for tail in tails:  # the longest ending that names any of the clone's files
-            ends = [c for t in tracked if t == tail or t.endswith("/" + tail)
-                    if _usable(c := (root / t).resolve(), root) and _is_script(c)]
-            if ends:
-                found.extend(ends)
-                break
-    return found
+            ends = [t for t in tracked if t == tail or t.endswith("/" + tail)]
+            if not ends:
+                continue
+            inside = [t for t in ends if near and t.startswith(near + "/")]
+            chosen = inside if inside and len(inside) <= ENDING_MAX else ends if len(ends) <= ENDING_MAX else []
+            ending.extend(c for t in chosen if _usable(c := (root / t).resolve(), root) and _is_script(c))
+            break
+    return named, ending
 
 
 def named_files(path: str, command: str) -> list[Path]:
@@ -192,11 +198,14 @@ def named_files(path: str, command: str) -> list[Path]:
         file = (root / word).resolve()
         if _usable(file, root) and file not in files:
             files.append(file)
-    tracked = _tracked(root)
+    tracked, later = _tracked(root), []
     for file in files:  # (grows as it goes: what those run, in turn)
-        for found in _scripts_it_runs(file, root, tracked):
-            if found not in files and len(files) < NAMED_MAX:
-                files.append(found)
+        named, ending = _scripts_it_runs(file, root, tracked)
+        files.extend(f for f in dict.fromkeys(named) if f not in files and len(files) < NAMED_MAX)
+        later.extend(ending)
+        if file is files[-1]:  # named outright: all followed; now those found by how they end, and what they run
+            files.extend(f for f in dict.fromkeys(later) if f not in files and len(files) < NAMED_MAX)
+            later = []
     return files
 
 

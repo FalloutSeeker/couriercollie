@@ -143,6 +143,7 @@ class Updating:
         # the disk before one finished has read it as it was before (loadDetails, _scan_done).
         self._finished: dict[str, int] = {}
         self._load_after: set[str] = set()  # pages to load again once their update is done
+        self._approved: dict[str, tuple] = {}  # whether each step is still as approved, for the page
 
     def _here_now(self, repo_id: str):
         """Updated or installed: it's on this computer now, whatever the page found before ("Not found")."""
@@ -385,8 +386,16 @@ class Updating:
         elif repo.apply_command:
             self.askStep.emit(repo.id, "changed")
 
-    def _step_still_approved(self, repo: TrackedRepo) -> bool:
-        return applying.fingerprint(repo.local_path, repo.apply_command) == repo.apply_approved
+    def _step_still_approved(self, repo: TrackedRepo, fresh: bool = True) -> bool:
+        """Whether the step and the scripts it runs are as approved. Before it runs, always worked out afresh; for the
+        page (asked on each redraw, and it reads files and asks git), once, then again after an update, a Refresh, or
+        this being worked out afresh."""
+        key = (repo.local_path, repo.apply_command, repo.apply_approved)
+        if not fresh and (known := self._approved.get(repo.id)) and known[0] == key:
+            return known[1]
+        ok = applying.fingerprint(repo.local_path, repo.apply_command) == repo.apply_approved
+        self._approved[repo.id] = (key, ok)
+        return ok
 
     def _asks_first(self, repo: TrackedRepo) -> bool:
         """Whether Update first asks what runs after it downloads: a clone, with something to run, and neither a
