@@ -736,8 +736,9 @@ def run(path: str, command: str, line: Callable[[str], None], started: Callable[
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace",
                                start_new_session=True, env=env)
     started(process)
-    for text in process.stdout:
-        line(text.rstrip("\n"))
+    with process.stdout:  # (closed after: one step's output pipe isn't kept open for the app's life)
+        for text in process.stdout:
+            line(text.rstrip("\n"))
     return process.wait()
 
 
