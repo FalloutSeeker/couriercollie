@@ -86,15 +86,19 @@ class Harness:
             }
             const item = walk(root);
             if (!item) return null;
-            // Scrolled out of sight (e.g. further down a page): scroll it into the middle, as a person would.
-            let p = item.mapToItem(null, item.width / 2, item.height / 2);
-            for (let f = item.parent; f && (p.y < 0 || p.y > windowHeight); f = f.parent) {
+            // Scrolled out of sight, further down a page or a dialog's list: each thing that scrolls it brings it
+            // into its middle, as a person would. (Not only out of the window: a row below a dialog's fold is still
+            // inside the window, and a click there lands on the dialog's buttons.)
+            for (let f = item.parent; f; f = f.parent) {
                 if (f.contentY === undefined || f.contentHeight === undefined || !f.contentItem) continue;
+                const top = item.mapToItem(f, 0, 0).y;
+                if (top >= 0 && top + item.height <= f.height) continue;  // (in sight there)
                 const inside = item.mapToItem(f.contentItem, 0, item.height / 2).y;
                 const lowest = Math.max(f.originY, f.originY + f.contentHeight - f.height);
                 f.contentY = Math.max(f.originY, Math.min(lowest, inside - f.height / 2));
-                p = item.mapToItem(null, item.width / 2, item.height / 2);
             }
+            const p = item.mapToItem(null, item.width / 2, item.height / 2);
+            if (p.y < 0 || p.y > windowHeight) return null;  // (can't be brought into sight)
             return [p.x, p.y, !!item.checked];
         })""")
 
