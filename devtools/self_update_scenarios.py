@@ -187,7 +187,7 @@ b = fresh(OLD)
 check("…not offered", not b.repo(Backend.MYSELF)["updateAvailable"], offered(b))
 b.shutdown()
 b = fresh(OLD, prereleases=True)
-check("…offered with Show test versions on", b.repo(Backend.MYSELF)["updateAvailable"], offered(b))
+check("…offered with Include & Update from test versions on", b.repo(Backend.MYSELF)["updateAvailable"], offered(b))
 b.shutdown()
 
 print("- yours is newer than every release (installed by hand from a newer build)", flush=True)

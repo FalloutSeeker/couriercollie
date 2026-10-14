@@ -310,7 +310,7 @@ class Updating:
             rels = known if known is not None else sources.releases(ref, host)
             release = _newest_release(prereleases, rels)
             if not release:
-                raise updater.UpdateError("Only test versions so far: turn on Show test versions to install one."
+                raise updater.UpdateError("Only test versions so far: tick \u201cInclude & Update from test versions\u201d to install one."
                                           if rels else "This project has no releases to install.")
             chosen = assets.pick(pattern, [a.name for a in release.assets])
             asset = next((a for a in release.assets if a.name == chosen), None)

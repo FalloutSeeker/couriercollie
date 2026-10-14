@@ -236,7 +236,7 @@ class TestVersionsTest(AppImageCase):
         sources.releases = lambda ref, host, **_: [beta, full]
         self.backend.updateRepo(self.id)
         self.assertEqual(config.load(self.path).repos[0].installed, "v2.0")
-        self.backend.setPrereleases(self.id, True)  # Show test versions: Update installs the newest one
+        self.backend.setPrereleases(self.id, True)  # Include & Update from test versions: Update installs the newest one
         self.backend.updateRepo(self.id)
         self.assertEqual(config.load(self.path).repos[0].installed, "v3.0-beta")
 
@@ -254,7 +254,7 @@ class TestVersionsTest(AppImageCase):
     def test_only_test_versions_and_they_arent_shown(self):
         sources.releases = lambda ref, host, **_: [Release("v3.0-beta", "v3.0-beta", None, True, "", "", [self.asset()])]
         self.backend.updateRepo(self.id)
-        self.assertIn("Show test versions", self.backend.details(self.id)["updateNote"])
+        self.assertIn("Include & Update from test versions", self.backend.details(self.id)["updateNote"])
         self.assertEqual(config.load(self.path).repos[0].installed, "-")
 
 

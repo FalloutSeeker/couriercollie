@@ -949,7 +949,7 @@ Kirigami.ScrollablePage {
 
             QQC2.CheckBox {
                 visible: page.followsReleases
-                text: "Show test versions"
+                text: "Include & Update from test versions"
                 checked: page.repo.prereleases === true
                 onToggled: backend.setPrereleases(page.repoId, checked)
             }
@@ -1268,7 +1268,7 @@ Kirigami.ScrollablePage {
 
         QQC2.Label {
             visible: page.followsReleases && page.ready && page.details.releases.length === 0 && page.details.hasReleases
-            text: "Only pre-releases so far. Tick “Show test versions” to see them."
+            text: "Only pre-releases so far. Tick “Include & Update from test versions” to see and install them."
             opacity: 0.7
         }
 
