@@ -78,8 +78,8 @@ class Relay(BaseHTTPRequestHandler):
         elif what == "429":
             self.answer(429, b"", [("Retry-After", "5")])
         elif what == "slow":
-            time.sleep(25)  # longer than the app waits
-            self.answer(200, b"[]")
+            time.sleep(25)  # longer than the app waits; then what a proxy would say (never a believable answer)
+            self.answer(504, b'{"message": "Gateway Timeout"}')
         elif what == "wrong":
             self.answer(200, random.choice(WRONG), [("Content-Type", "application/json")])
         else:  # the connection drops partway through the answer

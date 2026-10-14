@@ -15,7 +15,9 @@ class _ToRelay(urllib.request.BaseHandler):
             return None  # the usual way
         headers = dict(req.header_items())
         headers.pop("Authorization", None)
-        return urllib.request.urlopen(urllib.request.Request(RELAY + req.selector, headers=headers), timeout=60)
+        # As long as the app would wait for GitHub itself.
+        return urllib.request.urlopen(urllib.request.Request(RELAY + req.selector, headers=headers),
+                                      timeout=getattr(req, "timeout", None) or 60)
 
 
 if RELAY:
