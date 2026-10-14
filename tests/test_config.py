@@ -202,3 +202,18 @@ class SymlinkTest(unittest.TestCase):
             config.save(Config(repos=[TrackedRepo(id="github.com/a/b", name="b", url="", host="github")]), link)
             self.assertTrue(link.is_symlink())
             self.assertEqual([r.id for r in config.load(real).repos], ["github.com/a/b"])
+
+
+class WriteWholeTest(unittest.TestCase):
+    def test_keeps_its_permissions_and_leaves_nothing_beside_it(self):
+        import os
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "repos.toml"
+            path.write_text("old")
+            path.chmod(0o600)
+            config.write_whole(path, "new")
+            self.assertEqual((path.read_text(), path.stat().st_mode & 0o777), ("new", 0o600))
+            self.assertEqual(os.listdir(d), ["repos.toml"])

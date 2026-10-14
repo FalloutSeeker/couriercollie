@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import assets, flatpaks, packages, scan, sources, updater
-from .config import FOLLOW_BRANCH, NOT_INSTALLED, SOURCE_SCANNED, Settings, TrackedRepo
+from .config import FOLLOW_BRANCH, NOT_INSTALLED, SOURCE_SCANNED, Settings, TrackedRepo, write_whole
 from .sources import RepoRef, SourceError
 
 # What a check found.
@@ -91,9 +91,7 @@ def _result(saved) -> Result | None:
 def save_state(state: State, path: Path | None = None) -> None:
     path = path or state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(asdict(state), indent=1), encoding="utf-8")
-    os.replace(tmp, path)
+    write_whole(path, json.dumps(asdict(state), indent=1))
 
 
 def now() -> datetime:

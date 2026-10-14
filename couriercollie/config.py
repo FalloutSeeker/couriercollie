@@ -273,8 +273,37 @@ def save(config: Config, path: Path | None = None) -> str:
         path = path.resolve()  # (kept by a dotfile manager, say: the file it points to is written, the link kept)
     path.parent.mkdir(parents=True, exist_ok=True)
     text = dumps(config)
-    # Write to a temporary file and rename, so a crash mid-write can't leave a half-written settings file.
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+    write_whole(path, text)
     return text
+
+
+def write_whole(path: Path, text: str) -> None:
+    """Write a file all at once: to a temporary file of its own beside it, then renamed, so a crash mid-write can't
+    leave it half written, and two writing at once (the window and a background check) don't trip over each other.
+    It keeps its permissions."""
+    import tempfile
+
+    try:
+        mode = path.stat().st_mode & 0o777
+    except OSError:
+        mode = 0o666 & ~_umask()
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            os.fchmod(f.fileno(), mode)
+            f.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def _umask() -> int:
+    # (Read, not set and set back: other threads may be making files meanwhile.)
+    try:
+        for line in Path("/proc/self/status").read_text().splitlines():
+            if line.startswith("Umask:"):
+                return int(line.split()[1], 8)
+    except (OSError, ValueError):
+        pass
+    return 0o022

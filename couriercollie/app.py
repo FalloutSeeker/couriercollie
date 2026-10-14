@@ -38,7 +38,10 @@ def check(if_due: bool) -> int:
 
     use_login(cfg.settings.github_login)
     state, fresh = checker.check_all(cfg.repos, state)
-    checker.save_state(state)
+    try:
+        checker.save_state(state)
+    except OSError as e:
+        print(f"Couldn\u2019t save what was found ({e.strerror or e}): {checker.state_path()}", file=sys.stderr)
     names = {r.id: r.name for r in cfg.repos}
     for repo_id, result in state.results.items():
         print(f"{names.get(repo_id, repo_id)}: {result.text}" + (" (not rechecked)" if result.not_rechecked else ""))
