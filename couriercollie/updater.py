@@ -38,6 +38,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+import zlib
 from pathlib import Path
 
 from . import flatpaks, packages, sources
@@ -669,58 +670,84 @@ def _compressed(path: Path):
     return None
 
 
-def _unpack(archive: Path, into: Path, name: str = "program") -> None:
+def _unpack(archive: Path, into: Path, name: str = "program", shown_as: str = "") -> None:
     """Unpacks an archive into `into`, refusing anything that would land outside it, links that point outside it,
     device files, and archives that unpack to more than UNPACKED_MAX_BYTES. A Linux program on its own, not in an
-    archive (yq's "yq_linux_amd64"), goes in as `name`, runnable."""
+    archive (yq's "yq_linux_amd64"), goes in as `name`, runnable. `shown_as`: the file's name in messages (the
+    release's, not the download's)."""
+    shown_as = shown_as or archive.name
+    damaged = f"{shown_as} is damaged and couldn\u2019t be unpacked. Try again later."
     into.mkdir(parents=True)
     with archive.open("rb") as f:
-        if f.read(4) == b"\x7fELF":
-            shutil.copyfile(archive, into / name)
-            (into / name).chmod(0o755)
-            return
-    if zipfile.is_zipfile(archive):
-        with zipfile.ZipFile(archive) as z:
-            members = z.infolist()
-            if sum(m.file_size for m in members) > UNPACKED_MAX_BYTES:
-                raise UpdateError("The archive unpacks to more than 4 GB, so it wasn’t unpacked.")
-            for m in members:
-                target = (into / m.filename).resolve()
-                if not target.is_relative_to(into.resolve()):
-                    raise UpdateError(f"The archive tries to put {m.filename} outside its folder, so it wasn’t "
-                                      "unpacked.")
-                z.extract(m, into)
-                mode = (m.external_attr >> 16) & 0o777
-                if mode and not m.is_dir():
-                    target.chmod(mode & 0o755)
+        head = f.read(512)
+    if head.startswith(b"\x7fELF"):
+        shutil.copyfile(archive, into / name)
+        (into / name).chmod(0o755)
         return
-    if not tarfile.is_tarfile(archive) and (opener := _compressed(archive)):
-        # One file compressed on its own (rust-analyzer's "…-linux-gnu.gz"): a program, if that's what it holds.
-        program = into / name
-        try:
-            with opener(archive) as source, program.open("wb") as out:
-                while chunk := source.read(CHUNK):
-                    if out.tell() + len(chunk) > UNPACKED_MAX_BYTES:
-                        raise UpdateError("The file unpacks to more than 4 GB, so it wasn’t unpacked.")
-                    out.write(chunk)
-        except UpdateError:
-            raise
-        except Exception as e:  # noqa: BLE001 - cut short or damaged: each format says it its own way (xz, zstd)
-            raise UpdateError(f"{archive.name} is damaged and couldn’t be unpacked. Try again later.") from e
-        with program.open("rb") as f:
-            if f.read(4) != b"\x7fELF":
-                raise UpdateError(f"{archive.name} doesn’t hold a Linux program, so it wasn’t installed.")
-        program.chmod(0o755)
-        return
+    if head.lstrip()[:1] == b"<":
+        raise UpdateError(f"The site sent a web page instead of {shown_as}, so it wasn\u2019t installed. Try again "
+                          "later.")
     try:
+        if zipfile.is_zipfile(archive):
+            with zipfile.ZipFile(archive) as z:
+                members = z.infolist()
+                if sum(m.file_size for m in members) > UNPACKED_MAX_BYTES:
+                    raise UpdateError("The archive unpacks to more than 4 GB, so it wasn\u2019t unpacked.")
+                for m in members:
+                    target = (into / m.filename).resolve()
+                    if not target.is_relative_to(into.resolve()):
+                        raise UpdateError(f"The archive tries to put {m.filename} outside its folder, so it "
+                                          "wasn\u2019t unpacked.")
+                    z.extract(m, into)
+                    mode = (m.external_attr >> 16) & 0o755
+                    if not m.is_dir() and _starts_like_a_program(target):
+                        mode |= 0o755  # (a zip made elsewhere may keep no permissions: a program still runs)
+                    if mode and not m.is_dir():
+                        target.chmod(mode)
+            return
+        if not tarfile.is_tarfile(archive) and (opener := _compressed(archive)):
+            # One file compressed on its own (rust-analyzer's "…-linux-gnu.gz"): a program, if that's what it holds.
+            program = into / name
+            try:
+                with opener(archive) as source, program.open("wb") as out:
+                    while chunk := source.read(CHUNK):
+                        if out.tell() + len(chunk) > UNPACKED_MAX_BYTES:
+                            raise UpdateError("The file unpacks to more than 4 GB, so it wasn\u2019t unpacked.")
+                        out.write(chunk)
+            except (UpdateError, OSError):
+                raise
+            except Exception as e:  # noqa: BLE001 - cut short or damaged: each format says it its own way (xz, zstd)
+                raise UpdateError(damaged) from e
+            if not _starts_like_a_program(program):
+                raise UpdateError(f"{shown_as} doesn\u2019t hold a Linux program, so it wasn\u2019t installed.")
+            program.chmod(0o755)
+            return
         with tarfile.open(archive, "r:*") as t:
             if sum(m.size for m in t.getmembers()) > UNPACKED_MAX_BYTES:
-                raise UpdateError("The archive unpacks to more than 4 GB, so it wasn’t unpacked.")
+                raise UpdateError("The archive unpacks to more than 4 GB, so it wasn\u2019t unpacked.")
             t.extractall(into, filter="data")  # Python's safe mode: nothing outside, no devices, no setuid
     except tarfile.FilterError as e:
-        raise UpdateError(f"The archive has something unsafe in it ({e}), so it wasn’t unpacked.") from e
-    except (tarfile.TarError, EOFError, OSError) as e:
-        raise UpdateError(f"The archive couldn’t be unpacked: {e}") from e
+        raise UpdateError(f"The archive has something unsafe in it ({e}), so it wasn\u2019t unpacked.") from e
+    except tarfile.ReadError as e:
+        raise UpdateError(f"{shown_as} isn\u2019t an archive that can be unpacked, so it wasn\u2019t "
+                          "installed.") from e
+    except OSError as e:
+        if e.errno == errno.ENOSPC:
+            raise UpdateError(f"The disk is full, so {shown_as} couldn\u2019t be unpacked. Free some space, then "
+                              "try again.") from e
+        if e.errno is None:  # (not the disk: the file, as gzip says it, "Not a gzipped file")
+            raise UpdateError(damaged) from e
+        raise UpdateError(f"{shown_as} couldn\u2019t be unpacked: {e.strerror or e}") from e
+    except (tarfile.TarError, zipfile.BadZipFile, EOFError, zlib.error) as e:
+        raise UpdateError(damaged) from e
+
+
+def _starts_like_a_program(path: Path) -> bool:
+    try:
+        with path.open("rb") as f:
+            return f.read(4) == b"\x7fELF"
+    except OSError:
+        return False
 
 
 def _is_program(path: Path) -> bool:
@@ -773,7 +800,8 @@ def install_program(repo_id: str, tag: str, asset, others: list, wanted: str = "
     try:
         verified, _ = _download_checked(asset, part, others, progress, get_text)
         # A program on its own is named for the project ("yq", not "yq_linux_amd64").
-        _unpack(part, unpacking, _folder_name(next((h for h in hints if h), "")) or _folder_name(asset.name))
+        _unpack(part, unpacking, _folder_name(next((h for h in hints if h), "")) or _folder_name(asset.name),
+                Path(asset.name).name)
         program = choose_program(unpacking, wanted, list(hints))
         link = bin_dir() / program.name
         # ~/.local/bin comes before the system's commands: a program called "sudo" or "ls" would run instead of the
@@ -813,6 +841,10 @@ def install_program(repo_id: str, tag: str, asset, others: list, wanted: str = "
     finally:
         part.unlink(missing_ok=True)
         shutil.rmtree(unpacking, ignore_errors=True)
+        try:
+            home.rmdir()  # (only if nothing's in it: a first install that failed leaves no empty folder)
+        except OSError:
+            pass
 
 
 def program_version(link: Path) -> str:

@@ -805,6 +805,32 @@ class CompressedProgramUnpackTest(unittest.TestCase):
         self.addCleanup(self.dir.cleanup)
         self.root = Path(self.dir.name)
 
+    def test_damaged_or_wrong_files_say_so_by_the_releases_name(self):
+        import gzip
+
+        cut = self.root / "cut.part"
+        cut.write_bytes(gzip.compress(ELF * 2000)[:200])
+        page = self.root / "page.part"
+        page.write_bytes(b"<!DOCTYPE html><html>sign in</html>")
+        for file, says in ((cut, "tool.gz is damaged"), (page, "sent a web page instead of tool.gz")):
+            with self.assertRaisesRegex(updater.UpdateError, says):
+                updater._unpack(file, self.root / file.stem, "tool", "tool.gz")
+
+    def test_a_zip_that_kept_no_permissions_still_runs_its_program(self):
+        import io
+        import zipfile
+
+        data = io.BytesIO()
+        with zipfile.ZipFile(data, "w") as z:
+            for name in ("tool/tool", "tool/README"):
+                info = zipfile.ZipInfo(name)
+                info.external_attr = 0o644 << 16
+                z.writestr(info, ELF if name == "tool/tool" else b"read me")
+        (zipped := self.root / "tool.zip").write_bytes(data.getvalue())
+        updater._unpack(zipped, self.root / "out")
+        self.assertEqual([p.name for p in updater.programs_in(self.root / "out")], ["tool"])
+        self.assertFalse(os.access(self.root / "out/tool/README", os.X_OK))
+
     def test_gzip_and_xz_holding_a_program(self):
         import gzip
         import lzma
