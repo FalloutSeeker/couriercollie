@@ -16,20 +16,6 @@ AppImages, programs from release archives, downloaded `.rpm` or `.deb` files and
 your package manager. couriercollie keeps track of them, tells you when there's a new version, and updates them with
 a click.
 
-## Why another tool?
-
-Each existing tool covers one piece:
-
-| Tool | What it does | What it misses |
-| --- | --- | --- |
-| Topgrade | Runs your package managers | Software you got from GitHub |
-| Gear Lever, AppImageLauncher | AppImages | Everything else |
-| eget | Downloads a release's program | Runs in a terminal, one at a time |
-| nvchecker | Tells you about new versions | Doesn't update anything |
-| Discover | Packages and Flatpaks | What you downloaded yourself |
-
-couriercollie does all of it in one app.
-
 ## Install
 
 Download the package for your distro from [Releases](https://github.com/FalloutSeeker/couriercollie/releases), then:
