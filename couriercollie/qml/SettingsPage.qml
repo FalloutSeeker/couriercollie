@@ -275,32 +275,41 @@ Kirigami.ScrollablePage {
         }
 
         // Ko-fi's own button, as in the README: kept with the app (never fetched from the site), and a real button, so
-        // Tab and Space reach it too.
-        QQC2.AbstractButton {
-            objectName: "donate"
-            implicitWidth: Kirigami.Units.gridUnit * 223 / 30 * 1.6
-            implicitHeight: Kirigami.Units.gridUnit * 1.6
-            Accessible.name: "Support couriercollie on Ko-fi"
-            QQC2.ToolTip.text: "ko-fi.com/E1E01YFRJU"
-            QQC2.ToolTip.visible: hovered
-            QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
-            HoverHandler {
-                cursorShape: Qt.PointingHandCursor
+        // Tab and Space reach it too. Across the whole form (as a section is), centered under its heading.
+        Item {
+            Kirigami.FormData.isSection: true
+            Layout.fillWidth: true
+            implicitHeight: donate.implicitHeight
+
+            QQC2.AbstractButton {
+                id: donate
+
+                objectName: "donate"
+                anchors.horizontalCenter: parent.horizontalCenter
+                implicitWidth: Kirigami.Units.gridUnit * 223 / 30 * 1.6
+                implicitHeight: Kirigami.Units.gridUnit * 1.6
+                Accessible.name: "Support couriercollie on Ko-fi"
+                QQC2.ToolTip.text: "ko-fi.com/E1E01YFRJU"
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                HoverHandler {
+                    cursorShape: Qt.PointingHandCursor
+                }
+                contentItem: Image {
+                    source: Qt.resolvedUrl("../logo/ko-fi.svg")
+                    sourceSize.height: parent.height * Screen.devicePixelRatio
+                    fillMode: Image.PreserveAspectFit
+                    opacity: parent.pressed ? 0.75 : 1
+                }
+                // (Where Tab has put it: a ring, as other buttons show.)
+                background: Rectangle {
+                    color: "transparent"
+                    radius: height / 4
+                    border.width: parent.visualFocus ? 2 : 0
+                    border.color: Kirigami.Theme.focusColor
+                }
+                onClicked: Qt.openUrlExternally("https://ko-fi.com/E1E01YFRJU")
             }
-            contentItem: Image {
-                source: Qt.resolvedUrl("../logo/ko-fi.svg")
-                sourceSize.height: parent.height * Screen.devicePixelRatio
-                fillMode: Image.PreserveAspectFit
-                opacity: parent.pressed ? 0.75 : 1
-            }
-            // (Where Tab has put it: a ring, as other buttons show.)
-            background: Rectangle {
-                color: "transparent"
-                radius: height / 4
-                border.width: parent.visualFocus ? 2 : 0
-                border.color: Kirigami.Theme.focusColor
-            }
-            onClicked: Qt.openUrlExternally("https://ko-fi.com/E1E01YFRJU")
         }
     }
 
