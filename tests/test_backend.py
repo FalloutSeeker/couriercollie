@@ -1348,7 +1348,7 @@ class ReleaseHoldingTest(unittest.TestCase):
 class ScanKeysTest(unittest.TestCase):
     def test_keys_as_the_window_sends_them(self):
         # (QML's numbers reach Python as floats: 3.0. Dropped, Track Selected tracked nothing.)
-        from couriercollie.backend import _whole
+        from couriercollie.backend import _whole_number
 
-        self.assertEqual([_whole(k) for k in (3.0, 3, "3", 0.0, "nope", "", None, 2.5, -1)],
+        self.assertEqual([_whole_number(k) for k in (3.0, 3, "3", 0.0, "nope", "", None, 2.5, -1)],
                          [3, 3, 3, 0, None, None, None, None, None])
