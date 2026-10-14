@@ -333,6 +333,13 @@ class CoveredFilesTest(unittest.TestCase):
         (Path(folder) / "build/out").write_text("left by a build\n")  # (not tracked)
         self.assertEqual(self.covered(folder), {"install.sh"})
 
+    def test_the_programs_own_source_only_when_run(self):
+        # Mentioned ("see src/lib/api.ts"), the program's source isn't the step (every update runs its new code
+        # anyway); run by the script ("node tools/setup.js"), it is.
+        folder = self.clone({"install.sh": "echo see src/lib/api.ts\nnode tools/setup.js\n", "src/lib/api.ts": "x",
+                             "tools/setup.js": "x"})
+        self.assertEqual(self.covered(folder), {"install.sh", "tools/setup.js"})
+
     def test_a_long_word_is_data_and_quick(self):
         import time
 

@@ -382,8 +382,11 @@ _RUNS_NEXT = {".", "source", "sh", "bash", "zsh", "dash", "ksh", "python", "pyth
               "include", "-include", "-f", "-r", "--requirement", "-a", "--arg-file", "<"}
 # Files never run or read as settings, which change often (documentation, pictures, fonts): not covered unless run or
 # read as above, so a step isn't asked about again for them.
-_NOT_COMMANDS = re.compile(r"\.(md|markdown|rst|txt|adoc|org|html?|pdf|png|jpe?g|gif|svg|webp|ico|xcf|ttf|otf|woff2?)$"
-                           r"|^(license|licence|copying|authors|changelog|readme)(\.\w+)?$", re.I)
+# The program's own source, too: every update runs its new code anyway (accepted); a script that only mentions it
+# ("see src/lib/api.ts") doesn't make it part of the step.
+_NOT_COMMANDS = re.compile(r"\.(md|markdown|rst|txt|adoc|org|html?|pdf|png|jpe?g|gif|svg|webp|ico|xcf|ttf|otf|woff2?|"
+                           r"tsx?|jsx?|mjs|cjs|vue|svelte|css|s[ac]ss|go|rs|c|cc|cpp|cxx|h|hh|hpp|java|kt|swift|cs|"
+                           r"qml|ui)$|^(license|licence|copying|authors|changelog|readme)(\.\w+)?$", re.I)
 NAMED_MAX = 300  # files covered by one step, at most
 ENDING_MAX = 3  # a name merely mentioned that ends like more of the clone's files than this names none of them
 
