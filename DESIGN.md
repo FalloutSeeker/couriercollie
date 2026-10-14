@@ -124,5 +124,6 @@ Optional: GitHub allows 60 requests an hour without signing in, 5,000 with.
   `account.py`).
 - **No freezing:** network and disk work runs on worker threads; results come back through `_deliver`.
 - **Settings** (`~/.config/couriercollie/repos.toml`) are written to a temporary file and renamed. A file that can't
-  be read is never overwritten.
+  be read is never overwritten. Edited by hand while the app runs, it's merged with the app's own changes (the hand
+  edit wins where both changed something); comments in it aren't kept.
 - **One copy at a time:** a second launch, or the background check, talks to the open app through a local socket.
