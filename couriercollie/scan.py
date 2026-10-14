@@ -56,6 +56,7 @@ class Found:
     needs_password: bool = False  # in a folder this user can't change (e.g. owned by the system in /opt)
     homepage: str = ""  # the project's own website, once identified ("-" if it gives none)
     release_file: str = ""  # for AppImages: the release file it updates from, e.g. "App-*-x86_64.AppImage"
+    linked_to: str = ""  # a tracked repo the user said it's the same project as (a mirror): merged into that one
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -406,10 +407,9 @@ class MergeResult:
 
 
 def link_to(item: Found, repo: TrackedRepo) -> Found:
-    """Make a find merge into `repo` (the user confirmed it's the same project): the find's address becomes an alias."""
-    if item.id.lower() != repo.id.lower():
-        item.aliases.append(item.id)
-        item.id = repo.id
+    """Make a find merge into `repo` (the user confirmed it's the same project, a mirror say). Its own address is kept:
+    merge adds it to the repo's aliases, as another place the project is, not the tracked repo's own clone."""
+    item.linked_to = repo.id
     return item
 
 
@@ -422,7 +422,7 @@ def merge(config: Config, found: list[Found], resolve: Callable[[str], str | Non
     """
     result = MergeResult(added=[], updated=[])
     for item in found:
-        repo = next((r for a in (item.id, *item.aliases) if (r := config.find_any(a))), None)
+        repo = next((r for a in (item.linked_to, item.id, *item.aliases) if a and (r := config.find_any(a))), None)
         if repo is None and (current := resolve(item.id)):
             repo = config.find_any(current)
         if repo is None:
@@ -432,14 +432,30 @@ def merge(config: Config, found: list[Found], resolve: Callable[[str], str | Non
             )
             config.repos.append(repo)
             result.added.append(repo)
-        elif repo not in result.updated:
-            result.updated.append(repo)
+            before = None
+        else:
+            before = _on_disk(repo)
+        # The repo's own: found under its address (or an old one of it, renamed since). Otherwise it matched only
+        # through an address the repo was given (a mirror linked to it): another place the project is, which never
+        # takes the place of the repo's own while that's there.
+        own = repo.id.lower() in (a.lower() for a in (item.id, *item.aliases))
         # Remember old addresses, so the next scan matches without asking the site.
         for alias in (item.id, *item.aliases):
             if alias.lower() != repo.id.lower() and alias.lower() not in (a.lower() for a in repo.aliases):
                 repo.aliases.append(alias)
+        if before is not None and not own and repo.local_path and repo.local_path != item.path \
+                and Path(repo.local_path).exists():
+            continue
         _apply(repo, item)
+        # (Only what the scan changed counts as updated: found as it was, it's not news, nor worth a check.)
+        if before is not None and _on_disk(repo) != before and repo not in result.updated:
+            result.updated.append(repo)
     return result
+
+
+def _on_disk(repo: TrackedRepo) -> tuple:
+    """What a scan may change about a tracked repo."""
+    return (repo.source, repo.local_path, repo.follow, repo.kind, repo.branch, repo.asset_pattern, repo.installed)
 
 
 def _apply(repo: TrackedRepo, item: Found) -> None:
