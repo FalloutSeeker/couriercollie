@@ -363,7 +363,7 @@ class FailClosedTest(CoveredFilesTest):
     def test_globs_variables_and_find(self):
         folder = self.clone({
             "install.sh": "for f in ~/.local/share/app/install/*.sh; do . \"$f\"; done\n"
-                          "find hooks -name '*.sh' -exec sh {} \;\n"
+                          "find hooks -name '*.sh' -exec sh {} \\;\n"
                           'sh "sdata/dist-${ID}/deps.sh"\n. "$LIBDIR/common"\n',
             "install/a.sh": "x", "install/b.sh": "x", "hooks/post.sh": "x", "sdata/dist-arch/deps.sh": "x",
             "sdata/dist-nix/deps.sh": "x", "lib/common": "x"})
@@ -426,7 +426,7 @@ class RunsInContextTest(CoveredFilesTest):
     def test_shell_forms(self):
         folder = self.clone({
             "install.sh": 'for f in "$DIR"/*.sh; do . "$f"; done\n. "${DIR}/lib/common"\nrun-parts steps.d\n'
-                          'find tools -type f -exec bash {} \;\nfor g in \\\n  "./gen/$A$B.colors"; do echo; done\n',
+                          'find tools -type f -exec bash {} \\;\nfor g in \\\n  "./gen/$A$B.colors"; do echo; done\n',
             "top.sh": "x", "lib/common": "x", "steps.d/10-a": "x", "tools/t": "x",
             **{f"gen/c{i}.colors": "x" for i in range(10)}})
         self.assertEqual(self.covered(folder), {"install.sh", "top.sh", "lib/common", "steps.d/10-a", "tools/t"})
