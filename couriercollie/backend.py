@@ -403,6 +403,10 @@ class Backend(QObject, Updating, Account):
                                                if Path(folder) == settings_file.parent else None)
         self._watcher.fileChanged.connect(lambda file: self._settings_timer.start())
         self._watch_settings_file()
+        # Run from a clone: the commit it started at (an update pulling it doesn't change what runs).
+        clone = integration.PROJECT
+        self._started_at = (updater.git_out(str(clone), "rev-parse", "HEAD")
+                            if self._desktop and not integration.INSTALLED and (clone / ".git").exists() else "")
         self._started = False
         if not self._config_error:
             self._start()
@@ -1783,10 +1787,15 @@ class Backend(QObject, Updating, Account):
                 "statusKind": STATUS_PROBLEM, "headline": "Not comparable"}
 
     def _restart_needed(self, repo: TrackedRepo | None) -> bool:
+        """couriercollie itself, updated while it runs: your version isn't the one running. Followed as a clone (run
+        from one), that's the commit it started at; else its release."""
         from . import __version__
 
-        return (bool(repo) and repo.id == self.MYSELF and repo.installed not in ("", NOT_INSTALLED)
-                and not assets.same_version(repo.installed, __version__) and repo.id not in self._updating)
+        if not repo or repo.id != self.MYSELF or repo.installed in ("", NOT_INSTALLED) or repo.id in self._updating:
+            return False
+        if _is_clone(repo):
+            return bool(self._started_at) and repo.installed != self._started_at
+        return not assets.same_version(repo.installed, __version__)
 
     @Slot()
     def restartApp(self):

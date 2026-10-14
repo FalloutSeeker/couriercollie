@@ -1229,6 +1229,15 @@ class RestartTest(unittest.TestCase):
         self.backend._config.find(Backend.MYSELF).installed = __version__
         self.assertFalse(self.backend.details(Backend.MYSELF)["restartNeeded"])
 
+    def test_run_from_a_clone_only_once_it_moved(self):
+        # Run from a clone (run.sh), it follows the clone's branch: your version is a commit, never "0.6.0".
+        repo = self.backend._config.find(Backend.MYSELF)
+        repo.follow, repo.branch, repo.kind, repo.source, repo.local_path = "branch", "main", "git", "scanned", self.dir.name
+        repo.installed = self.backend._started_at = "a" * 40
+        self.assertFalse(self.backend.details(Backend.MYSELF)["restartNeeded"])
+        repo.installed = "b" * 40  # pulled while running
+        self.assertTrue(self.backend.details(Backend.MYSELF)["restartNeeded"])
+
     def test_restart_waits_for_other_updates(self):
         import couriercollie.backend as backend_module
 
