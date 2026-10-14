@@ -86,6 +86,7 @@ class TrackedRepo:
     # approved (the command and the files it names). If they change, it isn't run until approved again.
     apply_command: str = ""
     apply_approved: str = ""
+    apply_commit: str = ""  # the clone's commit when it was approved: what changed since is shown (applying.changes)
     # For a clone: Only Download was chosen, so Update only downloads, and doesn't ask what to run.
     apply_skip: bool = False
     # What installed it, when that's something that keeps it up to date ("dnf", "Flatpak"): found when its page

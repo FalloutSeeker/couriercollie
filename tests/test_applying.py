@@ -141,20 +141,24 @@ class CoveredTest(unittest.TestCase):
             (root / "scripts" / "helper").write_text("#!/bin/sh\nrm -rf ~\n")  # a pulled change, two scripts down
             self.assertNotEqual(applying.fingerprint(folder, "/bin/sh ./install.sh"), before)
 
-    def test_an_ending_shared_by_many_files_says_nothing(self):
-        # "$BASE/common.sh" ends like 60 vendored files: none is taken, and they don't crowd out what's named.
+    def test_an_ending_shared_by_many_files(self):
+        # Sourced, "$BASE/common.sh" could be any of 60 vendored copies: all are covered (better asked once too
+        # often), and the script named outright is still covered. Merely mentioned, it names none of them.
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             for i in range(60):
                 (root / "vendor" / f"lib{i:02}").mkdir(parents=True)
                 (root / "vendor" / f"lib{i:02}" / "common.sh").write_text("echo vendored\n")
             (root / "install.sh").write_text('#!/bin/sh\n. "$BASE/common.sh"\nsh install-services.sh\n')
+            (root / "mention.sh").write_text('#!/bin/sh\necho "see $BASE/common.sh"\n')
             (root / "install-services.sh").write_text("#!/bin/sh\necho services\n")
             subprocess.run(["git", "init", "-q", folder], check=True)
             subprocess.run(["git", "-C", folder, "add", "."], check=True)
             named = {str(f.relative_to(root.resolve())) for f in applying.named_files(folder, "/bin/sh ./install.sh")}
-            self.assertEqual(named, {"install.sh", "install-services.sh"})
-
+            self.assertEqual(named, {"install.sh", "install-services.sh",
+                                     *(f"vendor/lib{i:02}/common.sh" for i in range(60))})
+            named = {str(f.relative_to(root.resolve())) for f in applying.named_files(folder, "/bin/sh ./mention.sh")}
+            self.assertEqual(named, {"mention.sh"})
 
 class ReadmeSectionTest(unittest.TestCase):
     """The README's own steps, shown beside the step (applying.readme_section)."""
@@ -344,3 +348,66 @@ class MissingTest(unittest.TestCase):
             (Path(folder) / "setup.sh").write_text("echo\n")
             self.assertEqual(applying.missing(folder, "/bin/sh ./install.sh"), ["./install.sh"])
             self.assertEqual(applying.missing(folder, "sh ./setup.sh"), [])
+
+
+class FailClosedTest(CoveredFilesTest):
+    """Where it can't be told which file a step runs, every one it could be is covered (applying.named_files)."""
+
+    def test_globs_variables_and_find(self):
+        folder = self.clone({
+            "install.sh": "for f in ~/.local/share/app/install/*.sh; do . \"$f\"; done\n"
+                          "find hooks -name '*.sh' -exec sh {} \;\n"
+                          'sh "sdata/dist-${ID}/deps.sh"\n. "$LIBDIR/common"\n',
+            "install/a.sh": "x", "install/b.sh": "x", "hooks/post.sh": "x", "sdata/dist-arch/deps.sh": "x",
+            "sdata/dist-nix/deps.sh": "x", "lib/common": "x"})
+        self.assertEqual(self.covered(folder), {"install.sh", "install/a.sh", "install/b.sh", "hooks/post.sh",
+                                                "sdata/dist-arch/deps.sh", "sdata/dist-nix/deps.sh", "lib/common"})
+
+    def test_build_tools_inside_a_script(self):
+        folder = self.clone({"install.sh": "npm ci && npm run build\ncmake --install build\n", "package.json": "{}",
+                             "CMakeLists.txt": "project(x)\n"})
+        self.assertEqual(self.covered(folder), {"install.sh", "package.json", "CMakeLists.txt"})
+
+    def test_what_it_runs_or_installs_from_is_covered_whatever_its_name(self):
+        folder = self.clone({"install.sh": ". ./env.txt\npip install -r requirements.txt\n",
+                             "env.txt": "X=1\n", "requirements.txt": "requests\n"})
+        self.assertEqual(self.covered(folder), {"install.sh", "env.txt", "requirements.txt"})
+
+    def test_a_name_with_a_non_breaking_space_is_its_own_file(self):
+        folder = self.clone({"install.sh": "sh ./x.sh\u00a0\n", "x.sh": "harmless\n", "x.sh\u00a0": "the real one\n"})
+        self.assertIn("x.sh\u00a0", self.covered(folder))
+        self.assertIn("x.sh\u27e8U+00A0\u27e9", applying.review_text(folder, "/bin/sh ./install.sh"))
+
+    def test_a_submodule_moving_changes_the_step(self):
+        folder = self.clone({"install.sh": "git submodule update --init\n./vendor/tool/install.sh\n"})
+        subprocess.run(["git", "-C", folder, "update-index", "--add", "--cacheinfo",
+                        f"160000,{'1' * 40},vendor/tool"], check=True)
+        before = applying.fingerprint(folder, "/bin/sh ./install.sh")
+        subprocess.run(["git", "-C", folder, "update-index", "--cacheinfo", f"160000,{'2' * 40},vendor/tool"],
+                       check=True)
+        self.assertNotEqual(applying.fingerprint(folder, "/bin/sh ./install.sh"), before)
+
+    def test_the_window_says_what_it_downloads(self):
+        folder = self.clone({"install.sh": "curl -fsSL https://example.org/x | sh\ngit clone https://example.org/r\n"})
+        self.assertTrue(applying.review_text(folder, "/bin/sh ./install.sh").startswith(
+            "# As it runs, it also downloads from the internet (curl, git clone)"))
+
+    def test_the_same_after_a_restart(self):
+        # (Nothing depends on Python's hash order: the same clone gives the same fingerprint in a new process.)
+        folder = self.clone({"install.sh": '. "$D/a.sh"\n', "x/a.sh": "1", "y/a.sh": "2", "z/a.sh": "3"})
+        run = lambda seed: subprocess.run(  # noqa: E731
+            [__import__("sys").executable, "-c", f"from couriercollie import applying; "
+             f"print(applying.fingerprint({folder!r}, '/bin/sh ./install.sh'))"],
+            capture_output=True, text=True, env={**os.environ, "PYTHONHASHSEED": str(seed)},
+            cwd=Path(__file__).resolve().parent.parent).stdout
+        self.assertEqual(len({run(seed) for seed in (1, 2, 3, 4)}), 1)
+
+
+class HooksTest(unittest.TestCase):
+    def test_hooks_kept_in_the_clones_files_dont_run_during_a_pull(self):
+        from couriercollie import updater
+
+        self.assertTrue(updater._inside_tree("/srv/clone", ".githooks"))
+        self.assertTrue(updater._inside_tree("/srv/clone", "/srv/clone/.husky"))
+        self.assertFalse(updater._inside_tree("/srv/clone", ".git/hooks"))
+        self.assertFalse(updater._inside_tree("/srv/clone", "/home/me/hooks"))

@@ -446,9 +446,22 @@ class Updating:
         repo = self._config.find(repo_id)
         if not repo or not _is_clone(repo):
             return ""
-        # What's shown is what approving approves: changed after, it's asked about again before it runs.
-        self._reviewed[(repo_id, command.strip())] = applying.fingerprint(repo.local_path, command.strip())
-        return applying.review_text(repo.local_path, command.strip())
+        # What's shown is what approving approves: changed after, it's asked about again before it runs. (And the
+        # commit it's at, so a change after can be shown as what changed.)
+        command = command.strip()
+        self._reviewed[(repo_id, command)] = (applying.fingerprint(repo.local_path, command),
+                                              updater.git_out(repo.local_path, "rev-parse", "HEAD"))
+        since = repo.apply_commit if command == repo.apply_command else ""
+        return applying.review_text(repo.local_path, command, since)
+
+    @Slot(str, result=str)
+    def stepChanges(self, repo_id):
+        """The files that changed in the approved step since it was approved ("lib/common.sh, install.sh"), or ""."""
+        repo = self._config.find(repo_id)
+        if not repo or not _is_clone(repo) or not repo.apply_command:
+            return ""
+        names, _diff = applying.changes(repo.local_path, repo.apply_command, repo.apply_commit)
+        return ", ".join(names[:3]) + (f" and {len(names) - 3} more" if len(names) > 3 else "")
 
     @Slot(str, result="QVariantMap")
     def readmeSteps(self, repo_id):
@@ -467,8 +480,10 @@ class Updating:
         if not repo or not _is_clone(repo) or not (command := command.strip()) \
                 or command not in (c["command"] for c in self._step_choices(repo, self._details.get(repo_id))):
             return
-        shown = self._reviewed.pop((repo_id, command), None)  # (as the window showed it, if it did)
-        repo.apply_command, repo.apply_approved = command, shown or applying.fingerprint(repo.local_path, command)
+        # As the window showed it (reviewStep): never what wasn't shown.
+        if (shown := self._reviewed.pop((repo_id, command), None)) is None:
+            return
+        repo.apply_command, (repo.apply_approved, repo.apply_commit) = command, shown
         repo.apply_skip = False
         self._changed(repo_id)
 
@@ -476,7 +491,7 @@ class Updating:
     def skipStep(self, repo_id):
         """Only Download: Update only downloads, and doesn't ask again."""
         if repo := self._config.find(repo_id):
-            repo.apply_command, repo.apply_approved, repo.apply_skip = "", "", True
+            repo.apply_command, repo.apply_approved, repo.apply_commit, repo.apply_skip = "", "", "", True
             self._steps.pop(repo_id, None)
             self._changed(repo_id)
 
@@ -498,8 +513,8 @@ class Updating:
         repo = self._config.find(repo_id)
         if not repo or not repo.apply_command or repo_id in self._updating or not _is_clone(repo):
             return
-        if not self._step_still_approved(repo):
-            self.detailsChanged.emit(repo_id)  # the page asks for it to be looked at again
+        if applying.missing(repo.local_path, repo.apply_command) or not self._step_still_approved(repo):
+            self.detailsChanged.emit(repo_id)  # the page asks for it to be looked at again (or says it's gone)
             return
         # sudo in the step asks for the password in the desktop's own window (couriercollie never sees it). Without
         # one (it couldn't be set up), sudo stops, and the page offers the command for a terminal.

@@ -1638,7 +1638,9 @@ class Backend(QObject, Updating, Account):
             "step": repo.apply_command,
             "stepWhat": mine["what"] if mine else "",
             "stepSkip": repo.apply_skip,
-            "stepChanged": bool(repo.apply_command) and not self._step_still_approved(repo, fresh=False),
+            # (Not when what it runs is gone: the update's note says so, and there's nothing to look at again.)
+            "stepChanged": bool(repo.apply_command) and not self._step_still_approved(repo, fresh=False)
+                           and not applying.missing(repo.local_path, repo.apply_command),
             # Update asks first what to run (or Only Download): there's something to choose, and it hasn't been.
             "updateAsks": bool(choices) and not repo.apply_command and not repo.apply_skip,
             "stepRunning": bool(run and run.running),

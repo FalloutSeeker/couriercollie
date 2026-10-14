@@ -105,6 +105,7 @@ try:
     check("the first Update asks, and waits", asks == ["update"] and b.details(ID)["updateNote"] == "",
           f"{asks} {b.details(ID)['updateNote']}")
     print("approved: pull, then install.sh…")
+    b.reviewStep(ID, command)  # (the window shows it)
     b.updateWithStep(ID, command)  # (the window's Update)
     d = b.details(ID)
     check("Update pulled", d["updateNote"] == "Pulled 1 new commit.", d["updateNote"])
@@ -126,7 +127,8 @@ try:
     check("a changed install.sh stops the step", d["stepChanged"] and d["stepResult"] == ""
           and serving(clone) == "3", f"{d['stepChanged']} {d['stepResult']} {serving(clone)}")
     check("…and the page is asked to show it again", asks == ["update", "changed"], str(asks))
-    b.approveStep(ID, d["step"])  # looked at again
+    b.reviewStep(ID, d["step"])  # looked at again (the window shows it)
+    b.approveStep(ID, d["step"])
     b.runStep(ID)
     check("approved again, it runs: version 4", b.details(ID)["stepResult"] == "applied" and serving(clone) == "4",
           serving(clone))

@@ -197,6 +197,7 @@ Kirigami.ScrollablePage {
         readonly property var chosen: choices[Math.min(choice, choices.length - 1)] || ({ label: "", command: "", what: "" })
         readonly property string name: page.repo.name || ""
         property var readme: ({ heading: "", text: "" })
+        property string changes: ""  // the files that changed since it was approved ("lib/common.sh, install.sh")
         // The height the script and the README's steps share: what the window has left after the dialog's title, text
         // and buttons. Kept within it, the dialog never needs a scrollbar of its own (which, narrowing the text and
         // so changing its height, would loop).
@@ -207,12 +208,13 @@ Kirigami.ScrollablePage {
             choice = Math.max(0, choices.findIndex(c => c.command === page.details.step));
             reviewText.text = backend.reviewStep(page.repoId, chosen.command);
             readme = backend.readmeSteps(page.repoId);
+            changes = why === "changed" ? backend.stepChanges(page.repoId) : "";
             open();
         }
 
         onChoiceChanged: reviewText.text = backend.reviewStep(page.repoId, chosen.command)
         objectName: "stepDialog"
-        title: why === "changed" ? `${Labels.capitalized(chosen.what)} Changed`
+        title: why === "changed" ? `${changes || Labels.capitalized(chosen.what)} Changed`
             : why === "change" ? `After Downloading ${name}`
             : why === "installed" ? `${name} Is Downloaded`
             : `Update ${name}`
@@ -260,7 +262,7 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 textFormat: Text.PlainText
                 text: stepDialog.why === "change" ? `Runs after each download of ${stepDialog.name}. It can change anything your account can, so read it first.`
-                    : stepDialog.why === "changed" ? `This download changed ${stepDialog.chosen.what}. Read it again before it runs.`
+                    : stepDialog.why === "changed" ? `This download changed ${stepDialog.changes || stepDialog.chosen.what}. What changed is shown first; read it before it runs.`
                     : stepDialog.why === "installed" ? `Run ${stepDialog.chosen.what} now, and after each download? It can change anything your account can, so read it first.`
                     : `Update downloads ${stepDialog.name}, then runs ${stepDialog.chosen.what}. It can change anything your account can, so read it first. From now on it runs after each download, and you’re asked again only if it changes.`
                 wrapMode: Text.Wrap

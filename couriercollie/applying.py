@@ -357,28 +357,35 @@ FILE_MAX_BYTES = 1024 * 1024
 
 # Files a tool reads without being told their names: "make install" runs what the Makefile says, so a change to the
 # Makefile is a change to the step.
+_MAKEFILES = ("GNUmakefile", "makefile", "Makefile")
 _IMPLIED = {
     "make": ("GNUmakefile", "makefile", "Makefile"), "gmake": ("GNUmakefile", "makefile", "Makefile"),
     "npm": ("package.json",), "pnpm": ("package.json",), "yarn": ("package.json",), "cargo": ("Cargo.toml",),
     "just": ("justfile", "Justfile"), "cmake": ("CMakeLists.txt",), "meson": ("meson.build",),
 }
+_IMPLIED_NAMES = {name for names in _IMPLIED.values() for name in names}  # (CMakeLists.txt: not a document)
 
 
 # What a step covers (named_files): the clone's files its command names, and those the files it runs name in turn,
 # read word by word ("lib/common", "./install-services.sh", "$SCRIPT_DIR/install-services.sh": each ending of a
 # path is tried). Any kind of file: a sourced "build.conf" or "scripts/common" is as much the step as a script is.
-_SPLIT = re.compile(r"[\s'\"`;|&()<>=,{}\[\]]+")
+# When it can't be told which file is meant ("install/*.sh", "dist-${ID}/deps.sh", or a name that ends like several
+# of the clone's files, run or sourced), every one that could be is covered: better asked once too often.
+# (Spaces as the shell sees them: a non-breaking space is part of a name, as it is when the script runs.)
+_SPLIT = re.compile(r"[ \t\r\n\f\v'\"`;|&(),{}\[\]]+")
+_VARIABLE = re.compile(r"\$\{[^}]*\}|\$\w+|\$\(|\)")  # "${TARGET_ID}", "$DIR": any part of a name
 WORD_MAX = 512  # longer words are data (a payload, a key), never a file's name: not looked at
 _SCRIPT_SUFFIXES = (".sh", ".bash", ".zsh", ".py", ".pl", ".rb", ".mk")
-# Words after which a file is read as commands, whatever it looks like: sourced, run by an interpreter, included.
+# Words after which a file is read as commands, whatever it looks like: sourced, run by an interpreter, included;
+# or as the list of what to install ("pip install -r requirements.txt", "xargs -a pkglist.txt", "< packages.txt").
 _RUNS_NEXT = {".", "source", "sh", "bash", "zsh", "dash", "ksh", "python", "python3", "perl", "ruby", "node", "exec",
-              "include", "-include", "-f"}
-# Files never run or read as settings, which change often (documentation, pictures, fonts): not covered, so a step
-# isn't asked about again for them.
+              "include", "-include", "-f", "-r", "--requirement", "-a", "--arg-file", "<"}
+# Files never run or read as settings, which change often (documentation, pictures, fonts): not covered unless run or
+# read as above, so a step isn't asked about again for them.
 _NOT_COMMANDS = re.compile(r"\.(md|markdown|rst|txt|adoc|org|html?|pdf|png|jpe?g|gif|svg|webp|ico|xcf|ttf|otf|woff2?)$"
                            r"|^(license|licence|copying|authors|changelog|readme)(\.\w+)?$", re.I)
-NAMED_MAX = 200  # files covered by one step, at most
-ENDING_MAX = 3  # files found by how a name ends, at most, for one name
+NAMED_MAX = 300  # files covered by one step, at most
+ENDING_MAX = 3  # a name merely mentioned that ends like more of the clone's files than this names none of them
 
 
 def _is_script(file: Path) -> bool:
@@ -398,18 +405,22 @@ def _usable(file: Path, root: Path) -> bool:
         return False
 
 
-def _tracked(root: Path) -> list[str]:
-    """The clone's files, as git tracks them (relative paths)."""
+def _tracked(root: Path) -> list[str] | None:
+    """The clone's files, as git tracks them (relative paths, sorted); None if git can't say. (Through updater's git,
+    which also reads a clone that belongs to the system, as one in /opt does.)"""
+    from .updater import UpdateError, _git
+
     try:
-        out = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], capture_output=True, timeout=15)
-    except (OSError, subprocess.TimeoutExpired):
-        return []
-    return [p for p in out.stdout.decode(errors="replace").split("\0") if p] if out.returncode == 0 else []
+        out = _git(str(root), "ls-files", "-z")
+    except UpdateError:
+        return None
+    return sorted(p for p in out.stdout.split("\0") if p) if out.returncode == 0 else None
 
 
 def _file_words(file: Path) -> list[tuple[str, bool]]:
-    """Each word of a text file that may name a file, and whether it's read as commands (after "source", "bash"…);
-    "python3 -m tools.inst" names tools/inst.py. Words too long to be a name are left out."""
+    """Each word of a text file that may name a file, and whether it's read as commands (after "source", "bash", or
+    as a list of what to install); "python3 -m tools.inst" names tools/inst.py, and "npm ci" names package.json (as
+    a step's own command does, _IMPLIED). Words too long to be a name are left out."""
     try:
         if file.stat().st_size > FILE_MAX_BYTES:
             return []  # (covered, but not read for more)
@@ -419,51 +430,115 @@ def _file_words(file: Path) -> list[tuple[str, bool]]:
     found = []
     for line in text.splitlines():
         words = [w for w in _SPLIT.split(line) if w]
+        if "find" in words and "-name" in words and words.index("find") + 1 < len(words):
+            # "find hooks -name '*.sh' -exec sh {} \;": what it finds, as a pattern ("hooks/*.sh").
+            where, name = words[words.index("find") + 1], words[words.index("-name") + 1 : words.index("-name") + 2]
+            if name and not where.startswith("-"):
+                found.append((f"{where.rstrip('/')}/*{name[0].lstrip('*')}", "-exec" in words or "-execdir" in words))
         for k, word in enumerate(words):
             if len(word) > WORD_MAX or "://" in word or not any(c.isalnum() for c in word):
                 continue
             before = words[k - 1] if k else ""
             if before == "-m" and k > 1 and words[k - 2].startswith("python") and "/" not in word:
                 found += [(word.replace(".", "/") + ".py", True), (word.replace(".", "/") + "/__main__.py", True)]
-            else:
-                found.append((word, before in _RUNS_NEXT))
+                continue
+            # (Covered, not followed further: a Makefile's recipes are commands; package.json's, Cargo.toml's or
+            # CMakeLists.txt's words lead into the project's own source, which every update changes.)
+            found += [(name, name in _MAKEFILES) for name in _IMPLIED.get(word, ())]
+            found.append((word, before in _RUNS_NEXT))
     return found
 
 
-def _named_by(file: Path, root: Path, tracked: set[str]) -> tuple[list[tuple[Path, bool]], list[Path]]:
-    """The clone's files this one names: (file, whether to read it for more), those named outright (by path, from
-    this file's folder or the clone's), then scripts found by how a name behind a variable ends ("$DIR/lib/common.sh"),
-    inside this file's own folder first and never more than a few (a name that ends like many vendored files says
-    nothing about which). Only files git tracks: not what a build left."""
+class _Clone:
+    """The clone's tracked files, looked up by name (once per step: a clone may have tens of thousands)."""
+
+    def __init__(self, root: Path):
+        self.root = root
+        self.tracked = _tracked(root)
+        self.known = set(self.tracked or ())
+        self.by_name: dict[str, list[str]] = {}
+        for t in self.tracked or ():
+            self.by_name.setdefault(t.rsplit("/", 1)[-1], []).append(t)
+
+    def ok(self, file: Path) -> bool:
+        """The clone's own, git-tracked file (not what a build left), when git can say."""
+        return _usable(file, self.root) and (self.tracked is None or file.relative_to(self.root).as_posix() in self.known)
+
+    def ending(self, tail: str) -> list[str]:
+        """The tracked files whose path ends with `tail`."""
+        return [t for t in self.by_name.get(tail.rsplit("/", 1)[-1], ()) if t == tail or t.endswith("/" + tail)]
+
+    def matching(self, pattern: str) -> list[str]:
+        """The tracked files a pattern ("install/*.sh", from "$DIR/install/*.sh") could mean, by how they end. (By
+        the file's name first, when the pattern says it: a clone may have tens of thousands of files.)"""
+        import fnmatch
+
+        last = pattern.rsplit("/", 1)[-1]
+        candidates = self.tracked or () if any(c in last for c in "*?[") else self.by_name.get(last, ())
+        return [t for t in candidates if fnmatch.fnmatchcase(t, pattern) or fnmatch.fnmatchcase(t, "*/" + pattern)]
+
+
+def _named_by(file: Path, clone: _Clone) -> tuple[list[tuple[Path, bool]], list[tuple[Path, bool]]]:
+    """The clone's files this one names: (file, whether to read it for more). Those named outright (by path, from this
+    file's folder or the clone's: each that's there), then those found by how a name ends ("$DIR/lib/common.sh") or
+    by a pattern ("install/*.sh", "dist-${ID}/deps.sh"). A name merely mentioned that ends like many files (vendored
+    copies) names none; one run or sourced names them all."""
+    root = clone.root
     named, ending = [], []
     near = str(file.parent.relative_to(root)) if file.parent != root else ""
     for word, runs in dict.fromkeys(_file_words(file)):
+        pattern = _VARIABLE.sub("*", word)
+        if pattern != word or any(c in word for c in "*?"):
+            if not pattern.strip("*/."):
+                continue  # ("$installer"): nothing to tell which file
+            # Its longest ending (with a folder in it) that matches any of the clone's files: "install/terminal/*.sh"
+            # from "~/.local/share/omakub/install/terminal/*.sh", as the clone is somewhere else once installed.
+            pieces = pattern.split("/")
+            # (Just the file's name only when it's in a folder named by a variable: "$LIBDIR/install-deps.sh".)
+            matches = next((m for i in range(len(pieces) - 1) if (tail := "/".join(pieces[i:]).lstrip("*/"))
+                            and ("/" in tail or pattern.startswith("*/"))
+                            and (m := clone.matching(tail.removeprefix("./")))), [])
+            # A glob ("install/*.sh", in a loop that runs them) means all it matches; a name made of a variable only
+            # does when it's run or sourced, or matches only a few (as a name's ending).
+            if any(c in word for c in "*?") or runs or len(matches) <= ENDING_MAX:
+                for t in matches:
+                    if not _NOT_COMMANDS.search(t) or runs:
+                        found = (root / t).resolve()
+                        ending.append((found, runs or _is_script(found)))
+            continue
         parts = word.split("/")
         tails = [t for i in range(len(parts)) if (t := "/".join(parts[i:]))]
-        here = next((c for t in tails for b in (file.parent, root) if _usable(c := (b / t).resolve(), root)
-                     and (not tracked or c.relative_to(root).as_posix() in tracked)
-                     and not _NOT_COMMANDS.search(c.name)), None)
+        here = []
+        for tail in tails:
+            here = [c for b in dict.fromkeys((file.parent, root)) if clone.ok(c := (b / tail).resolve())
+                    and (runs or c.name in _IMPLIED_NAMES or not _NOT_COMMANDS.search(c.name))]
+            if here:
+                break
         if here:
-            named.append((here, runs or _is_script(here)))
+            named += [(c, runs or _is_script(c)) for c in dict.fromkeys(here)]
             continue
-        if "/" not in word and not word.endswith(_SCRIPT_SUFFIXES):
+        if "/" not in word and not word.endswith(_SCRIPT_SUFFIXES) and not runs:
             continue  # (a plain word: not a name behind a variable)
         for tail in tails:  # the longest ending that names any of the clone's files
-            ends = [t for t in tracked if t == tail or t.endswith("/" + tail)]
+            ends = clone.ending(tail)
             if not ends:
                 continue
             inside = [t for t in ends if near and t.startswith(near + "/")]
-            chosen = inside if inside and len(inside) <= ENDING_MAX else ends if len(ends) <= ENDING_MAX else []
-            ending.extend(c for t in chosen if _usable(c := (root / t).resolve(), root) and _is_script(c))
+            chosen = ends if runs else inside if inside and len(inside) <= ENDING_MAX else ends \
+                if len(ends) <= ENDING_MAX else []
+            for t in chosen:
+                found = (root / t).resolve()
+                if _usable(found, root) and (runs or _is_script(found)):
+                    ending.append((found, True))
             break
     return named, ending
 
 
 def named_files(path: str, command: str) -> list[Path]:
     """What approving the command covers: the clone's files it names (a script), those the tools it runs read
-    without being told (make's Makefile), and the files those name in turn (a sourced "build.conf", a script it runs,
-    a Makefile's include), followed into those that are commands. A change to any of them is shown before the step
-    runs again."""
+    without being told (make's Makefile, npm's package.json), and the files those name in turn (a sourced
+    "build.conf", a script it runs, a Makefile's include, "install/*.sh"), followed into those that are commands. A
+    change to any of them is shown before the step runs again."""
     try:
         words = shlex.split(command)
     except ValueError:
@@ -476,11 +551,11 @@ def named_files(path: str, command: str) -> list[Path]:
         file = (root / word).resolve()
         if _usable(file, root) and file not in files:
             files.append(file)
-    tracked, later, read = set(_tracked(root)), [], set(files)
+    clone, later, read = _Clone(root), [], set(files)
     queue = list(files)
     while queue:  # (what those name, in turn: files named outright first, then those found by how they end)
         file = queue.pop(0)
-        named, ending = _named_by(file, root, tracked)
+        named, ending = _named_by(file, clone)
         for found, runs in named:
             if found not in files and len(files) < NAMED_MAX:
                 files.append(found)
@@ -489,9 +564,10 @@ def named_files(path: str, command: str) -> list[Path]:
                 queue.append(found)
         later.extend(ending)
         if not queue:
-            for found in dict.fromkeys(later):
+            for found, runs in dict.fromkeys(later):
                 if found not in files and len(files) < NAMED_MAX:
                     files.append(found)
+                if runs and found not in read:
                     read.add(found)
                     queue.append(found)
             later = []
@@ -505,13 +581,36 @@ def missing(path: str, command: str) -> list[str]:
     except ValueError:
         return []
     root = Path(path).resolve()
-    return [w for w in words if w.startswith("./") and not (root / w).resolve().is_file()]
+    # (One that's now a link to a file outside the clone is gone too: what's outside isn't the step.)
+    return [w for w in words if w.startswith("./") and not ((f := (root / w).resolve()).is_relative_to(root)
+                                                           and f.is_file())]
+
+
+def _mentions(file: Path, word: bytes) -> bool:
+    try:
+        return file.stat().st_size <= FILE_MAX_BYTES and word in file.read_bytes()
+    except OSError:
+        return False
 
 
 def fingerprint(path: str, command: str) -> str:
     """What was approved: the command, and the content of the files it names."""
     digest, root = hashlib.sha256(command.encode()), Path(path).resolve()
-    for file in named_files(path, command):
+    files = named_files(path, command)
+    if any(_mentions(file, b"submodule") for file in files):
+        # Its submodules (which it updates and runs): the commits they're at, and where they come from. A pull that
+        # only moves one changes what runs.
+        from .updater import UpdateError, _git
+
+        try:
+            staged = _git(str(root), "ls-files", "-s", "-z").stdout
+        except UpdateError:
+            staged = "?"
+        digest.update(b"\0submodules\0" + "\0".join(e for e in staged.split("\0") if e.startswith("160000"))
+                      .encode())
+        if (root / ".gitmodules").is_file():
+            digest.update(b"\0.gitmodules\0" + (root / ".gitmodules").read_bytes())
+    for file in files:
         digest.update(b"\0" + str(file.relative_to(root)).encode() + b"\0")
         try:
             with file.open("rb") as f:
@@ -521,10 +620,49 @@ def fingerprint(path: str, command: str) -> str:
     return digest.hexdigest()
 
 
-def review_text(path: str, command: str) -> str:
-    """The command and the files it names, to read before approving it."""
+# Characters that don't show, or show something else than what's there (a space that isn't one, text that runs
+# backwards): shown as their codes, so what's read is what runs.
+_HIDDEN = re.compile("[^\\S\\n\\t ]|[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f\\u00ad\\u200b-\\u200f\\u202a-\\u202e"
+                     "\\u2060-\\u2064\\u2066-\\u2069\\ufeff]")
+# What a step downloads and runs as it goes: not in the clone, so never shown in the window.
+_FETCHES = re.compile(r"\b(curl|wget|git (?:clone|pull|fetch|submodule)|(?:npm|pnpm) (?:ci|install|i)|yarn|"
+                      r"pip3? install|pipx install|cargo install|go (?:install|get)|flatpak install|yay|paru|"
+                      r"(?:docker|podman) (?:pull|build)|compose (?:pull|up))\b")
+
+
+def _shown(text: str) -> str:
+    return _HIDDEN.sub(lambda m: f"\u27e8U+{ord(m.group()):04X}\u27e9", text)
+
+
+def changes(path: str, command: str, since: str) -> tuple[list[str], str]:
+    """What changed in the files the command covers since the clone was at commit `since` (when it was approved):
+    (their names, the diff). ([], "") if that can't be told (no commit, or one that's gone)."""
+    from .updater import UpdateError, _git
+
     root = Path(path).resolve()
-    parts = [command]
+    if not since:
+        return [], ""
+    names = [f.relative_to(root).as_posix() for f in named_files(path, command)]
+    try:
+        listed = _git(str(root), "diff", "--name-only", since, "--", *names)
+        diff = _git(str(root), "diff", "--no-color", "--no-ext-diff", since, "--", *names) if listed.stdout else None
+    except UpdateError:
+        return [], ""
+    if listed.returncode != 0:
+        return [], ""
+    return listed.stdout.split(), (diff.stdout[:FILE_MAX_BYTES] if diff else "")
+
+
+def review_text(path: str, command: str, since: str = "") -> str:
+    """The command and the files it covers, to read before approving it: what can't be seen shown by its code; and,
+    first, whether it also downloads things as it runs (which can't be shown), and what changed since it was
+    approved at commit `since` (as a diff: the change is what there is to read)."""
+    root = Path(path).resolve()
+    parts, fetches = [_shown(command)], set()
+    changed, diff = changes(path, command, since)
+    if changed:
+        parts = [f"# Changed since you approved it: {', '.join(_shown(n) for n in changed)}\n\n{_shown(diff)}",
+                 "\n# ======== All it runs, as it is now ========\n", *parts]
     for file in named_files(path, command):
         try:
             size = file.stat().st_size
@@ -533,7 +671,11 @@ def review_text(path: str, command: str) -> str:
                     else file.read_text(encoding="utf-8", errors="replace"))
         except OSError as e:
             text = f"# (couldn\u2019t be read: {e.strerror or e})\n"
-        parts.append(f"\n# ---- {file.relative_to(root)} ----\n" + text)
+        fetches.update(m.group(1) for m in _FETCHES.finditer(text))
+        parts.append(f"\n# ---- {_shown(str(file.relative_to(root)))} ----\n" + _shown(text))
+    if fetches:
+        parts.insert(0, f"# As it runs, it also downloads from the internet ({', '.join(sorted(fetches))}): what it gets "
+                        "isn\u2019t in the clone, so it isn\u2019t shown here.\n")
     return "\n".join(parts).rstrip() + "\n"
 
 
