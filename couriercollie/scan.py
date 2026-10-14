@@ -191,9 +191,19 @@ def find_debs(run=_run_out) -> list[Found]:
 
 
 def find_zypper_rpms(run=_run_out) -> list[Found]:
-    """openSUSE's RPMs only you can update: zypper lists one no repository offers under "(System Packages)"."""
+    """openSUSE's RPMs only you can update: zypper lists one whose installed version no repository offers under
+    "(System Packages)", and of those, the ones no repository offers in any version: a package whose repository has
+    moved on to a newer one (between Tumbleweed snapshots, say) is the system's, not one you downloaded. If zypper
+    can't say which are offered, none are listed (as for dnf)."""
     listed = run("zypper", "--quiet", "--xmlout", "search", "--installed-only", "--details", "--type", "package")
     names = sorted(set(re.findall(r'<solvable [^>]*name="([^"]+)"[^>]*repository="\(System Packages\)"', listed or "")))
+    if not names:
+        return []
+    every = run("zypper", "--quiet", "--xmlout", "search", "--details", "--type", "package", "--match-exact", *names)
+    if every is None:
+        return []
+    offered = set(re.findall(r'<solvable [^>]*name="([^"]+)"[^>]*repository="(?!\(System Packages\))[^"]+"', every))
+    names = [n for n in names if n not in offered]
     if not names:
         return []
     return _from_homepages(assets.KIND_RPM, run("rpm", "-q", "--qf", "%{NAME}|%{VERSION}|%{URL}\n", *names) or "")
