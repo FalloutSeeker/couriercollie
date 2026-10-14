@@ -1396,7 +1396,9 @@ class Backend(QObject, Updating, Account):
                 return  # removed while loading
             if repo_id in self._updating or self._finished.get(repo_id, 0) != finished:
                 # Updated while this loaded: what it read from disk (your version, where it is) is from before. Loaded
-                # again, after the update.
+                # again, after the update. (Its "loading" goes, or loading again would think it's under way.)
+                if self._details.get(repo_id) and self._details[repo_id].state == "loading":
+                    self._details.pop(repo_id)
                 if repo_id in self._updating:
                     self._load_after.add(repo_id)
                 else:

@@ -697,10 +697,23 @@ class UpdatedWhilePageLoadsTest(AppImageCase):
         done, result = answers.pop(1)
         done(*result)  # the update finishes first
         done, result = answers.pop(0)
-        done(*result)  # then the page's answer arrives
+        done(*result)  # then the page's answer arrives: thrown away, and the page loaded again
         repo = b._config.find(rid)
         self.assertEqual((repo.installed, Path(repo.local_path).name), ("v2.0", NAME))
         self.assertEqual(config.load(path).repos[0].installed, "v2.0")
+        from PySide6.QtCore import QCoreApplication
+
+        app = QCoreApplication.instance() or QCoreApplication([])
+        for _ in range(20):
+            app.processEvents()  # (the reload is started a moment later)
+            while answers:
+                done, result = answers.pop(0)
+                done(*result)
+            if b.details(rid)["state"] == "ready":
+                break
+        d = b.details(rid)
+        self.assertEqual((d["state"], d["localMissing"]), ("ready", False))  # not stuck "loading"
+        self.assertEqual(b._config.find(rid).installed, "v2.0")
 
 
 class DesktopQuoteTest(unittest.TestCase):
