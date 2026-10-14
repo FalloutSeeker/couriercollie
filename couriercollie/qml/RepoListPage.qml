@@ -7,6 +7,31 @@ Kirigami.ScrollablePage {
     id: page
 
     title: "Tracked Repos"
+    // couriercollie's logo before the title (in its white circle, it reads on light and dark windows alike).
+    titleDelegate: RowLayout {
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
+        spacing: Kirigami.Units.smallSpacing
+
+        Image {
+            objectName: "appLogo"
+            Layout.leftMargin: Kirigami.Units.largeSpacing  // (where the title alone started)
+            Layout.preferredWidth: Kirigami.Units.iconSizes.medium
+            Layout.preferredHeight: Kirigami.Units.iconSizes.medium
+            source: Qt.resolvedUrl("../logo/logo.png")
+            fillMode: Image.PreserveAspectFit
+            mipmap: true
+        }
+
+        Kirigami.Heading {
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            text: page.title
+            maximumLineCount: 1
+            elide: Text.ElideRight
+            textFormat: Text.PlainText
+        }
+    }
 
     // The Scan button is only in the list while scanning is allowed. Listing it hidden instead makes Kirigami log
     // "Could not create delegate for ToolBarLayout" at start-up.

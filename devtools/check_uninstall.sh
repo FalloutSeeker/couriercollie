@@ -73,7 +73,7 @@ wake
 report
 expect "the timer turned itself off" '! systemctl --user is-enabled couriercollie-check.timer'
 expect "its files are gone" '! ls ~/.config/systemd/user/couriercollie-check.*'
-expect "the menu entry and icon are gone" '! ls ~/.local/share/applications/couriercollie.desktop ~/.local/share/icons/hicolor/scalable/apps/couriercollie.svg'
+expect "the menu entry and icon are gone" '! ls ~/.local/share/applications/couriercollie.desktop ~/.local/share/icons/hicolor/512x512/apps/couriercollie.png'
 expect "no failed units" 'test "$(systemctl --user --failed --no-legend | wc -l)" = 0'
 
 echo "=== left in the home folder (kept on purpose: settings, results, cache)"

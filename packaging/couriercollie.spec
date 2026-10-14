@@ -51,7 +51,8 @@ cp -a couriercollie %{buildroot}%{python3_sitelib}/
 find %{buildroot}%{python3_sitelib}/couriercollie -name __pycache__ -prune -exec rm -rf {} +
 install -Dm755 data/couriercollie %{buildroot}%{_bindir}/couriercollie
 install -Dm644 data/couriercollie.desktop %{buildroot}%{_datadir}/applications/couriercollie.desktop
-install -Dm644 data/couriercollie.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/couriercollie.svg
+install -d %{buildroot}%{_datadir}/icons
+cp -a data/icons/hicolor %{buildroot}%{_datadir}/icons/
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/couriercollie.desktop
@@ -62,7 +63,7 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/couriercollie.desktop
 %{_bindir}/couriercollie
 %{python3_sitelib}/couriercollie/
 %{_datadir}/applications/couriercollie.desktop
-%{_datadir}/icons/hicolor/scalable/apps/couriercollie.svg
+%{_datadir}/icons/hicolor/*/apps/couriercollie.png
 
 %changelog
 * Sun Oct 11 2026 couriercollie - %{app_version}-1

@@ -36,7 +36,7 @@ tar -xzf /work/couriercollie-'"$version"'.tar.gz -C /tmp/src && cd /tmp/src/cour
 cp -a couriercollie $root/usr/lib/python3/dist-packages/
 install -Dm755 data/couriercollie $root/usr/bin/couriercollie
 install -Dm644 data/couriercollie.desktop $root/usr/share/applications/couriercollie.desktop
-install -Dm644 data/couriercollie.svg $root/usr/share/icons/hicolor/scalable/apps/couriercollie.svg
+mkdir -p $root/usr/share/icons && cp -a data/icons/hicolor $root/usr/share/icons/
 install -Dm644 README.md $root/usr/share/doc/couriercollie/README.md
 # Debian keeps a package'\''s license in its doc folder, as "copyright".
 { printf "couriercollie: GPL-3.0-or-later. Its Breeze icons (couriercollie/icons): LGPL-3.0-or-later.\n\n"; cat LICENSE; } \

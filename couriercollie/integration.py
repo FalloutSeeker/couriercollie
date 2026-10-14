@@ -20,11 +20,12 @@ LAUNCHER = Path(shutil.which(APP_ID) or f"/usr/bin/{APP_ID}") if INSTALLED else 
 ICON = APP_ID
 # The app's icon as a file: in the project folder, run from there; else where the package put it (for when the
 # desktop's icon theme can't find it by name).
-ICON_FILE = next((p for p in (PROJECT / "data" / f"{APP_ID}.svg",
-                              *(Path(d) / "icons/hicolor/scalable/apps" / f"{APP_ID}.svg"
+_ICON_IN = f"icons/hicolor/512x512/apps/{APP_ID}.png"  # (the largest; the package installs every size)
+ICON_FILE = next((p for p in (PROJECT / "data" / _ICON_IN,
+                              *(Path(d) / _ICON_IN
                                 for d in (os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share").split(":")
                                 if d))
-                  if p.is_file()), PROJECT / "data" / f"{APP_ID}.svg")
+                  if p.is_file()), PROJECT / "data" / _ICON_IN)
 TIMER = "couriercollie-check"
 
 
@@ -72,6 +73,11 @@ def menu_entry_text(launcher: str | Path = LAUNCHER) -> str:
 
 
 def icon_path() -> Path:
+    return _data_home() / _ICON_IN
+
+
+def _old_icon_path() -> Path:
+    """Where the icon went before couriercollie had its logo (a drawing that would still be found first)."""
     return _data_home() / "icons" / "hicolor" / "scalable" / "apps" / f"{APP_ID}.svg"
 
 
@@ -92,6 +98,7 @@ def install_menu_entry() -> bool:
         if ICON_FILE.is_file() and (not icon_path().is_file() or icon_path().read_bytes() != ICON_FILE.read_bytes()):
             icon_path().parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ICON_FILE, icon_path())
+        _old_icon_path().unlink(missing_ok=True)
         if path.is_file() and path.read_text(encoding="utf-8") == text:
             return False
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -238,7 +245,8 @@ def unit_texts() -> dict[str, str]:
     checker then only checks if the chosen interval has passed since the last check (checker.due), so the interval
     is counted from the last check, and a missed check happens soon after the next login."""
     # The menu entry and icon only if couriercollie wrote them (run from a project folder): a package removes its own.
-    leftovers = (_stamp_path(), autostart_path()) + (() if INSTALLED else (menu_entry_path(), icon_path()))
+    leftovers = (_stamp_path(), autostart_path()) + (() if INSTALLED else (menu_entry_path(), icon_path(),
+                                                                           _old_icon_path()))
     cleanup = " ".join(_unit_arg(a) for a in (LAUNCHER, _unit_dir(), *leftovers))
     return {
         f"{TIMER}.service": (
