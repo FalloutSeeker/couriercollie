@@ -703,7 +703,7 @@ class Backend(QObject, Updating, Account):
             self.reposChanged.emit()
             self.githubChanged.emit()  # GitHub may have turned the login down
             if self._check_again:
-                QTimer.singleShot(0, self.checkNow)
+                self.checkNow()  # (straight away: never "not checking" in between, with a check still to come)
 
         self._run(lambda: checker.check_all(repos, previous), done)
 
