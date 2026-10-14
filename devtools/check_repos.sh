@@ -9,7 +9,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 work=$(mktemp -d)
-port=18767
+port=${PORT:-18767}  # (PORT=…: beside another run of this check)
 python3 -I devtools/github_relay.py "$work/allow" $port > "$work/relay.log" 2>&1 &
 relay=$!
 trap 'kill $relay; podman unshare rm -rf "$work"' EXIT
