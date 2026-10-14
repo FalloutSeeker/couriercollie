@@ -23,6 +23,8 @@ KIND_OTHER = "Other"
 KIND_VERSIONS = "versions"
 
 _ARCHIVES = (".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.bz2", ".tbz2", ".tar.zst", ".zip")
+# One file compressed on its own (not an archive): a program, when its name says it's for Linux or a processor.
+_COMPRESSED = (".gz", ".xz", ".bz2", ".zst")
 # Files for other systems, or that aren't software at all.
 _FOREIGN_EXT = {
     ".deb": "Debian/Ubuntu", ".exe": "Windows", ".msi": "Windows", ".msix": "Windows", ".dmg": "macOS",
@@ -119,6 +121,8 @@ def _kind_of(lower: str) -> "str | AssetInfo":
         return KIND_APPIMAGE
     if lower.endswith(_ARCHIVES):
         return KIND_PROGRAM
+    if lower.endswith(_COMPRESSED) and ("linux" in lower or _ANY_ARCH.search(lower)):
+        return KIND_PROGRAM  # the program itself, compressed on its own (rust-analyzer's "…-linux-gnu.gz")
     if lower.endswith(tuple(_FOREIGN_EXT)):
         return AssetInfo(KIND_OTHER, False, f"for {_FOREIGN_EXT['.' + lower.rsplit('.', 1)[-1]]}")
     if _bare(lower) and ("linux" in lower or _ANY_ARCH.search(lower)):

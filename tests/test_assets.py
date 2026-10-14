@@ -419,3 +419,17 @@ class VersionEdgeCasesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CompressedProgramTest(unittest.TestCase):
+    """A program compressed on its own, not in an archive (rust-analyzer's "…-x86_64-unknown-linux-gnu.gz")."""
+
+    def test_a_program_for_linux(self):
+        for name in ("rust-analyzer-x86_64-unknown-linux-gnu.gz", "tool-linux-amd64.xz", "tool_linux_x86_64.zst"):
+            info = assets.classify(name, machine="x86_64")
+            self.assertEqual((info.kind, info.suits), (assets.KIND_PROGRAM, True), name)
+
+    def test_not_for_this_computer_or_not_a_program(self):
+        self.assertFalse(assets.classify("rust-analyzer-x86_64-apple-darwin.gz", machine="x86_64").suits)
+        self.assertFalse(assets.classify("rust-analyzer-aarch64-unknown-linux-gnu.gz", machine="x86_64").suits)
+        self.assertNotEqual(assets.classify("data.json.gz", machine="x86_64").kind, assets.KIND_PROGRAM)

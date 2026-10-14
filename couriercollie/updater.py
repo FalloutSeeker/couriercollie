@@ -611,6 +611,29 @@ def _folder_name(text: str) -> str:
     return "".join(c if c.isalnum() or c in "._-" else "_" for c in text).strip(".") or "_"
 
 
+def _compressed(path: Path):
+    """How to open a file compressed on its own (gzip, xz, bzip2 or zstd, by its first bytes), or None."""
+    import bz2
+    import gzip
+    import lzma
+
+    with path.open("rb") as f:
+        head = f.read(6)
+    if head.startswith(b"\x1f\x8b"):
+        return gzip.open
+    if head.startswith(b"\xfd7zXZ\x00"):
+        return lzma.open
+    if head.startswith(b"BZh"):
+        return bz2.open
+    if head.startswith(b"\x28\xb5\x2f\xfd"):
+        try:
+            from compression import zstd  # (Python 3.14)
+        except ImportError:
+            return None
+        return zstd.open
+    return None
+
+
 def _unpack(archive: Path, into: Path, name: str = "program") -> None:
     """Unpacks an archive into `into`, refusing anything that would land outside it, links that point outside it,
     device files, and archives that unpack to more than UNPACKED_MAX_BYTES. A Linux program on its own, not in an
@@ -635,6 +658,19 @@ def _unpack(archive: Path, into: Path, name: str = "program") -> None:
                 mode = (m.external_attr >> 16) & 0o777
                 if mode and not m.is_dir():
                     target.chmod(mode & 0o755)
+        return
+    if not tarfile.is_tarfile(archive) and (opener := _compressed(archive)):
+        # One file compressed on its own (rust-analyzer's "…-linux-gnu.gz"): a program, if that's what it holds.
+        program = into / name
+        with opener(archive) as source, program.open("wb") as out:
+            while chunk := source.read(CHUNK):
+                if out.tell() + len(chunk) > UNPACKED_MAX_BYTES:
+                    raise UpdateError("The file unpacks to more than 4 GB, so it wasn’t unpacked.")
+                out.write(chunk)
+        with program.open("rb") as f:
+            if f.read(4) != b"\x7fELF":
+                raise UpdateError(f"{archive.name} doesn’t hold a Linux program, so it wasn’t installed.")
+        program.chmod(0o755)
         return
     try:
         with tarfile.open(archive, "r:*") as t:

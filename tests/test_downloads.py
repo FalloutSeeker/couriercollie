@@ -2,6 +2,7 @@ import hashlib
 import http.server
 import os
 import shutil
+import tarfile
 import tempfile
 import threading
 import unittest
@@ -755,3 +756,43 @@ class QuitWhileUpdatingTest(AppImageCase):
         b.finish_updates()  # Quit: the app's event loop is over
         b.shutdown()
         self.assertEqual(config.load(path).repos[0].installed, "v2.0")
+
+
+class CompressedProgramUnpackTest(unittest.TestCase):
+    """updater._unpack: one file compressed on its own is a program if it holds one; a .tar.gz is still an archive."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.root = Path(self.dir.name)
+
+    def test_gzip_and_xz_holding_a_program(self):
+        import gzip
+        import lzma
+
+        for opener, suffix in ((gzip.open, ".gz"), (lzma.open, ".xz")):
+            archive = self.root / f"tool-linux-x86_64{suffix}"
+            with opener(archive, "wb") as f:
+                f.write(ELF + b"rest of the program")
+            into = self.root / f"out{suffix}"
+            updater._unpack(archive, into, "tool")
+            self.assertEqual((into / "tool").read_bytes()[:4], b"\x7fELF")
+            self.assertTrue(os.access(into / "tool", os.X_OK))
+
+    def test_not_a_program_inside_is_refused(self):
+        import gzip
+
+        archive = self.root / "tool-linux-x86_64.gz"
+        with gzip.open(archive, "wb") as f:
+            f.write(b"<html>sign in</html>")
+        with self.assertRaisesRegex(updater.UpdateError, "doesn’t hold a Linux program"):
+            updater._unpack(archive, self.root / "out", "tool")
+
+    def test_a_tar_gz_is_still_an_archive(self):
+        archive = self.root / "tool.tar.gz"
+        (self.root / "src").mkdir()
+        (self.root / "src" / "tool").write_bytes(ELF)
+        with tarfile.open(archive, "w:gz") as t:
+            t.add(self.root / "src" / "tool", arcname="tool/tool")
+        updater._unpack(archive, self.root / "out", "tool")
+        self.assertTrue((self.root / "out" / "tool" / "tool").is_file())
