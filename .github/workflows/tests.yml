@@ -40,7 +40,11 @@ jobs:
           - distro: arch
             image: docker.io/library/archlinux:latest
             install: pacman -Syu --noconfirm --quiet git python pyside6 python-pytest
-    container: ${{ matrix.image }}
+    container:
+      image: ${{ matrix.image }}
+      # A tiny init as the container's first process: it cleans up ended processes, as systemd does on a desktop
+      # (without it, a stopped step's processes linger as zombies, and the test of Stop sees them).
+      options: --init
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
