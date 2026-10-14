@@ -619,8 +619,9 @@ def settings_and_rescans():
     check("closed mid-scan: the scan carries on (or has finished)", b.scanState in ("scanning", "done")
           and b.scanError == "", (b.scanState, b.scanError))
     toolbar("Scan…")  # again, while it runs
+    # (Running, or just done: Arch scans no packages, and its scan can finish before the ⋮ menu has been opened.)
     check("Scan while one runs: the window opens on the running scan", h.visible("scanDialog")
-          and b.scanState == "scanning")
+          and b.scanState in ("scanning", "done") and b.scanError == "", (b.scanState, b.scanError))
     pump(lambda: b.scanState == "done", 600)
     pump(seconds=0.5)
     check("…and shows its results, new ones ticked", ticked("github.com/tpope/vim-eunuch"), items().keys())
