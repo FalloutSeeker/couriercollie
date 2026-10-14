@@ -79,8 +79,9 @@ def shown(rid):
 
 
 def add(url, ending):
-    """Add a project, trying again while GitHub misbehaves; returns its id or ""."""
-    for _ in range(8):
+    """Add a project, trying again while GitHub misbehaves (each try is a few requests, any of which may go
+    wrong); returns its id or ""."""
+    for _ in range(20):
         before = {r.id for r in b._config.repos}
         b.addRepo("", url)
         pump(lambda: not b.adding, 90)

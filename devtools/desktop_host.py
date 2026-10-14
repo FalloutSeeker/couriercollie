@@ -90,7 +90,9 @@ class Notifications(dbus.service.Object):
         self.last += 1
         record = {"id": self.last, "app_name": str(app_name), "icon": str(app_icon), "summary": str(summary),
                   "body": str(body), "actions": [str(a) for a in actions],
-                  "desktop_entry": str(hints.get("desktop-entry", ""))}
+                  "desktop_entry": str(hints.get("desktop-entry", "")),
+                  # (newer notify-send gives --icon as a hint, older as app_icon)
+                  "image_path": str(hints.get("image-path", hints.get("image_path", "")))}
         with open(os.environ["NOTIFICATIONS"], "a") as f:
             f.write(json.dumps(record) + "\n")
         return self.last
