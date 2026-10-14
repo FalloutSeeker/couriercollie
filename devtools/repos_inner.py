@@ -180,11 +180,12 @@ def in_place(repo):
     return repo.installed if repo.local_path and Path(repo.local_path).is_file() else "missing"
 
 
-def dated(*args):
-    """A version that's a date (rust-analyzer's tags): the date it says it was built."""
+def runs(says, *args):
+    """For a program whose version isn't its release's name (rust-analyzer's tags are dates; it says its own number):
+    the release recorded, if what's installed runs and says what it is."""
     def version(repo):
-        m = re.search(r"\d{4}-\d{2}-\d{2}", run(repo.local_path, *args) if repo.local_path else "")
-        return m.group(0) if m else "missing"
+        out = run(repo.local_path, *args) if repo.local_path else ""
+        return repo.installed if says in out else out[:80] or "missing"
     return version
 
 
@@ -193,7 +194,7 @@ if SET == "odd":
     for args in [
         ("https://github.com/AppImage/appimagetool", prefer(r"appimagetool-x86_64\.AppImage$"), in_place),
         ("https://github.com/keepassxreboot/keepassxc", prefer(r"x86_64\.AppImage$"), named),
-        ("https://github.com/rust-lang/rust-analyzer", prefer(r"x86_64-unknown-linux-gnu\.gz$"), dated("--version")),
+        ("https://github.com/rust-lang/rust-analyzer", prefer(r"x86_64-unknown-linux-gnu\.gz$"), runs("rust-analyzer", "--version")),
         ("https://github.com/syncthing/syncthing", prefer(r"syncthing-linux-amd64-.*\.tar\.gz$"), program("--version")),
         ("https://github.com/jqlang/jq", prefer(r"^jq-linux-amd64$"), program("--version")),
         ("https://github.com/yt-dlp/yt-dlp", prefer(r"^yt-dlp_linux$"), program("--version")),
