@@ -348,7 +348,8 @@ Kirigami.ScrollablePage {
 
                     objectName: "reviewText"
                     readOnly: true
-                    font: Kirigami.Theme.fixedWidthFont
+                    // (Kirigami without KDE's desktop integration, as on Debian, has no fixed-width font: the system's.)
+                    font: Kirigami.Theme.fixedWidthFont ?? Qt.font({ family: "monospace" })
                     wrapMode: TextEdit.NoWrap
                     textFormat: TextEdit.PlainText
                 }
@@ -929,7 +930,8 @@ Kirigami.ScrollablePage {
                     readOnly: true
                     text: page.details.stepOutput || ""
                     textFormat: TextEdit.PlainText
-                    font: Kirigami.Theme.fixedWidthFont
+                    // (Kirigami without KDE's desktop integration, as on Debian, has no fixed-width font: the system's.)
+                    font: Kirigami.Theme.fixedWidthFont ?? Qt.font({ family: "monospace" })
                     // Long lines (paths, mostly) wrap rather than scroll sideways.
                     wrapMode: TextEdit.WrapAnywhere
                     onTextChanged: cursorPosition = length
