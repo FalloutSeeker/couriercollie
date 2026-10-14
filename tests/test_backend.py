@@ -254,6 +254,16 @@ class BackendTest(unittest.TestCase):
 
     def test_the_page_and_the_list_agree_on_v_or_not(self):
         # "1.18.2" (a package's version, say) is the release tagged "v1.18.2": up to date, on the page as in the list.
+        import couriercollie.backend as backend_module
+
+        # The page loaded again (Refresh), from the same answers as setUp's: no request to the site.
+        d = self.backend._details[LOCALSEND]
+        for module, name, value in ((sources, "newest_releases", lambda *a, **k: d.releases),
+                                    (backend_module, "_fetch_branches", lambda ref: ("main", d.branches, "")),
+                                    (backend_module, "_managed_elsewhere", lambda *a, **k: ("", "", "")),
+                                    (backend_module, "_homepage_of", lambda *a, **k: "-")):
+            self.addCleanup(setattr, module, name, getattr(module, name))
+            setattr(module, name, value)
         repo = self.backend._config.find(LOCALSEND)
         self.backend.loadDetails(LOCALSEND, True)
         newest = self.backend.details(LOCALSEND)["newestText"]
