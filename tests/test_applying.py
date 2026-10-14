@@ -99,10 +99,12 @@ class BuildFolderTest(unittest.TestCase):
             (root / "local").mkdir()
             built = applying.builds(d)
             self.assertEqual([(b.tool, b.folder) for b in built], [("meson", "_build"), ("cmake", "build")])
-            # /usr only root can write: sudo (which asks in the password window); your own prefix: no sudo.
+            # /usr only root can write: sudo (which asks in the password window); your own prefix: no sudo. (Run as
+            # root, as in a container, /usr can be written: no sudo either.)
+            sudo = "" if os.access("/usr", os.W_OK) else "sudo "
             self.assertEqual([applying.build_command(b) for b in built],
                              ["meson compile -C _build && meson install -C _build",
-                              "cmake --build build && sudo cmake --install build"])
+                              f"cmake --build build && {sudo}cmake --install build"])
             [s] = applying.suggestions(d, [], built)
             self.assertEqual(s.label, "Rebuild and install it")
             # A project with its own install script: that's its way (it may build more than this folder).
