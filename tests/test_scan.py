@@ -214,14 +214,28 @@ class FindOnDiskTest(unittest.TestCase):
 
     def test_opensuse_rpms_from_a_downloaded_file(self):
         # zypper lists a package no repository offers under "(System Packages)".
-        outputs = {
-            "zypper": '<solvable status="installed" name="cc-tool" kind="package" edition="2.0-1" arch="noarch" '
-                      'repository="(System Packages)"/>\n<solvable status="installed" name="curl" kind="package" '
-                      'edition="8.5-1" arch="x86_64" repository="Main Repository (OSS)"/>',
-            "rpm": "cc-tool|2.0|https://gitlab.com/example/tool\n",
-        }
-        found = scan.find_zypper_rpms(lambda *args: outputs[args[0]])
+        # libncurses6 too, once its repository has a newer version (between Tumbleweed snapshots): the system's own.
+        installed = ('<solvable status="installed" name="cc-tool" kind="package" edition="2.0-1" arch="noarch" '
+                     'repository="(System Packages)"/>\n<solvable status="installed" name="curl" kind="package" '
+                     'edition="8.5-1" arch="x86_64" repository="Main Repository (OSS)"/>\n<solvable status="installed" '
+                     'name="libncurses6" kind="package" edition="6.6-114.1" arch="x86_64" '
+                     'repository="(System Packages)"/>')
+        every = ('<solvable status="installed" name="cc-tool" kind="package" edition="2.0-1" arch="noarch" '
+                 'repository="(System Packages)"/>\n<solvable status="installed" name="libncurses6" kind="package" '
+                 'edition="6.6-114.1" arch="x86_64" repository="(System Packages)"/>\n<solvable status="other-version" '
+                 'name="libncurses6" kind="package" edition="6.6-115.1" arch="x86_64" repository="Main Repository (OSS)"/>')
+        asked = []
+
+        def run(*args):
+            asked.append(args)
+            if args[0] == "rpm":
+                return "cc-tool|2.0|https://gitlab.com/example/tool\n"
+            return every if "--match-exact" in args else installed
+        found = scan.find_zypper_rpms(run)
         self.assertEqual([(f.id, f.path) for f in found], [("gitlab.com/example/tool", "RPM package \u201ccc-tool\u201d")])
+        self.assertEqual(asked[-1][-1], "cc-tool")  # (libncurses6's homepage isn't even asked for)
+        # zypper can't say what's offered: nothing is listed.
+        self.assertEqual(scan.find_zypper_rpms(lambda *args: None if "--match-exact" in args else run(*args)), [])
 
     def test_if_dnf_cant_say_which_are_offered_none_are_listed(self):
         def dnf(*args):
