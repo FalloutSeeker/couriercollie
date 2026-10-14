@@ -1317,6 +1317,8 @@ class Backend(QObject, Updating, Account):
                         self._finished.get(tracked.id, 0) == self._scan_started.get(tracked.id, 0):
                     on_list.append(f)
                 continue
+            if not tracked and not f.host and not c.problem:
+                continue  # tracked when the scan started (so not looked up), removed since: found by the next scan
             similar = None if c.problem else scan.looks_like(self._config, f)
             self._scan_finds[key] = f
             self._scan_items.append({
