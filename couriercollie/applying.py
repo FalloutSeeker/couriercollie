@@ -78,13 +78,26 @@ def build_command(b: Build) -> str:
 
 # ---- The README's install or update steps, shown beside the step (only to read: never run) -------------------------
 
-README_NAMES = ("README.md", "README.markdown", "Readme.md", "readme.md", "README.MD", "README", "README.txt")
+README_NAMES = ("README.md", "README.markdown", "Readme.md", "readme.md", "README.MD", "README", "README.txt",
+                "README.rst", "docs/README.md")
 README_MAX_BYTES = 512 * 1024
 SECTION_MAX_CHARS = 2500  # enough for a few steps, not the whole README
-# What a heading is about, in the order they're looked for: updating first, else installing or building.
-_ABOUT = (re.compile(r"\b(updat(e|es|ing)|upgrad(e|es|ing))\b", re.I),
-          re.compile(r"\b(install(ation|ing|s)?|set ?up|setting up|getting started|quick ?start|build(ing)?|"
-                     r"compil(e|ing|ation))\b", re.I))
+# What a heading is about (see _rank): whole words, not in a hyphenated one ("Post-update hooks", "RetroPie-Setup").
+_UPDATE = re.compile(r"(?<![\w-])(updat(e|es|ing)|upgrad(e|es|ing))(?![\w-])", re.I)
+_INSTALL = re.compile(r"(?<![\w-])(install(ation|ing|s)?|set ?up|setting up|build(ing)?|compil(e|ing|ation))(?![\w-])",
+                      re.I)
+_STARTED = re.compile(r"(?<![\w-])(getting started|quick ?start)(?![\w-])", re.I)
+_USAGE = re.compile(r"(?<![\w-])(usage|how to use|download(ing)?)(?![\w-])", re.I)
+_USAGE_STEPS = re.compile(r"\b(clone|copy|cp|install|download|extract|unzip|symlink|move|mv)\b", re.I)  # in its text
+# Doing it from the clone ("From source", "Basic Git Checkout", "Install a checkout from git"; "Manual installation").
+_FROM_SOURCE = re.compile(r"\b(from (the )?(source|git)|git (clone|checkout)|(using|with|via) \W?git)\b", re.I)
+_BY_HAND = re.compile(rf"{_FROM_SOURCE.pattern}|\bmanual(ly)?\b", re.I)
+# What it needs ("Install Dependencies", or "Building" under "Requirements"): a list of packages, not the steps.
+_NEEDS = re.compile(r"^\W*(\w+\W+){0,3}(dependenc(y|ies)|deps|requirements?|prerequisites?)\W*$", re.I)
+# An "update" heading that isn't the steps: news, notes, a changelog, a migration from an old version.
+_NOT_STEPS = re.compile(r"\b(notes?|news|changelog|log|history|schedule[ds]?|management|hooks?|requests?|policy|"
+                        r"what'?s new|migrat\w*|from v?\d|credits?)\b", re.I)
+_NAME_WORD = re.compile(r"[a-z0-9]{3,}")  # a word of the project's name ("powerlevel10k")
 # What isn't the README's words: pictures and badges ("![…](…)", "<img …>"), HTML tags and comments; a link keeps its
 # words ("[Manual Install](#manual-install)" is "Manual Install").
 _TARGET = r"(\([^)]*\)|\[[^\]]*\])"  # a link's address: "(https://…)", or "[name]" defined elsewhere
@@ -96,22 +109,35 @@ _LINK = re.compile(rf"\[([^\]]*)\]{_TARGET}")
 _STARTS = re.compile(r"^\W*(to (update|upgrade|install)|updating|upgrading|installing)\b", re.I)
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 _UNDERLINE = re.compile(r"^\s*(=+|-+)\s*$")  # a heading written as a line underlined with === or ---
+_RST_UNDERLINE = re.compile(r"^([=\-~^*#\"'`+:._])\1{2,}\s*$")  # in reStructuredText, any of these
 _FENCE = re.compile(r"^\s*(```|~~~)")
 
 
-def _readme(path: str) -> str:
+def _readme(path: str) -> tuple[str, str]:
+    """(its name, its text). Only the clone's own: a README that's a link to a file outside it isn't read."""
+    root = Path(path).resolve()
     for name in README_NAMES:
-        file = Path(path) / name
+        file = (root / name).resolve()
         try:
-            if file.is_file() and file.stat().st_size <= README_MAX_BYTES:
-                return file.read_text(encoding="utf-8", errors="replace")
+            if file.is_relative_to(root) and file.is_file() and file.stat().st_size <= README_MAX_BYTES:
+                return name, file.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-    return ""
+    return "", ""
 
 
-def _headings(lines: list[str]) -> list[tuple[int, int, str]]:
-    """(line index, level, text) of each heading, outside code blocks: "## Install", or "Install" underlined."""
+def _headings(lines: list[str], kind: str = ".md") -> list[tuple[int, int, str]]:
+    """(line index, level, text) of each heading, outside code blocks: "## Install", or "Install" underlined. In
+    reStructuredText (kind ".rst") a line underlined with any punctuation, the levels in the order the underlines
+    first appear."""
+    if kind == ".rst":
+        found, order = [], []
+        for i, line in enumerate(lines):
+            if i and _RST_UNDERLINE.match(line) and lines[i - 1].strip() and not _RST_UNDERLINE.match(lines[i - 1]):
+                if line[0] not in order:
+                    order.append(line[0])
+                found.append((i - 1, order.index(line[0]) + 1, lines[i - 1].strip()))
+        return found
     found, in_code = [], False
     for i, line in enumerate(lines):
         if _FENCE.match(line):
@@ -147,20 +173,60 @@ def _cleaned(text: str) -> str:
     return "\n".join(line for line in text.splitlines() if line.strip() not in ("[]", "()")) if text else ""
 
 
-def _section(text: str) -> tuple[str, str]:
-    """In a Markdown text, the steps for updating (else installing or building): (heading, section)."""
+def _rank(title: str, parent: str) -> int | None:
+    """What a heading is about, the steps likeliest first: 0 updating (not news of it), 1 installing or building, 2
+    "From source" alone, 3 getting started, 4 usage (themes put their steps there), 5 what installing needs; None if
+    none of these."""
+    if _UPDATE.search(title) and not _NOT_STEPS.search(title):
+        return 0
+    if _NEEDS.search(title) or _NEEDS.search(parent):
+        return 5 if _INSTALL.search(title) or _FROM_SOURCE.search(title) else None
+    if _INSTALL.search(title):
+        return 1
+    if _FROM_SOURCE.search(title):
+        return 2
+    if _STARTED.search(title):
+        return 3
+    return 4 if _USAGE.search(title) else None
+
+
+def _section(text: str, kind: str = ".md", project: str = "") -> tuple[str, str]:
+    """In a text (Markdown, else as kind says), the steps for updating (else installing or building): (heading,
+    section). The first heading of the likeliest kind (_rank), but rather one about doing it from the clone; else a
+    paragraph that starts "To install…". project: the clone's name, when it's the README."""
     lines = text.splitlines()
-    headings = [(i, level, _words(title)) for i, level, title in _headings(lines)]
-    for about in _ABOUT:
-        for n, (i, level, title) in enumerate(headings):
-            if not about.search(title):
-                continue
-            end = next((j for j, lv, _t in headings[n + 1:] if lv <= level), len(lines))
-            body = lines[i + 1:end]
-            if body and _UNDERLINE.match(body[0]):  # (an underlined heading's own line)
-                body = body[1:]
-            if (text := _cleaned("\n".join(body))).strip():
-                return title, _shortened(text)
+    headings = [(i, level, _words(title)) for i, level, title in _headings(lines, kind)]
+    if project and len(headings) > 1 and headings[0][1] == 1 and all(lv > 1 for _i, lv, _t in headings[1:]):
+        headings[0] = (headings[0][0], 1, "")  # the README's title ("Luke's build of dwm"), everything under it
+    biggest = min((lv for _i, lv, t in headings if _INSTALL.search(t)), default=9)  # of the install headings
+    names = set(_NAME_WORD.findall(project.lower()))
+    found = []
+    for n, (i, level, title) in enumerate(headings):
+        parent = next((t for _j, lv, t in reversed(headings[:n]) if lv < level), "")
+        if (rank := _rank(title, parent)) is None:
+            continue
+        # In the README, an update heading under a bigger install heading is about updating something else ("Updating
+        # plugins"): unless it's just "Upgrading", names the project, or is part of an update section.
+        if rank == 0 and project and level > biggest and len(title.split()) > 1 and not _UPDATE.search(parent) \
+                and not names & set(_NAME_WORD.findall(title.lower())):
+            continue
+        end = next((j for j, lv, _t in headings[n + 1:] if lv <= level), len(lines))
+        body = lines[i + 1:end]
+        if body and (_UNDERLINE.match(body[0]) or _RST_UNDERLINE.match(body[0])):  # (an underlined heading's own line)
+            body = body[1:]
+        if (text := _cleaned("\n".join(body))).strip() and (rank != 4 or _USAGE_STEPS.search(text)):
+            found.append((rank, i, end, title, text))
+    if found:
+        rank, start, end, title, text = min(found)
+        # Rather one as likely about doing it from the clone ("Install from source", "Manual upgrade"), unless it's
+        # part of this section (shown with it). If this one is too long to show (a wall of distro packages), its part
+        # about that, or a "From source" heading.
+        fits = len(text) <= SECTION_MAX_CHARS
+        title, text = next(((t, x) for r, i, _e, t, x in found if _BY_HAND.search(t)
+                            and (r == rank or ((rank, r) == (1, 2) and not fits)) and not (fits and start < i < end)),
+                           (title, text))
+        return title, _shortened(text)
+    paragraphs: list[str] = []
     paragraph: list[str] = []
     in_code = False
     for line in [*lines, ""]:
@@ -168,29 +234,43 @@ def _section(text: str) -> tuple[str, str]:
             in_code = not in_code
         if line.strip() or in_code:
             paragraph.append(line)
-            continue
-        if paragraph and _STARTS.match(paragraph[0]):
-            return "", _shortened(_cleaned("\n".join(paragraph)))
-        paragraph = []
+        elif paragraph:
+            paragraphs.append("\n".join(paragraph))
+            paragraph = []
+    for k, paragraph in enumerate(paragraphs):
+        if _STARTS.match(paragraph):
+            if paragraph.rstrip().endswith(":") and k + 1 < len(paragraphs):  # "To install, run:", and what to run
+                paragraph += "\n\n" + paragraphs[k + 1]
+            return "", _shortened(_cleaned(paragraph))
     return "", ""
 
 
 # A link to another text file in the clone ("See [INSTALL.md](./INSTALL.md)"): not to a website.
 _LOCAL_DOC = re.compile(r"\]\((?!\w+:)(?:\./)?([^)\s#]+\.(?:md|markdown|txt))(?:#[^)]*)?\)", re.I)
-_DOCS = ("UPDATING.md", "UPGRADING.md", "INSTALL.md", "INSTALLING.md", "docs/INSTALL.md", "docs/install.md")
+_DOCS = ("UPDATING.md", "UPGRADING.md", "INSTALL.md", "INSTALLING.md", "INSTALLATION.md", "BUILDING.md",
+         "docs/INSTALL.md", "docs/install.md", "doc/INSTALL.md", "INSTALL.rst", "INSTALL")
 POINTER_MAX_CHARS = 400  # a section this short that links elsewhere only points there
+_DOC_NAME = re.compile(r"install|build|setup|updat|upgrad", re.I)  # a file named for the steps ("INSTALL.md")
 
 
 def readme_section(path: str) -> tuple[str, str]:
     """The README's own steps for updating (else for installing or building): (its heading, the section as Markdown).
     A heading about it, with everything under it up to the next heading as big; else a paragraph that starts "To
-    update" or "To install". A README that only points elsewhere ("See INSTALL.md") is followed there, and one
-    without any such steps is looked for in INSTALL.md and the like. ("", "") if there are none."""
+    update" or "To install". A README that only points elsewhere ("See INSTALL.md", also before the section's own
+    parts) is followed there, and one without any such steps (or only a link to a website) is looked for in
+    INSTALL.md and the like: one whose headings don't say shows from its beginning. ("", "") if there are none."""
     root = Path(path).resolve()
-    title, body = _section(_readme(path))
-    if body and len(body) > POINTER_MAX_CHARS:
-        return title, body
-    linked = list(dict.fromkeys(_LOCAL_DOC.findall(body))) if body else list(_DOCS)
+    readme, text = _readme(path)
+    title, body = _section(text, Path(readme).suffix.lower(), root.name)
+    linked = list(dict.fromkeys(_LOCAL_DOC.findall(body)))
+    if len(body) > POINTER_MAX_CHARS:  # the steps, unless it starts by pointing to their file, then has its parts
+        parts = _headings(body.splitlines())
+        lead = "\n".join(body.splitlines()[:parts[0][0]]) if parts else body
+        linked = [name for name in _LOCAL_DOC.findall(lead) if _DOC_NAME.search(name)]
+        if len(lead) > POINTER_MAX_CHARS or not linked:
+            return title, body
+    elif not linked and "`" not in body:  # none, or no steps of its own ("See https://…")
+        linked = list(_DOCS)
     for name in linked:
         file = (root / name).resolve()
         try:
@@ -199,10 +279,11 @@ def readme_section(path: str) -> tuple[str, str]:
             text = file.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        there, steps = _section(text)
+        there, steps = _section(text, file.suffix.lower())
         if steps:
             return " · ".join(t for t in (file.relative_to(root).as_posix(), there) if t), steps
-        if body:  # linked from the README, though no heading says what it is: its beginning
+        if text.strip() and not text.startswith("#!"):  # linked from the README or named for it (not a script),
+            # though no heading says what it is: its beginning
             return file.relative_to(root).as_posix(), _shortened(_cleaned(text))
     return title, body
 

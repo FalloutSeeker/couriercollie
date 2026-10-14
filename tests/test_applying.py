@@ -159,13 +159,16 @@ class CoveredTest(unittest.TestCase):
 class ReadmeSectionTest(unittest.TestCase):
     """The README's own steps, shown beside the step (applying.readme_section)."""
 
-    def section(self, readme: str, **files):
-        with tempfile.TemporaryDirectory() as folder:
-            (Path(folder) / "README.md").write_text(readme)
+    def section(self, readme: str | None, clone: str = "clone", **files):
+        with tempfile.TemporaryDirectory() as parent:
+            folder = Path(parent) / clone
+            folder.mkdir()
+            if readme is not None:
+                (folder / "README.md").write_text(readme)
             for name, text in files.items():
-                (Path(folder) / name.replace("__", "/")).parent.mkdir(parents=True, exist_ok=True)
-                (Path(folder) / name.replace("__", "/")).write_text(text)
-            return applying.readme_section(folder)
+                (folder / name.replace("__", "/")).parent.mkdir(parents=True, exist_ok=True)
+                (folder / name.replace("__", "/")).write_text(text)
+            return applying.readme_section(str(folder))
 
     def test_updating_first_then_installing(self):
         readme = "# App\n\n## Installation\n\nRun ./install.sh\n\n## Updating\n\ngit pull, then ./install.sh\n\n## License\n\nMIT\n"
@@ -212,3 +215,72 @@ class ReadmeSectionTest(unittest.TestCase):
         title, text = self.section("## Install\n\n```sh\n" + "echo step\n" * 600 + "```\n")
         self.assertLessEqual(len(text), applying.SECTION_MAX_CHARS + 10)
         self.assertEqual(sum(1 for line in text.splitlines() if line.startswith("```")) % 2, 0)
+
+    def test_restructuredtext_and_docs_readme(self):
+        readme = "Thing\n=====\n\nInstall\n-------\n\nRun ``make install``.\n\nUsage\n-----\n\nx\n"
+        self.assertEqual(self.section(None, **{"README.rst": readme}), ("Install", "Run ``make install``."))
+        self.assertEqual(self.section(None, **{"docs__README.md": "## Install\n\nmake\n"}), ("Install", "make"))
+
+    def test_more_files_of_steps(self):
+        # BUILDING.md and the like; one whose headings don't say (a plain INSTALL) shows from its beginning: not a script.
+        self.assertEqual(self.section("# Thing\n", **{"BUILDING.md": "# Building\n\nmake\n"}),
+                         ("BUILDING.md · Building", "make"))
+        self.assertEqual(self.section("# Thing\n", INSTALL="Normally just run make.\n"),
+                         ("INSTALL", "Normally just run make."))
+        self.assertEqual(self.section("# Thing\n", INSTALL="#!/bin/sh\nmake install\n"), ("", ""))
+
+    def test_headings_that_only_seem_about_it(self):
+        # The README's title, part of a hyphenated word, news of an update or a migration from an old version.
+        readme = ("# Luke's build of dwm\n\nA window manager.\n\n## Post-update hooks\n\nx\n\n## Update notes\n\nx\n\n"
+                  "## Upgrading from v1\n\nx\n\n## Installation\n\nmake install\n")
+        self.assertEqual(self.section(readme), ("Installation", "make install"))
+
+    def test_installing_before_getting_started_usage_and_what_it_needs(self):
+        readme = ("## Getting started\n\nPress q to quit.\n\n## Install dependencies\n\nmeson, ninja\n\n"
+                  "## Requirements\n\n### Building\n\ngcc\n\n## Installation\n\nmeson setup build\n")
+        self.assertEqual(self.section(readme), ("Installation", "meson setup build"))
+        self.assertEqual(self.section(readme.replace("## Installation\n\nmeson setup build\n", ""))[0], "Getting started")
+        theme = "# Theme\n\n## Previews\n\nx\n\n## Usage\n\n1. Copy the theme into ~/.themes\n"
+        self.assertEqual(self.section(theme), ("Usage", "1. Copy the theme into ~/.themes"))
+        self.assertEqual(self.section("## Usage\n\nRun it with --help.\n"), ("", ""))  # (not the steps to set it up)
+
+    def test_from_the_clone_rather_than_packages(self):
+        self.assertEqual(self.section("## Install from package\n\napt install x\n\n## Install from source\n\nmake\n"),
+                         ("Install from source", "make"))
+        # A wall of distro packages, too long to show: its part about the clone.
+        packages = "".join(f"### Distro {n}\n\n```sh\nsudo pkg install thing\n```\n\n" for n in range(100))
+        readme = f"## Installation\n\n{packages}### From source\n\n```sh\nmake install\n```\n\n## License\n\nMIT\n"
+        self.assertEqual(self.section(readme), ("From source", "```sh\nmake install\n```"))
+
+    def test_updating_something_else_isnt_the_steps(self):
+        readme = "## Installation\n\nRun ./install.sh\n\n### Updating plugins\n\nfisher update\n"
+        self.assertEqual(self.section(readme)[0], "Installation")
+        # Unless it's just that word, or names the project (as its clone is named).
+        self.assertEqual(self.section(readme.replace("Updating plugins", "Updating"))[0], "Updating")
+        self.assertEqual(self.section(readme.replace("plugins", "Fisher"), clone="fisher")[0], "Updating Fisher")
+
+    def test_a_paragraph_with_the_steps_it_announces(self):
+        self.assertEqual(self.section("# Thing\n\nTo install, run:\n\n```sh\nmake install\n```\n\nEnjoy.\n"),
+                         ("", "To install, run:\n\n```sh\nmake install\n```"))
+
+    def test_a_link_to_a_website_gives_way_to_install_md(self):
+        readme = "## Install\n\nAll instructions are at [the website](https://example.org/install).\n"
+        self.assertEqual(self.section(readme, **{"INSTALL.md": "## Install manually\n\nCopy it to ~/.themes\n"}),
+                         ("INSTALL.md · Install manually", "Copy it to ~/.themes"))
+        self.assertEqual(self.section(readme)[0], "Install")
+
+    def test_a_section_that_starts_by_pointing_elsewhere(self):
+        readme = "## Installing\n\nSee [INSTALL.md](INSTALL.md).\n\n### Configuration\n\n" + "Set things.\n" * 50
+        self.assertEqual(self.section(readme, **{"INSTALL.md": "# Installing\n\nmeson setup build\n"}),
+                         ("INSTALL.md · Installing", "meson setup build"))
+        # (to a file that isn't about the steps: not followed)
+        self.assertEqual(self.section(readme.replace("INSTALL.md", "docs/options.md"),
+                                      **{"docs__options.md": "# Options\n\nx\n"})[0], "Installing")
+
+
+class ReadmeOutsideTest(unittest.TestCase):
+    def test_a_readme_linked_outside_the_clone_isnt_read(self):
+        with tempfile.TemporaryDirectory() as outside, tempfile.TemporaryDirectory() as folder:
+            (Path(outside) / "secret.md").write_text("## Install\n\nthe secret\n")
+            (Path(folder) / "README.md").symlink_to(Path(outside) / "secret.md")
+            self.assertEqual(applying.readme_section(folder), ("", ""))
