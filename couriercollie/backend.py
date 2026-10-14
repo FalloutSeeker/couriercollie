@@ -400,6 +400,7 @@ class Backend(QObject, Updating, Account):
         self._checks = checker.load_state(self._state_path)
         self._init_account()
         self._checking = False
+        self._check_again = False  # (asked for while a check ran: done once it's over)
         self._check_error = ""
         # The background checker writes the results file when the app isn't open; pick up changes made meanwhile.
         self._watcher = QFileSystemWatcher(self)
@@ -643,7 +644,11 @@ class Backend(QObject, Updating, Account):
     def checkNow(self):
         """Check every tracked repo (checker.py). Repos are copied, so changes made while it runs don't mix in."""
         if self._checking:
+            # (Asked again while one runs: repos tracked meanwhile, say. Once it's done, once more, for them: an
+            # unchanged release list costs no request.)
+            self._check_again = True
             return
+        self._check_again = False
         repos = [dataclasses.replace(r) for r in self._config.repos]
         previous = self._checks
         at_start = dict(previous.results)
@@ -697,6 +702,8 @@ class Backend(QObject, Updating, Account):
             self.checksChanged.emit()
             self.reposChanged.emit()
             self.githubChanged.emit()  # GitHub may have turned the login down
+            if self._check_again:
+                QTimer.singleShot(0, self.checkNow)
 
         self._run(lambda: checker.check_all(repos, previous), done)
 
