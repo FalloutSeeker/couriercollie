@@ -9,6 +9,10 @@
 
 Inspired by [Obtainium](https://github.com/ImranR98/Obtainium), keep the software you got from GitHub and GitLab up to date, in one simple window.
 
+<p align="center">
+  <a href="https://ko-fi.com/E1E01YFRJU"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support couriercollie on Ko-fi"></a>
+</p>
+
 
 
 ![couriercollie showing an update for LocalSend](docs/screenshot.png)
