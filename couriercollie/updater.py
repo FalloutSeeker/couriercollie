@@ -82,13 +82,6 @@ def _git(path: str, *args: str, timeout: int = 30) -> subprocess.CompletedProces
         raise UpdateError(f"Couldn’t run git: {e}") from e
 
 
-def _inside_tree(path: str, hooks: str) -> bool:
-    """Whether a hooks folder is among the clone's own files (not in .git, which a pull leaves alone)."""
-    root = Path(path).resolve()
-    where = (root / Path(hooks).expanduser()).resolve()
-    return where.is_relative_to(root) and not where.is_relative_to(root / ".git")
-
-
 def git_out(path: str, *args: str, timeout: int = 30) -> str:
     """A git command's output in the clone at `path`, or "" if it fails. Never asks for anything."""
     try:
@@ -203,18 +196,19 @@ def _run_steps(path: str, steps: list[list[str]], as_root: bool) -> subprocess.C
     for once."""
     if not as_root:
         result = None
-        # Your own hooks (in .git/hooks, which a pull can't change) run as usual. Hooks the clone keeps in its own
-        # files (core.hooksPath into them: husky, .githooks) don't: the pull would change them, then run them, unseen.
-        hooks = git_out(path, "config", "core.hooksPath")
-        unsafe = bool(hooks) and _inside_tree(path, hooks)
+        # No hooks (as root, below): a hook can be one of the clone's own files (core.hooksPath into them, or a link
+        # from .git/hooks), which the pull would change and then run, unseen. Nor does a checkout move submodules on
+        # its own (submodule.recurse): what a submodule runs changes only by the step, which is shown first.
         for step in steps:
-            result = _git(path, *(["-c", "core.hooksPath=/dev/null"] if unsafe else []), *step, timeout=FETCH_TIMEOUT)
+            result = _git(path, "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false",
+                          "-c", "submodule.recurse=false", *step, timeout=FETCH_TIMEOUT)
             if result.returncode != 0:
                 break
         return result
     # As root: git from the system's folder, and none of the clone's hooks (scripts git would otherwise run).
     script = f"export PATH={SYSTEM_PATH} LC_ALL=C GIT_TERMINAL_PROMPT=0; " + " && ".join(
         shlex.join([GIT_AS_ROOT, "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false",
+                    "-c", "submodule.recurse=false",
                     "-c", f"safe.directory={path}", "-C", path, *step]) for step in steps)
     try:
         result = subprocess.run([*ROOT, "/bin/sh", "-c", script], capture_output=True, text=True,

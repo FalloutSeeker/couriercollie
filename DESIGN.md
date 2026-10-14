@@ -96,7 +96,7 @@ checksum file; none gives a warning) and must be what it claims. The old version
 
 - **Packages, as root:** copied where only root can write and checked again, so nothing can swap the file.
 - **Clones are never forced:** Update refuses, saying why, if the clone has its own commits, changed files, another
-  branch, or another owner. As root, git runs by full path with hooks off.
+  branch, or another owner. As root, git runs by full path; hooks are off either way.
 - **Programs:** unpacking can't land outside the program's folder. A command in `~/.local/bin` that couriercollie
   didn't put there is never replaced.
 - **An AppImage or program added by hand:** its copy's place isn't known, so Install puts a new copy in place. A scan

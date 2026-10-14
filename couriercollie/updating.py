@@ -461,6 +461,7 @@ class Updating:
         if not repo or not _is_clone(repo) or not repo.apply_command:
             return ""
         names, _diff = applying.changes(repo.local_path, repo.apply_command, repo.apply_commit)
+        names = [applying._shown(n) for n in names]  # (what can't be seen, shown as its code)
         return ", ".join(names[:3]) + (f" and {len(names) - 3} more" if len(names) > 3 else "")
 
     @Slot(str, result="QVariantMap")
@@ -480,8 +481,9 @@ class Updating:
         if not repo or not _is_clone(repo) or not (command := command.strip()) \
                 or command not in (c["command"] for c in self._step_choices(repo, self._details.get(repo_id))):
             return
-        # As the window showed it (reviewStep): never what wasn't shown.
-        if (shown := self._reviewed.pop((repo_id, command), None)) is None:
+        # As the window showed it (reviewStep): never what wasn't shown, nor what couldn't be shown whole.
+        if (shown := self._reviewed.pop((repo_id, command), None)) is None \
+                or applying.unapprovable(repo.local_path, command):
             return
         repo.apply_command, (repo.apply_approved, repo.apply_commit) = command, shown
         repo.apply_skip = False

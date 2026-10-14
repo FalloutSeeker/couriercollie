@@ -36,7 +36,8 @@ The choices behind couriercollie, and why. Numbered so the code can point to the
 - Nothing runs as root without your click and your password.
 - Downloads are checked against the project's published checksum; you're told when there isn't one.
 - The old version stays until the new one is in place, so a failed update leaves a working copy.
-- What runs as root is named by full path, works on a copy only root can change, and never runs a clone's hooks.
+- What runs as root is named by full path and works on a copy only root can change. Updating a clone never runs
+  its git hooks, as root or not: a hook can be one of its own files, which the update would change, then run.
 - What your package manager or Flatpak installed is never updated here, only shown: two updaters would fight over
   the same files.
 

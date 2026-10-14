@@ -410,11 +410,47 @@ class FailClosedTest(CoveredFilesTest):
         self.assertEqual(len({run(seed) for seed in (1, 2, 3, 4)}), 1)
 
 
-class HooksTest(unittest.TestCase):
-    def test_hooks_kept_in_the_clones_files_dont_run_during_a_pull(self):
-        from couriercollie import updater
 
-        self.assertTrue(updater._inside_tree("/srv/clone", ".githooks"))
-        self.assertTrue(updater._inside_tree("/srv/clone", "/srv/clone/.husky"))
-        self.assertFalse(updater._inside_tree("/srv/clone", ".git/hooks"))
-        self.assertFalse(updater._inside_tree("/srv/clone", "/home/me/hooks"))
+
+class RunsInContextTest(CoveredFilesTest):
+    """What counts as run, by its command: not every "-f" or "-r", nor a command's name."""
+
+    def test_only_what_a_command_runs(self):
+        folder = self.clone({
+            "install.sh": "[ -f data.conf ] && cp -r assets/* ~/x\ntee -a log.txt\nnvm_has curl\n"
+                          "pip install -r requirements.txt\nmake -f rules.mk\n",
+            "data.conf": "x", "assets/a.png": b"\x89PNG\0", "log.txt": "x", "nvm_has": "#!/bin/sh\n",
+            "requirements.txt": "x", "rules.mk": "all:\n"})
+        self.assertEqual(self.covered(folder), {"install.sh", "data.conf", "requirements.txt", "rules.mk"})
+
+    def test_shell_forms(self):
+        folder = self.clone({
+            "install.sh": 'for f in "$DIR"/*.sh; do . "$f"; done\n. "${DIR}/lib/common"\nrun-parts steps.d\n'
+                          'find tools -type f -exec bash {} \;\nfor g in \\\n  "./gen/$A$B.colors"; do echo; done\n',
+            "top.sh": "x", "lib/common": "x", "steps.d/10-a": "x", "tools/t": "x",
+            **{f"gen/c{i}.colors": "x" for i in range(10)}})
+        self.assertEqual(self.covered(folder), {"install.sh", "top.sh", "lib/common", "steps.d/10-a", "tools/t"})
+
+    def test_binary_files_and_links_out_are_never_read(self):
+        folder = self.clone({"install.sh": ". ./lib.sh\nsh ./pic.png\n", "lib.sh": "echo\n",
+                             "pic.png": b"\x89PNG\0\0with a /etc/passwd\0 name"})
+        (Path(folder) / "zero.sh").symlink_to("/dev/zero")
+        (Path(folder) / "install.sh").write_text(". ./lib.sh\nsh ./pic.png\nfor f in ./*.sh; do . $f; done\n")
+        subprocess.run(["git", "-C", folder, "add", "."], check=True)
+        self.assertEqual(self.covered(folder), {"install.sh", "lib.sh", "pic.png"})
+        applying.fingerprint(folder, "/bin/sh ./install.sh")  # (and quickly: /dev/zero isn't read)
+
+    def test_too_many_files_cant_be_approved(self):
+        folder = self.clone({"install.sh": "for f in parts/*.sh; do . $f; done\n",
+                             **{f"parts/p{i:03}.sh": "x" for i in range(applying.NAMED_MAX + 5)}})
+        self.assertIn("too many", applying.unapprovable(folder, "/bin/sh ./install.sh"))
+        self.assertIn("run it in a terminal", applying.review_text(folder, "/bin/sh ./install.sh"))
+
+    def test_a_submodule_without_the_word(self):
+        folder = self.clone({"install.sh": "sh ./vendor/tool/install.sh\n"})
+        subprocess.run(["git", "-C", folder, "update-index", "--add", "--cacheinfo",
+                        f"160000,{'1' * 40},vendor/tool"], check=True)
+        before = applying.fingerprint(folder, "/bin/sh ./install.sh")
+        subprocess.run(["git", "-C", folder, "update-index", "--cacheinfo", f"160000,{'2' * 40},vendor/tool"],
+                       check=True)
+        self.assertNotEqual(applying.fingerprint(folder, "/bin/sh ./install.sh"), before)

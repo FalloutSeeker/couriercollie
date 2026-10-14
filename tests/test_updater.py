@@ -376,10 +376,10 @@ class PullTest(UpstreamCase):
         self.assertNotIn("fetch", as_you)
         self.assertNotIn("merge", as_you)
         os.environ["PATH"] = saved
-        updater._writable = lambda path: True  # as you, your own hooks run as usual
+        updater._writable = lambda path: True  # as you, none run either (a hook can be a link into the clone's files)
         self.push_upstream(text="three\n")
         updater.pull(str(self.clone), "main", [])
-        self.assertEqual(ran.read_text(), "hook\n")
+        self.assertFalse(ran.exists())
 
     def test_no_password_no_change(self):
         self.push_upstream()
