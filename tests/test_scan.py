@@ -54,6 +54,34 @@ class MergeTest(unittest.TestCase):
         scan.merge(cfg, [aero_clone(AERO_NEW)])
         self.assertEqual((cfg.repos[0].follow, cfg.repos[0].installed), ("releases", "v6.7.0"))
 
+    def test_found_again_as_it_was_is_not_updated(self):
+        # (Every rescan said "Updated N tracked repos" and started a check, though nothing had changed.)
+        cfg = Config()
+        scan.merge(cfg, [aero_clone(AERO_NEW)])
+        self.assertEqual(scan.merge(cfg, [aero_clone(AERO_NEW)]).updated, [])
+        moved = aero_clone(AERO_NEW)
+        moved.path = "/home/me/src/aerothemeplasma"  # moved: followed there, and that's news
+        self.assertEqual(scan.merge(cfg, [moved]).updated, cfg.repos)
+        self.assertEqual(cfg.repos[0].local_path, "/home/me/src/aerothemeplasma")
+
+    def test_a_linked_mirror_never_takes_the_repos_own_clone(self):
+        # A GitHub mirror of the tracked GitLab project, linked to it: another place, not the repo's own clone, now
+        # and in every later scan (it used to take over the repo's folder, so updates went to the mirror's clone).
+        with tempfile.TemporaryDirectory() as d:
+            own = aero_clone(AERO_NEW)
+            own.path = d
+            cfg = Config()
+            scan.merge(cfg, [own])
+            mirror = Found(id="github.com/someone/aerothemeplasma", name="aerothemeplasma", url="", host="github",
+                           path="/home/me/mirrors/aerothemeplasma", kind="git", version="abc")
+            result = scan.merge(cfg, [scan.link_to(mirror, cfg.repos[0])])
+            self.assertEqual((len(cfg.repos), cfg.repos[0].local_path, result.updated), (1, d, []))
+            self.assertIn("github.com/someone/aerothemeplasma", cfg.repos[0].aliases)
+            again = Found(id="github.com/someone/aerothemeplasma", name="aerothemeplasma", url="", host="github",
+                          path="/home/me/mirrors/aerothemeplasma", kind="git", version="abc")
+            scan.merge(cfg, [own, again])  # (the next scan finds both)
+            self.assertEqual((len(cfg.repos), cfg.repos[0].local_path), (1, d))
+
     def test_clone_under_an_old_address_matches_a_remembered_alias(self):
         # Added by hand as the old address; the site redirected, so the old one was kept as an alias.
         cfg = Config(repos=[self.manual_aero(aliases=[AERO_OLD])])
