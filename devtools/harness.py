@@ -24,6 +24,9 @@ def start(copy_settings_from: Path | None = None, settings: dict | None = None, 
     real start would have them; the welcome screen is marked done unless they say otherwise."""
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
     sys.path.insert(0, str(PROJECT))
+    if os.environ.get("GITHUB_RELAY"):  # GitHub through devtools/github_relay.py (your login: 5,000 requests an hour)
+        sys.path.insert(0, str(PROJECT / "devtools"))
+        import relay_client  # noqa: F401
     from couriercollie.app import choose_style
 
     choose_style()  # as the app does
