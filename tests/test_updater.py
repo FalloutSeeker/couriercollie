@@ -352,12 +352,20 @@ class StopStepTest(unittest.TestCase):
 class PullTest(UpstreamCase):
     def test_pulls_new_commits(self):
         newest = self.push_upstream(2)
-        before, after, count = updater.pull(str(self.clone), "main", ["github.com/a/b"])
+        before, after, count, _head = updater.pull(str(self.clone), "main", ["github.com/a/b"])
         self.assertEqual((before, after, count), (self.start, newest, 2))
         self.assertEqual(git(self.clone, "rev-parse", "HEAD"), newest)
 
     def test_nothing_new(self):
-        self.assertEqual(updater.pull(str(self.clone), "main", []), (self.start, self.start, 0))
+        self.assertEqual(updater.pull(str(self.clone), "main", []), (self.start, self.start, 0, self.start))
+
+    def test_ahead_the_branchs_newest_is_whats_fetched_not_yours(self):
+        # (A commit of your own on top: "already up to date", and the branch's newest isn't your commit.)
+        (self.clone / "mine.txt").write_text("mine\n")
+        git(self.clone, "add", "mine.txt")
+        git(self.clone, "commit", "-q", "-m", "mine")
+        mine = git(self.clone, "rev-parse", "HEAD")
+        self.assertEqual(updater.pull(str(self.clone), "main", []), (mine, mine, 0, self.start))
 
     def test_your_own_commits_are_never_combined(self):
         self.push_upstream()
@@ -398,7 +406,7 @@ class PullTest(UpstreamCase):
     def test_the_systems_clone_asks_for_the_password_once(self):
         newest = self.push_upstream()
         asked = self.as_owner(0)
-        self.assertEqual(updater.pull(str(self.clone), "main", [])[1:], (newest, 1))
+        self.assertEqual(updater.pull(str(self.clone), "main", [])[1:3], (newest, 1))
         self.assertEqual(len(asked), 1)  # fetch and fast-forward in one go
         self.assertIn("merge --ff-only", asked[0])
 

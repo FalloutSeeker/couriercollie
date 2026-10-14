@@ -239,9 +239,10 @@ def _explain(result: subprocess.CompletedProcess) -> UpdateError:
     return UpdateError(f"Couldn\u2019t update the clone: {_last_line(result)}")
 
 
-def pull(path: str, branch: str, repo_ids: list[str]) -> tuple[str, str, int]:
+def pull(path: str, branch: str, repo_ids: list[str]) -> tuple[str, str, int, str]:
     """Brings the clone at `path` up to the newest commit on `branch`. Returns (commit before, commit after, how many
-    new commits). Refuses, with the reason, anything that isn't a plain fast-forward of the branch you're on."""
+    new commits, the branch's newest commit as fetched: not the clone's when it has commits of its own on top).
+    Refuses, with the reason, anything that isn't a plain fast-forward of the branch you're on."""
     as_root = _as_root(path)
     on = git_out(path, "symbolic-ref", "--short", "-q", "HEAD")
     if on != branch:
@@ -256,7 +257,7 @@ def pull(path: str, branch: str, repo_ids: list[str]) -> tuple[str, str, int]:
         raise _explain(result)
     after = git_out(path, "rev-parse", "HEAD")
     count = int(git_out(path, "rev-list", "--count", f"{before}..{after}") or 0) if before and after else 0
-    return before, after, count
+    return before, after, count, git_out(path, "rev-parse", "FETCH_HEAD") or after
 
 
 # A whole project's history can be big.

@@ -205,8 +205,14 @@ class Updating:
                 self._update_notes[repo_id] = ("error", self._error_text(error))
             elif repo and by_branch:
                 self._here_now(repo_id)
-                _before, after, count = result
-                self._pulled(repo, branch, after)
+                _before, after, count, head = result
+                if head == after:
+                    self._pulled(repo, branch, after)
+                else:  # (ahead of the branch, with commits of its own: not "up to date", nor the branch's newest)
+                    if after != repo.installed:
+                        repo.installed = after
+                        self._changed(repo_id)
+                    self.loadDetails(repo_id, True)
                 self._update_notes[repo_id] = ("done", "Already up to date." if not count else "Pulled 1 new commit."
                                                if count == 1 else f"Pulled {count} new commits.")
                 if count:
