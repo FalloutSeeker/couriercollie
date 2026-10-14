@@ -62,6 +62,9 @@ def install(rid, older=False):
     print(" ", rid, "->", b._config.find(rid).installed, b.details(rid)["updateNote"][:80], flush=True)
 
 
+# couriercollie itself, as on a real first start: tracked from its package, at the top of the list.
+b._config.settings.tracked_itself = False
+b._track_myself()
 localsend = add("https://github.com/localsend/localsend", "-linux-x86-64.AppImage")
 b.renameRepo(localsend, "LocalSend")
 install(localsend, older=True)

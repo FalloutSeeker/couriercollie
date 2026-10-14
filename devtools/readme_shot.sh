@@ -11,7 +11,7 @@ port=18769
 python3 -I devtools/github_relay.py "$work/allow" $port > "$work/relay.log" 2>&1 &
 relay=$!
 trap 'kill $relay; podman unshare rm -rf "$work"' EXIT
-printf "localsend/localsend\nneovim/neovim\nBurntSushi/ripgrep\njesseduffield/lazygit\nzed-industries/zed\ntmux-plugins/tpm\n" \
+printf "localsend/localsend\nneovim/neovim\nBurntSushi/ripgrep\njesseduffield/lazygit\nzed-industries/zed\ntmux-plugins/tpm\nFalloutSeeker/couriercollie\n" \
     > "$work/allow"
 git ls-files -z | xargs -0 tar -cf "$work/app.tar"  # the app as committed and staged here
 devtools/build_package.sh fedora >/dev/null
