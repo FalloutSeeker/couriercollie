@@ -433,14 +433,14 @@ class BackendTest(unittest.TestCase):
         self.assertNotEqual(b.renameRepo("github.com/no/such", "x"), "")
 
     def test_couriercollie_tracks_itself_once(self):
-        from couriercollie import assets, integration, packages
+        from couriercollie import __version__, assets, integration, packages
 
         b = self.backend
         self.addCleanup(setattr, integration, "INSTALLED", integration.INSTALLED)
         self.addCleanup(setattr, assets, "PACKAGE_TOOLS", assets.PACKAGE_TOOLS)
         self.addCleanup(setattr, packages, "installed_version", packages.installed_version)
         integration.INSTALLED = True  # installed as a package
-        packages.installed_version = lambda kind, name: ("0.6.0", name == "couriercollie")
+        packages.installed_version = lambda kind, name: (__version__, name == "couriercollie")
         files = {"dnf": "couriercollie-0.7.0-1.fc44.noarch.rpm", "zypper": "couriercollie-0.7.0-1.noarch.rpm",
                  "apt": "couriercollie_0.7.0_all.deb", "pacman": "couriercollie-0.7.0-1-any.pkg.tar.zst"}
         for tool, file in files.items():
@@ -449,7 +449,7 @@ class BackendTest(unittest.TestCase):
             b._config.settings.tracked_itself = False
             b._track_myself()
             me = b._config.repos[0]  # first in the list
-            self.assertEqual((me.id, me.installed, me.source), (b.MYSELF, "0.6.0", "scanned"), tool)
+            self.assertEqual((me.id, me.installed, me.source), (b.MYSELF, __version__, "scanned"), tool)
             # Its own distro's file in a release, and none of the others'.
             self.assertEqual([f for f in files.values() if assets.matches(me.asset_pattern, f)], [file], tool)
         # Once only: stopped tracking, it stays gone.
