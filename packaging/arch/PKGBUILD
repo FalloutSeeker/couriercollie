@@ -14,12 +14,12 @@ sha256sums=('SKIP')
 
 package() {
     cd "$pkgname-$pkgver"
-    local site
-    site=$(python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')
-    install -d "$pkgdir$site"
-    cp -a couriercollie "$pkgdir$site/"
-    find "$pkgdir$site/couriercollie" -name __pycache__ -prune -exec rm -rf {} +
-    python -m compileall -q -d "$site/couriercollie" "$pkgdir$site/couriercollie"
+    # Its own folder, not Python's: an Arch Python update doesn't leave it behind.
+    local app=/usr/share/couriercollie
+    install -d "$pkgdir$app"
+    cp -a couriercollie "$pkgdir$app/"
+    find "$pkgdir$app/couriercollie" -name __pycache__ -prune -exec rm -rf {} +
+    python -m compileall -q -d "$app/couriercollie" "$pkgdir$app/couriercollie"
     install -Dm755 data/couriercollie "$pkgdir/usr/bin/couriercollie"
     install -Dm644 data/couriercollie.desktop "$pkgdir/usr/share/applications/couriercollie.desktop"
     install -d "$pkgdir/usr/share/icons"

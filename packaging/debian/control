@@ -5,7 +5,7 @@ Section: utils
 Priority: optional
 Maintainer: couriercollie <couriercollie@users.noreply.github.com>
 Homepage: https://github.com/FalloutSeeker/couriercollie
-Depends: python3 (>= 3.13), python3-pyside6.qtcore, python3-pyside6.qtgui, python3-pyside6.qtwidgets,
+Depends: python3 (>= 3.11), python3-pyside6.qtcore, python3-pyside6.qtgui, python3-pyside6.qtwidgets,
  python3-pyside6.qtqml, python3-pyside6.qtquick, python3-pyside6.qtdbus, python3-pyside6.qtnetwork,
  python3-pyside6.qtsvg, qml6-module-org-kde-kirigami, qml6-module-qtquick-controls,
  qml6-module-qtquick-dialogs, qml6-module-qtquick-layouts, qml6-module-qtquick-window, libnotify-bin, git, pkexec,

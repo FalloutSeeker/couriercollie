@@ -1,4 +1,7 @@
 #!/bin/sh
-# The couriercollie command, as installed by the app's packages (RPM, AUR).
+# The couriercollie command, as installed by the app's packages (RPM, .deb, Arch). The app sits in
+# /usr/share/couriercollie, a folder that stays put when the distro moves to a newer Python.
 # -I: only the installed app, never a "couriercollie" folder in the current one.
-exec /usr/bin/python3 -I -m couriercollie "$@"
+exec /usr/bin/python3 -I -c 'import runpy, sys
+sys.path.insert(0, "/usr/share/couriercollie")
+runpy.run_module("couriercollie", run_name="__main__", alter_sys=True)' "$@"

@@ -5,7 +5,9 @@
 # stand-ins for KDE Plasma's tray host and the notification server: its window and icon, tray icon and menu, a
 # notification, Quit. Screenshots go to .uicheck/desktop/. Nothing is installed on this computer.
 #
-#     devtools/check_desktop.sh [fedora|opensuse|ubuntu|debian|arch …]
+#     devtools/check_desktop.sh [fedora|opensuse|ubuntu|debian|arch|fedora-40|leap-16 …]
+#
+# fedora-40 and leap-16: the oldest releases the packages are for.
 set -eu
 cd "$(dirname "$0")/.."
 work=$(mktemp -d)
@@ -15,7 +17,7 @@ tar -rf "$work/app.tar" devtools/desktop_inner.py devtools/desktop_host.py 2>/de
 distros=${*:-fedora opensuse ubuntu debian arch}
 # PREBUILT=folder: packages built already (say, from a clone, while another check builds here).
 if [ -n "${PREBUILT:-}" ]; then cp "$PREBUILT"/* "$work/"; else
-    devtools/build_package.sh $(echo "$distros" | tr ' ' '\n' | sed 's/^ubuntu$/debian/' | sort -u) >/dev/null
+    devtools/build_package.sh $(echo "$distros" | tr ' ' '\n' | sed 's/^ubuntu$/debian/; s/^fedora-40$/fedora/; s/^leap-16$/opensuse/' | sort -u) >/dev/null
     cp dist/* "$work/"
 fi
 mkdir -p "$work/out" .uicheck/desktop
@@ -36,6 +38,10 @@ for distro in $distros; do
         fedora) run fedora registry.fedoraproject.org/fedora:44 \
             "dnf install -y -q /work/couriercollie-$version-1.fc*.noarch.rpm xorg-x11-server-Xvfb openbox xdotool wmctrl ImageMagick xprop xdpyinfo xsetroot python3-dbus python3-gobject dbus-daemon openssl desktop-file-utils google-noto-sans-fonts" & ;;
         opensuse) run opensuse registry.opensuse.org/opensuse/tumbleweed:latest \
+            "zypper -q --non-interactive install --allow-unsigned-rpm /work/couriercollie-$version-1.noarch.rpm xorg-x11-server-Xvfb openbox xdotool wmctrl ImageMagick xprop xdpyinfo xsetroot python3-dbus-python python3-gobject dbus-1-daemon openssl desktop-file-utils google-noto-sans-fonts" & ;;
+        fedora-40) run fedora-40 registry.fedoraproject.org/fedora:40 \
+            "dnf install -y -q /work/couriercollie-$version-1.fc*.noarch.rpm xorg-x11-server-Xvfb openbox xdotool wmctrl ImageMagick xprop xdpyinfo xsetroot python3-dbus python3-gobject dbus-daemon openssl desktop-file-utils google-noto-sans-fonts" & ;;
+        leap-16) run leap-16 registry.opensuse.org/opensuse/leap:16.0 \
             "zypper -q --non-interactive install --allow-unsigned-rpm /work/couriercollie-$version-1.noarch.rpm xorg-x11-server-Xvfb openbox xdotool wmctrl ImageMagick xprop xdpyinfo xsetroot python3-dbus-python python3-gobject dbus-1-daemon openssl desktop-file-utils google-noto-sans-fonts" & ;;
         ubuntu) run ubuntu docker.io/library/ubuntu:26.04 "$apt /work/couriercollie_${version}_all.deb $deb_desktop" & ;;
         debian) run debian docker.io/library/debian:13 "$apt /work/couriercollie_${version}_all.deb $deb_desktop" & ;;

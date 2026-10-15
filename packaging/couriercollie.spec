@@ -12,14 +12,11 @@ BuildArch:      noarch
 
 BuildRequires:  python3
 BuildRequires:  desktop-file-utils
-# Where Python modules go, also without Fedora's Python macros (python3-rpm-macros) installed.
-%{!?python3_sitelib: %global python3_sitelib %(python3 -c "import sysconfig; print(sysconfig.get_path('purelib', vars={'base': '/usr'}))")}
-%{!?python3_version: %global python3_version %(python3 -c "import sys; print(*sys.version_info[:2], sep='.')")}
 
 # The window: PySide6 and Kirigami (KDE's toolkit, a Qt library: not the rest of KDE). The icons come with the app.
-Requires:       python3
-# The app sits in this Python's own folder, so another Python can't find it: refuse to install there rather than break.
-Requires:       python(abi) = %{python3_version}
+# Any Python from 3.11 on: the app sits in its own folder (not one named after a Python version), so it keeps working
+# when the distro moves to a newer Python.
+Requires:       python3 >= 3.11
 Requires:       python3-pyside6
 # Its icon goes in the hicolor theme, which needs this to be found by name.
 Requires:       hicolor-icon-theme
@@ -51,9 +48,9 @@ schedule, and updates them with a click.
 %build
 
 %install
-install -d %{buildroot}%{python3_sitelib}
-cp -a couriercollie %{buildroot}%{python3_sitelib}/
-find %{buildroot}%{python3_sitelib}/couriercollie -name __pycache__ -prune -exec rm -rf {} +
+install -d %{buildroot}%{_datadir}/%{name}
+cp -a couriercollie %{buildroot}%{_datadir}/%{name}/
+find %{buildroot}%{_datadir}/%{name}/couriercollie -name __pycache__ -prune -exec rm -rf {} +
 install -Dm755 data/couriercollie %{buildroot}%{_bindir}/couriercollie
 install -Dm644 data/couriercollie.desktop %{buildroot}%{_datadir}/applications/couriercollie.desktop
 install -d %{buildroot}%{_datadir}/icons
@@ -66,7 +63,7 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/couriercollie.desktop
 %license LICENSE
 %doc README.md
 %{_bindir}/couriercollie
-%{python3_sitelib}/couriercollie/
+%{_datadir}/%{name}/
 %{_datadir}/applications/couriercollie.desktop
 %{_datadir}/icons/hicolor/*/apps/couriercollie.png
 
