@@ -271,38 +271,28 @@ Kirigami.ScrollablePage {
     }
 
     // The handle for dragging a repo or category. While it's held, the list shows where it would go; the move is
-    // made when it's let go.
+    // made when it's let go. The list's drag area does the dragging: a handle goes away with its row once that's
+    // scrolled far out of sight, which would leave the drag behind.
     component DragHandle: Kirigami.Icon {
         id: handle
 
-        required property ListView view
+        readonly property bool isDragHandle: true
         required property var what
         required property Item bar  // the row it drags: shown under the pointer while dragging
 
         source: "handle-sort"
         implicitWidth: Kirigami.Units.iconSizes.smallMedium
         implicitHeight: Kirigami.Units.iconSizes.smallMedium
-        opacity: area.containsMouse || area.pressed ? 1 : 0.6
+        opacity: area.containsMouse ? 1 : 0.6
 
         MouseArea {
             id: area
 
-            function yInList(mouse) {
-                return mapToItem(handle.view.contentItem, mouse.x, mouse.y).y;
-            }
-
             anchors.fill: parent
             anchors.margins: -Kirigami.Units.smallSpacing
+            acceptedButtons: Qt.NoButton
             hoverEnabled: true
-            preventStealing: true
-            cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-            onPressed: mouse => handle.view.startDrag(handle.what, yInList(mouse), handle.bar)
-            onPositionChanged: mouse => {
-                if (pressed)
-                    handle.view.moveDrag(yInList(mouse));
-            }
-            onReleased: handle.view.endDrag(true)
-            onCanceled: handle.view.endDrag(false)
+            cursorShape: Qt.OpenHandCursor
         }
     }
 
@@ -345,9 +335,11 @@ Kirigami.ScrollablePage {
 
         objectName: "repoList"
 
-        // While something is dragged: what it is ({ kind, id, category, label }), the pointer's height in the list,
-        // and where it would go if let go here ({ category, before, lineY }), or null for nowhere new.
+        // While something is dragged: what it is ({ kind, id, category, label }), the pointer's height in sight
+        // (kept inside the list, also when the pointer is past it), that height in the list's rows, and where it
+        // would go if let go here ({ category, before, lineY }), or null for nowhere new.
         property var dragged: null
+        property real pointerY: 0
         property real dragY: 0
         property var drop: null
         // A picture of the dragged row, which follows the pointer, held where it was grabbed.
@@ -396,10 +388,12 @@ Kirigami.ScrollablePage {
             return { category: "", before: before, lineY: before ? headingY(before) : contentHeight + originY };
         }
 
-        function startDrag(what, y, bar) {
+        // y: the pointer's height in sight.
+        function startDrag(handle, y) {
+            const what = handle.what, bar = handle.bar;
             dragged = what;
             picture = null;
-            grabOffset = y - bar.y;
+            grabOffset = y - bar.mapToItem(list, 0, 0).y;
             barHeight = bar.height;
             moveDrag(y);
             bar.grabToImage(result => {
@@ -409,8 +403,14 @@ Kirigami.ScrollablePage {
         }
 
         function moveDrag(y) {
-            dragY = y;
-            drop = dropFor(y);
+            pointerY = Math.max(0, Math.min(height - 1, y));
+            followPointer();
+        }
+
+        // After the pointer moved or the list scrolled under it.
+        function followPointer() {
+            dragY = pointerY - contentItem.y;
+            drop = dropFor(dragY);
         }
 
         function endDrag(commit) {
@@ -536,7 +536,6 @@ Kirigami.ScrollablePage {
                         DragHandle {
                             objectName: "dragCategory:" + row.modelData.category
                             visible: row.modelData.category !== ""
-                            view: list
                             bar: row
                             what: ({ kind: "category", id: "", category: row.modelData.category,
                                      label: row.modelData.label })
@@ -650,7 +649,6 @@ Kirigami.ScrollablePage {
 
                         DragHandle {
                             objectName: "dragRepo:" + row.modelData.id
-                            view: list
                             bar: row
                             what: ({ kind: "repo", id: row.modelData.id, category: row.modelData.category,
                                      label: row.modelData.name })
@@ -772,38 +770,96 @@ Kirigami.ScrollablePage {
                 }
         }
 
-        // Where a dragged repo or category would go; above the dragged row, which often covers that spot.
-        Rectangle {
-            z: 12
-            visible: list.drop !== null && list.drop.lineY >= 0
-            y: list.drop ? list.drop.lineY - height / 2 : 0
-            width: list.width
-            height: 3
-            color: Kirigami.Theme.highlightColor
-        }
+        // Drags start on a handle and are followed from here, over the whole list: a press anywhere else goes on to
+        // what's under it. In sight, under the pointer, stay the dragged row and the line where it would go, also
+        // when the pointer goes past the list or out of the window.
+        MouseArea {
+            id: dragArea
 
-        // The dragged row itself follows the pointer.
-        Kirigami.ShadowedRectangle {
-            objectName: "dragPicture"
-            z: 11
-            Kirigami.Theme.colorSet: Kirigami.Theme.View
-            Kirigami.Theme.inherit: false
-            visible: list.picture !== null
-            y: list.dragY - list.grabOffset
-            width: list.width
-            height: list.barHeight
-            color: Kirigami.Theme.backgroundColor
-            border.width: 2
-            border.color: Kirigami.Theme.highlightColor
-            shadow.size: Kirigami.Units.gridUnit
-            shadow.yOffset: Kirigami.Units.smallSpacing / 2
-            shadow.color: Qt.rgba(0, 0, 0, 0.3)
+            objectName: "dragArea"
 
-            // Inside the outline, so the outline shows on every theme.
-            Image {
-                anchors.fill: parent
-                anchors.margins: parent.border.width
-                source: list.picture ? list.picture.url : ""
+            // The pointer's height, also past the list: the further past an edge, the faster the list scrolls.
+            property real reach: 0
+
+            // The handle at x, y here, or null. Its hover area reaches a little past the icon, and so does this.
+            function handleAt(x, y) {
+                const inRows = mapToItem(list.contentItem, x, y);
+                const row = list.itemAt(inRows.x, inRows.y);
+                return row ? handleIn(row, x, y) : null;
+            }
+
+            function handleIn(item, x, y) {
+                for (let i = 0; i < item.children.length; i++) {
+                    const child = item.children[i];
+                    if (!child.visible)
+                        continue;
+                    if (child.isDragHandle) {
+                        const p = child.mapFromItem(dragArea, x, y), m = Kirigami.Units.smallSpacing;
+                        if (p.x >= -m && p.y >= -m && p.x < child.width + m && p.y < child.height + m)
+                            return child;
+                    } else {
+                        const found = handleIn(child, x, y);
+                        if (found)
+                            return found;
+                    }
+                }
+                return null;
+            }
+
+            parent: list  // not among the rows, which scroll
+            anchors.fill: parent
+            z: 1
+            clip: true
+            preventStealing: true
+            cursorShape: pressed ? Qt.ClosedHandCursor : undefined  // undefined: the cursor of what's under it
+            onPressed: mouse => {
+                const handle = handleAt(mouse.x, mouse.y);
+                mouse.accepted = handle !== null;
+                if (handle) {
+                    reach = mouse.y;
+                    list.startDrag(handle, mouse.y);
+                }
+            }
+            onPositionChanged: mouse => {
+                reach = mouse.y;
+                if (list.dragged)
+                    list.moveDrag(mouse.y);
+            }
+            onReleased: list.endDrag(true)
+            onCanceled: list.endDrag(false)
+
+            // Where it would go; above the dragged row, which often covers that spot.
+            Rectangle {
+                z: 1
+                visible: list.drop !== null && list.drop.lineY >= 0
+                y: list.drop ? list.contentItem.y + list.drop.lineY - height / 2 : 0
+                width: parent.width
+                height: 3
+                color: Kirigami.Theme.highlightColor
+            }
+
+            // The dragged row itself follows the pointer.
+            Kirigami.ShadowedRectangle {
+                objectName: "dragPicture"
+                Kirigami.Theme.colorSet: Kirigami.Theme.View
+                Kirigami.Theme.inherit: false
+                visible: list.picture !== null
+                y: Math.max(0, Math.min(list.height - height, list.pointerY - list.grabOffset))
+                width: parent.width
+                height: list.barHeight
+                color: Kirigami.Theme.backgroundColor
+                border.width: 2
+                border.color: Kirigami.Theme.highlightColor
+                shadow.size: Kirigami.Units.gridUnit
+                shadow.yOffset: Kirigami.Units.smallSpacing / 2
+                shadow.color: Qt.rgba(0, 0, 0, 0.3)
+
+                // Inside the outline, so the outline shows on every theme.
+                Image {
+                    anchors.fill: parent
+                    anchors.margins: parent.border.width
+                    source: list.picture ? list.picture.url : ""
+                }
             }
         }
 
@@ -813,17 +869,17 @@ Kirigami.ScrollablePage {
             interval: 30
             repeat: true
             onTriggered: {
-                const edge = Kirigami.Units.gridUnit * 2, inView = list.dragY - list.contentY;
+                const edge = Kirigami.Units.gridUnit * 2, at = dragArea.reach;
                 let step = 0;
-                if (inView < edge)
-                    step = -Math.ceil((edge - inView) / 4);
-                else if (inView > list.height - edge)
-                    step = Math.ceil((inView - list.height + edge) / 4);
+                if (at < edge)
+                    step = -Math.min(edge, Math.ceil((edge - at) / 4));
+                else if (at > list.height - edge)
+                    step = Math.min(edge, Math.ceil((at - list.height + edge) / 4));
                 const lowest = Math.max(list.originY, list.originY + list.contentHeight - list.height);
                 const to = Math.max(list.originY, Math.min(lowest, list.contentY + step));
                 if (to !== list.contentY) {
-                    list.moveDrag(list.dragY + to - list.contentY);
                     list.contentY = to;
+                    list.followPointer();
                 }
             }
         }

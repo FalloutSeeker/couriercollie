@@ -33,7 +33,7 @@ Download the package for your distro from [Releases](https://github.com/FalloutS
 | --- | --- |
 | Fedora 43+ | `sudo dnf install ./couriercollie-*.fc*.noarch.rpm` |
 | openSUSE Tumbleweed, Leap 16+ | `sudo zypper install --allow-unsigned-rpm ./couriercollie-*.noarch.rpm` |
-| Ubuntu 26.04+, Debian 13+ | `sudo apt install ./couriercollie_*_all.deb` |
+| Ubuntu 25.04+, Debian 13+ | `sudo apt install ./couriercollie_*_all.deb` |
 | Arch (btw) | `sudo pacman -U ./couriercollie-*-any.pkg.tar.zst` |
 
 Your package manager installs everything else it needs. Then open **couriercollie** from your app menu.
@@ -51,9 +51,9 @@ cd couriercollie
 
 | Distro | Command |
 | --- | --- |
-| Fedora | `sudo dnf install python3-pyside6 kf6-kirigami` |
-| openSUSE | `sudo zypper install python3 python3-pyside6 kf6-kirigami-imports` |
-| Ubuntu, Debian | `sudo apt install python3-pyside6.qtquick python3-pyside6.qtwidgets python3-pyside6.qtdbus python3-pyside6.qtnetwork qml6-module-org-kde-kirigami qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts` |
+| Fedora 40+ | `sudo dnf install python3-pyside6 kf6-kirigami` |
+| openSUSE Tumbleweed, Leap 16+ | `sudo zypper install python3 python3-pyside6 kf6-kirigami-imports` |
+| Ubuntu 25.04+, Debian 13+ | `sudo apt install python3-pyside6.qtquick python3-pyside6.qtwidgets python3-pyside6.qtdbus python3-pyside6.qtnetwork qml6-module-org-kde-kirigami qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts` |
 | Arch (btw) | `sudo pacman -S pyside6 kirigami` |
 
 Kirigami is KDE's toolkit for app windows: one library, not the rest of KDE.
