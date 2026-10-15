@@ -13,7 +13,7 @@ from pathlib import Path
 
 DISTRO, OLD, NEW = sys.argv[1:4]
 sys.path[:] = [p for p in sys.path if not p.startswith("/app") and p not in ("", ".")]  # the installed copy only
-sys.path.insert(0, "/app/devtools")
+sys.path[:0] = ["/app/devtools", "/usr/share/couriercollie"]  # (where packages put it; older ones: Python's folder)
 import relay_client  # noqa: E402,F401  (GitHub's API: the stand-in)
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -37,7 +37,7 @@ def check(label, ok, detail=""):
 def fresh(code):
     """A new Python process (the files on disk, not this one's memory), with the same settings."""
     return subprocess.run([sys.executable, "-c", "import sys; sys.path[:] = [p for p in sys.path if not "
-                           "p.startswith('/app') and p not in ('', '.')]; sys.path.insert(0, '/app/devtools'); "
+                           "p.startswith('/app') and p not in ('', '.')]; sys.path[:0] = ['/app/devtools', '/usr/share/couriercollie']; "
                            "import relay_client; " + code], capture_output=True, text=True, timeout=120)
 
 

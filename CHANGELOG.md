@@ -4,8 +4,8 @@
 
 - **Dragging** a repo or category past the top or bottom of the list now scrolls the list and keeps the row under
   your pointer. Before, the row could get lost.
-- **Fedora and openSUSE packages** now refuse to install on a release with a different Python, instead of installing
-  an app that doesn't start. The README lists the oldest release each install works on.
+- **Packages** keep working when your distro moves to a newer Python, without a rebuild. The README lists the oldest
+  release each install works on.
 
 ## 0.6.0 (beta), 2026-10-14
 
