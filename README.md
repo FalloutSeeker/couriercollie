@@ -31,7 +31,7 @@ Download the package for your distro from [Releases](https://github.com/FalloutS
 
 | Distro | Command |
 | --- | --- |
-| Fedora 43+ | `sudo dnf install ./couriercollie-*.fc*.noarch.rpm` |
+| Fedora 40+ | `sudo dnf install ./couriercollie-*.fc*.noarch.rpm` |
 | openSUSE Tumbleweed, Leap 16+ | `sudo zypper install --allow-unsigned-rpm ./couriercollie-*.noarch.rpm` |
 | Ubuntu 25.04+, Debian 13+ | `sudo apt install ./couriercollie_*_all.deb` |
 | Arch (btw) | `sudo pacman -U ./couriercollie-*-any.pkg.tar.zst` |

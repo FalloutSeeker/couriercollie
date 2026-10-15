@@ -184,8 +184,8 @@ harness.OUT = Path("/out") if Path("/out").is_dir() else HOME / "shots"  # scree
 tempfile.mkdtemp = lambda *a, **k: str(STATE)  # the harness's settings folder: the same one, phase after phase
 if PHASE == "package":
     # The installed app, not /app's copy: where the package put it.
-    found = subprocess.run(["python3", "-I", "-c", "import couriercollie, os; "
-                            "print(os.path.dirname(os.path.dirname(couriercollie.__file__)))"],
+    found = subprocess.run(["python3", "-I", "-c", "import sys; sys.path.insert(0, '/usr/share/couriercollie'); "
+                            "import couriercollie, os; print(os.path.dirname(os.path.dirname(couriercollie.__file__)))"],
                            capture_output=True, text=True, cwd="/").stdout.strip()
     harness.PROJECT = Path(found)
     print("the installed app, from", found, flush=True)

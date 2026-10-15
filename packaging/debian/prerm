@@ -2,5 +2,5 @@
 # Before couriercollie is removed (or upgraded): Python's cache files in its folder, which aren't the package's (made
 # only if it was ever run as root, which can write there). Left, dpkg couldn't remove the folder.
 set -e
-find /usr/lib/python3/dist-packages/couriercollie -depth -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+find /usr/share/couriercollie/couriercollie -depth -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 exit 0

@@ -30,6 +30,10 @@ def check(label, ok, detail=""):
     return ok
 
 
+# Where the packages put the app (the couriercollie command loads it from there): for importing its parts here.
+APP_DIR = "/usr/share/couriercollie"
+
+
 def sh(*args, **kw):
     return subprocess.run(args, capture_output=True, text=True, **kw)
 
@@ -93,7 +97,7 @@ from couriercollie import tray
 QIcon.setThemeName("")
 mine = tray.app_icon()  # (without a theme: the app's own files)
 print(sorted(s.width() for s in mine.availableSizes()))
-""", env={**ENV, "QT_QPA_PLATFORM": "offscreen"})
+""", env={**ENV, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": APP_DIR})
 lines = found.stdout.splitlines() + ["", ""]
 check("a desktop's icon theme finds it by name", lines[0].startswith("True"), found.stdout + found.stderr[-300:])
 check("…and without one, the app has it at every size", lines[1] == str(sizes), lines[1])
@@ -308,7 +312,8 @@ check("…and saves nothing over the broken file", config.read_text() == broken)
 config.write_text(good)  # fixed by hand while it's open
 time.sleep(3)
 listed = sh(sys.executable, "-c", f"from couriercollie import config; from pathlib import Path; "
-            f"print(sorted(r.id for r in config.load(Path({str(config)!r})).repos))").stdout.strip()
+            f"print(sorted(r.id for r in config.load(Path({str(config)!r})).repos))",
+            env={**ENV, "PYTHONPATH": APP_DIR}).stdout.strip()
 check("…and, fixed by hand, the file still lists your repos", listed == str(sorted(REPOS)), listed)
 app.terminate()
 check("…and quits normally", wait_for(lambda: app.poll() is not None, 15))

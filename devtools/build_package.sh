@@ -31,9 +31,9 @@ cp /tmp/rpm/RPMS/noarch/*.rpm /dist/'
 
 deb_build='
 root=/tmp/deb/couriercollie
-mkdir -p $root/DEBIAN $root/usr/lib/python3/dist-packages /tmp/src
+mkdir -p $root/DEBIAN $root/usr/share/couriercollie /tmp/src
 tar -xzf /work/couriercollie-'"$version"'.tar.gz -C /tmp/src && cd /tmp/src/couriercollie-'"$version"'
-cp -a couriercollie $root/usr/lib/python3/dist-packages/
+cp -a couriercollie $root/usr/share/couriercollie/
 install -Dm755 data/couriercollie $root/usr/bin/couriercollie
 install -Dm644 data/couriercollie.desktop $root/usr/share/applications/couriercollie.desktop
 mkdir -p $root/usr/share/icons && cp -a data/icons/hicolor $root/usr/share/icons/
